@@ -1,4 +1,6 @@
-content = File.read('/Users/homer/Projects/MirrorNeuron/lib/mirror_neuron/api/router.ex')
+router_path = ENV['MIRROR_NEURON_ROUTER_PATH'] ||
+              File.expand_path('lib/mirror_neuron/api/router.ex', ENV.fetch('MIRROR_NEURON_CORE_DIR'))
+content = File.read(router_path)
 
 # 1. Add multipart to Plug.Parsers
 content.sub!(/parsers: \[:json\],/, "parsers: [:json, :multipart],\n    length: 50_000_000,")
@@ -84,4 +86,4 @@ ELIXIR
 
 content.sub!(/# Create Job/, bundle_upload + "\n  # Create Job")
 
-File.write('/Users/homer/Projects/MirrorNeuron/lib/mirror_neuron/api/router.ex', content)
+File.write(router_path, content)
