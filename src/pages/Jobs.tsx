@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { AlertCircle, Ban, CheckCircle, Clock, Eye, PauseCircle, PlayCircle, Trash2, XCircle } from 'lucide-react';
-import { cancelJob, clearJobs, fetchJobs, isJobDaemon, pauseJob } from '../api';
+import { cancelJob, clearJobs, fetchJobs, isServiceJob, pauseJob } from '../api';
 import type { Job } from '../api';
 
 const StatusIcon = ({ status }: { status: string }) => {
@@ -222,7 +222,7 @@ export default function Jobs() {
                     {job.submitted_at ? format(new Date(job.submitted_at), 'MMM d, HH:mm:ss') : 'Unknown'}
                   </td>
                   <td className="px-6 py-4 text-sm text-neutral-600">
-                    {isJobDaemon(job) ? '∞' : `${job.active_executors ?? 0} / ${job.executor_count ?? 0}`}
+                    {isServiceJob(job) ? '∞' : `${job.active_executors ?? 0} / ${job.executor_count ?? 0}`}
                   </td>
                   <td className="px-6 py-4">
                     <Link

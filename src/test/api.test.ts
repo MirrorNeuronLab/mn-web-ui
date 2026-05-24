@@ -5,7 +5,7 @@ import {
   fetchJobEvents,
   fetchJobs,
   fetchSystemSummary,
-  isJobDaemon,
+  isServiceJob,
 } from '../api';
 
 const mockApi = vi.hoisted(() => ({
@@ -124,18 +124,19 @@ describe('api parsing helpers', () => {
   });
 });
 
-describe('isJobDaemon', () => {
-  it('detects explicit daemon summaries before deriving from names', () => {
-    expect(isJobDaemon({ job_id: 'batch-job', graph_id: 'daily-run' }, { daemon: true })).toBe(true);
+describe('isServiceJob', () => {
+  it('detects explicit service summaries', () => {
+    expect(isServiceJob({ job_id: 'batch-job', graph_id: 'daily-run' }, { job_type: 'service' })).toBe(true);
   });
 
-  it('treats monitor and legacy misspelled daemon graph names as daemon jobs', () => {
-    expect(isJobDaemon({ job_id: 'price-monitor', graph_id: 'stream' })).toBe(true);
-    expect(isJobDaemon({ job_id: 'daily-job', graph_id: 'legacy-deamon-flow' })).toBe(true);
+  it('detects service jobs from job fields', () => {
+    expect(isServiceJob({ job_id: 'price-monitor', graph_id: 'stream', type: 'service' })).toBe(true);
+    expect(isServiceJob({ job_id: 'job-1', graph_id: 'batch-flow', job_type: 'service' })).toBe(true);
   });
 
-  it('does not mark normal batch jobs as daemon jobs', () => {
-    expect(isJobDaemon({ job_id: 'job-1', graph_id: 'batch-flow' })).toBe(false);
-    expect(isJobDaemon(null)).toBe(false);
+  it('does not mark normal batch jobs as service jobs by name', () => {
+    expect(isServiceJob({ job_id: 'price-monitor', graph_id: 'stream' })).toBe(false);
+    expect(isServiceJob({ job_id: 'job-1', graph_id: 'batch-flow' })).toBe(false);
+    expect(isServiceJob(null)).toBe(false);
   });
 });

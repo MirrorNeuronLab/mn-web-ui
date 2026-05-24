@@ -31,7 +31,8 @@ export const JobSchema = z.object({
   updated_at: z.string().optional(),
   executor_count: z.number().optional(),
   active_executors: z.number().optional(),
-  daemon: z.boolean().optional(),
+  type: z.string().optional(),
+  job_type: z.string().optional(),
 }).passthrough();
 
 export const JobDetailsSchema = z.object({
@@ -150,10 +151,10 @@ export type RunUiDefinition = z.infer<typeof RunUiDefinitionSchema>;
 export type WebUiHandle = z.infer<typeof WebUiHandleSchema>;
 export type RunUiResponse = z.infer<typeof RunUiResponseSchema>;
 
-export const isJobDaemon = (job: Partial<Job> | null | undefined, summary?: { daemon?: boolean }): boolean => {
-  if (summary?.daemon === true || job?.daemon === true) return true;
-  const combined = `${job?.job_id || ''} ${job?.graph_id || ''}`.toLowerCase();
-  return combined.includes('daemon') || combined.includes('deamon') || combined.includes('monitor');
+export const isServiceJob = (job: Partial<Job> | null | undefined, summary?: { type?: unknown; job_type?: unknown }): boolean => {
+  const summaryType = typeof summary?.job_type === 'string' ? summary.job_type : typeof summary?.type === 'string' ? summary.type : '';
+  const jobType = job?.job_type || job?.type || '';
+  return [summaryType, jobType].some((value) => value.toLowerCase() === 'service');
 };
 
 export const fetchSystemSummary = () => api.get('/system/summary').then(r => {
