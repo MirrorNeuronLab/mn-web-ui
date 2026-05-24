@@ -37,7 +37,7 @@ docs/images/web-ui-job-detail.png
 ## Prerequisites
 
 - Node.js and npm.
-- A running MirrorNeuron API. The default local API is `http://localhost:4001/api/v1`.
+- A running MirrorNeuron API. The default local API is `http://localhost:54001/api/v1`.
 
 ## Installation
 
@@ -59,7 +59,7 @@ Vite exposes `MN_` environment variables to the browser build.
 | `MN_WEB_API_TOKEN` | unset | Optional bearer token for protected API instances. |
 | `MN_WEB_UI_HOST` | `localhost` | Development server bind host. |
 | `MN_API_HOST` | `localhost` | Development proxy API host. |
-| `MN_API_PORT` | `4001` | Development proxy API port. |
+| `MN_API_PORT` | `54001` | Development proxy API port. |
 
 ## Running
 
@@ -78,7 +78,7 @@ npm run dev
 Open:
 
 ```text
-http://localhost:5173
+http://localhost:55173
 ```
 
 ## Build
