@@ -2,7 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import JobDetails from '../pages/JobDetails';
-import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, cancelJob, pauseJob, resumeJob } from '../api';
+import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, cancelJob, pauseJob, resumeJob } from '../api';
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>();
@@ -11,6 +11,7 @@ vi.mock('../api', async (importOriginal) => {
     fetchJobDetails: vi.fn(),
     fetchJobEvents: vi.fn(),
     fetchJobAgentGraph: vi.fn(),
+    fetchRunUi: vi.fn(),
     cancelJob: vi.fn(),
     pauseJob: vi.fn(),
     resumeJob: vi.fn(),
@@ -49,6 +50,14 @@ describe('JobDetails Component', () => {
       edges: [],
       stats: { agent_count: 0, edge_count: 0, message_count: 0, event_count: 0 },
     });
+    vi.mocked(fetchRunUi).mockResolvedValue({
+      run_id: 'test-job-1',
+      ui: { schema_version: 1, adapter: 'gradio', kind: 'output', title: 'Blueprint Run', refresh_seconds: 2, components: [], metadata: {} },
+      web_ui: { adapter: 'gradio', kind: 'output', url: '', title: 'Blueprint Run', status: 'unknown', metadata: {} },
+      job: {},
+      run: {},
+      events: [],
+    });
     // mock window.location to ensure useParams picks it up
     window.history.pushState({}, 'Test page', '/jobs/test-job-1');
   });
@@ -86,6 +95,11 @@ describe('JobDetails Component', () => {
       ],
       sandboxes: [],
       recent_events: [],
+      web_ui: {
+        url: 'http://localhost:61000',
+        title: 'Blueprint Dashboard',
+        status: 'running',
+      },
     };
 
     const mockEvents = [
@@ -107,6 +121,8 @@ describe('JobDetails Component', () => {
     await waitFor(() => {
       expect(screen.getByText('test-job-1')).toBeInTheDocument();
     });
+    expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute('href', 'http://localhost:61000/');
+    expect(screen.getByRole('link', { name: 'Web UI' })).toHaveAttribute('href', 'http://localhost:61000/');
     expect(screen.queryByText(/Executors:/i)).not.toBeInTheDocument();
 
     // Default tab is graph
@@ -164,6 +180,46 @@ describe('JobDetails Component', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
     expect(screen.getByText('agent-1')).toBeInTheDocument();
+  });
+
+  it('shows blueprint web ui from the run ui endpoint when job details are compact', async () => {
+    const mockDetails = {
+      job: {
+        job_id: 'test-job-1',
+        run_id: 'blueprint-run-1',
+        graph_id: 'graph-1',
+        status: 'running',
+        submitted_at: '2026-04-16T12:00:00Z',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    };
+
+    vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchRunUi).mockResolvedValue({
+      run_id: 'blueprint-run-1',
+      ui: { schema_version: 1, adapter: 'gradio', kind: 'output', title: 'Blueprint Run', refresh_seconds: 2, components: [], metadata: {} },
+      web_ui: {
+        adapter: 'gradio',
+        kind: 'output',
+        url: 'http://localhost:61000',
+        title: 'Blueprint Dashboard',
+        status: 'running',
+        metadata: {},
+      },
+      job: {},
+      run: {},
+      events: [],
+    });
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute('href', 'http://localhost:61000/');
+    });
+    expect(fetchRunUi).toHaveBeenCalledWith('blueprint-run-1');
   });
 
   it('pauses a running job', async () => {

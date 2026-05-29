@@ -29,6 +29,7 @@ export const JobSchema = z.object({
   status: z.string().optional().default('unknown'),
   submitted_at: z.string().optional(),
   updated_at: z.string().optional(),
+  run_id: z.string().optional(),
   executor_count: z.number().optional(),
   active_executors: z.number().optional(),
   type: z.string().optional(),
@@ -41,6 +42,9 @@ export const JobDetailsSchema = z.object({
   agents: z.array(AgentSchema).optional().default([]),
   sandboxes: z.array(z.unknown()).optional().default([]),
   recent_events: z.array(JobEventSchema).optional().default([]),
+  web_ui: z.record(z.string(), z.unknown()).optional(),
+  web_ui_service: z.record(z.string(), z.unknown()).optional(),
+  blueprint_web_ui_service: z.record(z.string(), z.unknown()).optional(),
 }).passthrough();
 
 export const AgentGraphNodeSchema = z.object({

@@ -91,6 +91,29 @@ describe('api parsing helpers', () => {
     );
   });
 
+  it('preserves blueprint web ui handles on job detail payloads', async () => {
+    mockApi.get.mockResolvedValue({
+      data: {
+        job: { job_id: 'job-1', status: 'running' },
+        web_ui: {
+          url: 'http://localhost:61000',
+          title: 'Blueprint Dashboard',
+          status: 'running',
+        },
+      },
+    });
+
+    await expect(fetchJobDetails('job-1')).resolves.toEqual(
+      expect.objectContaining({
+        web_ui: expect.objectContaining({
+          url: 'http://localhost:61000',
+          title: 'Blueprint Dashboard',
+          status: 'running',
+        }),
+      }),
+    );
+  });
+
   it('drops malformed event streams instead of surfacing partial bad data', async () => {
     mockApi.get.mockResolvedValue({
       data: {
