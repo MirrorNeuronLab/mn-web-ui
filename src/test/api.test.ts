@@ -157,12 +157,18 @@ describe('api parsing helpers', () => {
         workflow_kind: 'service',
         agent_count: { done: 1, total: 2 },
         current_step_id: 'research',
+        current_step_ids: ['research'],
+        edges: [{ from: 'intake', to: 'research', event: 'intake_ready' }],
+        layers: [['intake'], ['research']],
         steps: [
           {
             id: 'research',
             label: 'Research',
             status: 'running',
             current: true,
+            parents: ['intake'],
+            children: [],
+            layer: 1,
             done_count: 1,
             ready_count: 2,
             total_count: 2,
@@ -177,9 +183,14 @@ describe('api parsing helpers', () => {
         job_id: 'job-1',
         workflow_id: 'workflow-1',
         workflow_kind: 'service',
+        current_step_ids: ['research'],
+        edges: [{ from: 'intake', to: 'research', event: 'intake_ready' }],
+        layers: [['intake'], ['research']],
         steps: [
           expect.objectContaining({
             id: 'research',
+            parents: ['intake'],
+            layer: 1,
             agents: [expect.objectContaining({ id: 'research:docs', status: 'idle', live: true })],
           }),
         ],

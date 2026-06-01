@@ -9,6 +9,7 @@ type WorkflowProgressPanelProps = {
 const statusTone = (status: string | undefined) => {
   const normalized = String(status || '').toLowerCase();
   if (['completed', 'done', 'succeeded'].includes(normalized)) return 'text-emerald-700';
+  if (['partial', 'skipped'].includes(normalized)) return 'text-amber-700';
   if (['failed', 'cancelled', 'error'].includes(normalized)) return 'text-red-700';
   if (['running', 'active'].includes(normalized)) return 'text-sky-700';
   if (['idle', 'ready'].includes(normalized)) return 'text-neutral-600';
@@ -18,6 +19,7 @@ const statusTone = (status: string | undefined) => {
 const StatusGlyph = ({ status, current }: { status?: string; current?: boolean }) => {
   const normalized = String(status || '').toLowerCase();
   if (['completed', 'done', 'succeeded'].includes(normalized)) return <Check className="h-4 w-4 text-emerald-700" />;
+  if (['partial', 'skipped'].includes(normalized)) return <Circle className="h-4 w-4 text-amber-600" />;
   if (['failed', 'cancelled', 'error'].includes(normalized)) return <X className="h-4 w-4 text-red-700" />;
   if (current || ['running', 'active'].includes(normalized)) return <Loader2 className="h-4 w-4 animate-spin text-sky-700" />;
   if (['idle', 'ready'].includes(normalized)) return <Circle className="h-4 w-4 text-neutral-500" />;
@@ -46,7 +48,7 @@ const formatTokens = (tokens: number) => {
   return String(tokens);
 };
 
-const StepRow = ({ step, index, workflowKind }: { step: WorkflowProgressStep; index: number; workflowKind: string }) => {
+const StepRow = ({ step, index, workflowKind, showLayer }: { step: WorkflowProgressStep; index: number; workflowKind: string; showLayer: boolean }) => {
   const count = workflowKind === 'service' ? (step.ready_count || step.done_count || 0) : (step.done_count || 0);
   return (
     <div
@@ -56,7 +58,10 @@ const StepRow = ({ step, index, workflowKind }: { step: WorkflowProgressStep; in
     >
       <StatusGlyph status={step.status} current={step.current} />
       <div className="min-w-0">
-        <div className="truncate font-medium">{index + 1}. {step.label}</div>
+        <div className="truncate font-medium">
+          {showLayer ? <span className={step.current ? 'text-neutral-300' : 'text-neutral-400'}>L{(step.layer || 0) + 1} </span> : null}
+          {index + 1}. {step.label}
+        </div>
         {step.goal ? <div className={`truncate text-xs ${step.current ? 'text-neutral-300' : 'text-neutral-500'}`}>{step.goal}</div> : null}
       </div>
       <div className={`font-mono text-xs ${step.current ? 'text-neutral-200' : 'text-neutral-500'}`}>
@@ -107,12 +112,19 @@ export function WorkflowProgressPanel({ progress, status }: WorkflowProgressPane
   }
 
   const currentStep = progress.current_step || progress.steps.find((step) => step.current) || progress.steps[0];
-  const agents = currentStep?.agents || [];
+  const currentStepIds = new Set(progress.current_step_ids?.length ? progress.current_step_ids : progress.steps.filter((step) => step.current).map((step) => step.id));
+  const activeSteps = currentStepIds.size
+    ? progress.steps
+        .filter((step) => currentStepIds.has(step.id))
+        .map((step) => currentStep?.id === step.id && (currentStep.agents || []).length ? currentStep : step)
+    : (currentStep ? [currentStep] : []);
+  const agents = activeSteps.flatMap((step) => step.agents || []);
   const headlineStatus = progress.status || status || 'unknown';
   const workflowKind = progress.workflow_kind || 'batch';
   const shownAgents = workflowKind === 'service'
     ? (progress.agent_count.ready || progress.agent_count.done || 0)
     : (progress.agent_count.done || 0);
+  const showLayer = (progress.layers || []).length > 1 || progress.steps.some((step) => step.parents?.length || step.children?.length);
 
   return (
     <div className="absolute inset-0 overflow-auto bg-white">
@@ -133,7 +145,7 @@ export function WorkflowProgressPanel({ progress, status }: WorkflowProgressPane
           <div className="mb-3 text-sm font-semibold text-neutral-950">Steps</div>
           <div className="space-y-1">
             {progress.steps.map((step, index) => (
-              <StepRow key={step.id || index} step={step} index={index} workflowKind={workflowKind} />
+              <StepRow key={step.id || index} step={step} index={index} workflowKind={workflowKind} showLayer={showLayer} />
             ))}
           </div>
         </aside>
@@ -142,9 +154,11 @@ export function WorkflowProgressPanel({ progress, status }: WorkflowProgressPane
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-neutral-950">
-                {currentStep?.label || 'Agents'} · {agents.length} agents
+                {activeSteps.length > 1 ? `${activeSteps.length} active steps` : (currentStep?.label || 'Agents')} · {agents.length} agents
               </div>
-              {currentStep?.goal ? <div className="truncate text-xs text-neutral-500">{currentStep.goal}</div> : null}
+              {activeSteps.length > 1 ? (
+                <div className="truncate text-xs text-neutral-500">{activeSteps.map((step) => step.label).join(' / ')}</div>
+              ) : currentStep?.goal ? <div className="truncate text-xs text-neutral-500">{currentStep.goal}</div> : null}
             </div>
             <div className={`text-xs font-medium capitalize ${statusTone(currentStep?.status)}`}>{currentStep?.status || 'unknown'}</div>
           </div>

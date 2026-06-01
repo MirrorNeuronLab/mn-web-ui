@@ -370,6 +370,114 @@ describe('JobDetails Component', () => {
     expect(screen.getByText('Review visual detection')).toBeInTheDocument();
   });
 
+  it('renders graph workflow layers and multiple active steps in the Progress tab', async () => {
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'test-job-1',
+        graph_id: 'tax_graph',
+        status: 'running',
+        submitted_at: '2026-04-16T12:00:00Z',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchWorkflowProgress).mockResolvedValue({
+      schema_version: 1,
+      job_id: 'test-job-1',
+      workflow_id: 'tax_graph',
+      name: 'Tax Graph',
+      description: '',
+      status: 'running',
+      workflow_kind: 'batch',
+      elapsed_seconds: 20,
+      agent_count: { done: 1, running: 2, idle: 0, ready: 3, failed: 0, total: 4 },
+      current_step_id: 'income',
+      current_step_ids: ['income', 'property'],
+      edges: [
+        { from: 'intake', to: 'income', event: 'intake_ready' },
+        { from: 'intake', to: 'property', event: 'intake_ready' },
+      ],
+      layers: [['intake'], ['income', 'property']],
+      current_step: null,
+      steps: [
+        {
+          id: 'intake',
+          label: 'Intake',
+          goal: '',
+          status: 'done',
+          current: false,
+          parents: [],
+          children: ['income', 'property'],
+          layer: 0,
+          done_count: 1,
+          running_count: 0,
+          idle_count: 0,
+          ready_count: 1,
+          failed_count: 0,
+          total_count: 1,
+          live: false,
+          elapsed_seconds: 1,
+          agents: [],
+        },
+        {
+          id: 'income',
+          label: 'Income',
+          goal: '',
+          status: 'running',
+          current: true,
+          parents: ['intake'],
+          children: [],
+          layer: 1,
+          done_count: 0,
+          running_count: 1,
+          idle_count: 0,
+          ready_count: 1,
+          failed_count: 0,
+          total_count: 1,
+          live: false,
+          elapsed_seconds: 4,
+          agents: [{ id: 'income_agent', role: 'Income', working_on: 'Prepare income', model: 'runtime', status: 'running', progress: 0.4, live: false, elapsed_seconds: 4 }],
+        },
+        {
+          id: 'property',
+          label: 'Property',
+          goal: '',
+          status: 'running',
+          current: true,
+          parents: ['intake'],
+          children: [],
+          layer: 1,
+          done_count: 0,
+          running_count: 1,
+          idle_count: 0,
+          ready_count: 1,
+          failed_count: 0,
+          total_count: 1,
+          live: false,
+          elapsed_seconds: 4,
+          agents: [{ id: 'property_agent', role: 'Property', working_on: 'Prepare property', model: 'runtime', status: 'running', progress: 0.3, live: false, elapsed_seconds: 4 }],
+        },
+      ],
+      messages: ['Running: graph branches active'],
+      recent_events: [],
+    });
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Progress' }));
+
+    expect(screen.getByText(/2 active steps/)).toBeInTheDocument();
+    expect(screen.getByText(/2\. Income/)).toBeInTheDocument();
+    expect(screen.getByText(/3\. Property/)).toBeInTheDocument();
+    expect(screen.getByText('income_agent')).toBeInTheDocument();
+    expect(screen.getByText('property_agent')).toBeInTheDocument();
+  });
+
   it('shows blueprint web ui from the run ui endpoint when job details are compact', async () => {
     const mockDetails = {
       job: {
