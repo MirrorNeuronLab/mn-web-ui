@@ -1,11 +1,13 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Dashboard from '../pages/Dashboard';
-import { fetchJobs, fetchSystemSummary } from '../api';
+import { addClusterNode, fetchJobs, fetchSystemSummary, removeClusterNode } from '../api';
 
 vi.mock('../api', () => ({
   fetchSystemSummary: vi.fn(),
   fetchJobs: vi.fn(),
+  addClusterNode: vi.fn(),
+  removeClusterNode: vi.fn(),
 }));
 
 describe('Dashboard Component', () => {
@@ -62,5 +64,112 @@ describe('Dashboard Component', () => {
     expect(screen.getByText('mn1@127.0.0.1')).toBeInTheDocument();
     expect(screen.getByText('Pool: default')).toBeInTheDocument();
     expect(screen.getByText('Capacity')).toBeInTheDocument();
+  });
+
+  it('adds a remote node with host and token', async () => {
+    const localNode = {
+      name: 'mn1@127.0.0.1',
+      connected_nodes: ['mn1@127.0.0.1'],
+      self: true,
+      executor_pools: {},
+    };
+    const remoteNode = {
+      name: 'mirror_neuron@10.0.0.42',
+      connected_nodes: ['mn1@127.0.0.1'],
+      self: false,
+      executor_pools: {},
+    };
+
+    vi.mocked(fetchSystemSummary)
+      .mockResolvedValueOnce({ nodes: [localNode], jobs: [] })
+      .mockResolvedValue({ nodes: [localNode, remoteNode], jobs: [] });
+    vi.mocked(fetchJobs).mockResolvedValue([]);
+    vi.mocked(addClusterNode).mockResolvedValue({
+      ok: true,
+      host: '10.0.0.42',
+      node_name: 'mirror_neuron@10.0.0.42',
+      status: 'connected',
+      message: 'mirror_neuron@10.0.0.42 was added to this box.',
+    });
+
+    render(<Dashboard />);
+
+    await waitFor(() => expect(screen.getByText('Runtime Resources')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /add node/i }));
+
+    const dialog = screen.getByRole('dialog', { name: /add node to this box/i });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /remote host or ip/i }), {
+      target: { value: '10.0.0.42' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/token from mn node expose/i), {
+      target: { value: 'join-token-1' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /^add node$/i }));
+
+    await waitFor(() => expect(addClusterNode).toHaveBeenCalledWith({ host: '10.0.0.42', token: 'join-token-1' }));
+    await waitFor(() => expect(screen.getByText('mirror_neuron@10.0.0.42')).toBeInTheDocument());
+  });
+
+  it('reveals the token without changing the separate host and token inputs', async () => {
+    vi.mocked(fetchSystemSummary).mockResolvedValue({ nodes: [], jobs: [] });
+    vi.mocked(fetchJobs).mockResolvedValue([]);
+
+    render(<Dashboard />);
+
+    await waitFor(() => expect(screen.getByText('Runtime Resources')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /add node/i }));
+
+    const dialog = screen.getByRole('dialog', { name: /add node to this box/i });
+    const hostInput = within(dialog).getByRole('textbox', { name: /remote host or ip/i });
+    fireEvent.change(hostInput, {
+      target: { value: '192.168.4.173' },
+    });
+
+    const tokenInput = within(dialog).getByLabelText(/token from mn node expose/i);
+    fireEvent.change(tokenInput, {
+      target: { value: 'mn-test-token' },
+    });
+
+    expect(hostInput).toHaveValue('192.168.4.173');
+    expect(tokenInput).toHaveValue('mn-test-token');
+    expect(tokenInput).toHaveAttribute('type', 'password');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /show token/i }));
+    expect(tokenInput).toHaveAttribute('type', 'text');
+    expect(within(dialog).getByRole('button', { name: /hide token/i })).toBeInTheDocument();
+  });
+
+  it('removes a peer node from the cluster list', async () => {
+    const localNode = {
+      name: 'mn1@127.0.0.1',
+      connected_nodes: ['mn1@127.0.0.1'],
+      self: true,
+      executor_pools: {},
+    };
+    const remoteNode = {
+      name: 'mirror_neuron@10.0.0.42',
+      connected_nodes: ['mn1@127.0.0.1'],
+      self: false,
+      executor_pools: {},
+    };
+
+    vi.mocked(fetchSystemSummary)
+      .mockResolvedValueOnce({ nodes: [localNode, remoteNode], jobs: [] })
+      .mockResolvedValue({ nodes: [localNode], jobs: [] });
+    vi.mocked(fetchJobs).mockResolvedValue([]);
+    vi.mocked(removeClusterNode).mockResolvedValue({
+      ok: true,
+      node_name: 'mirror_neuron@10.0.0.42',
+      status: 'disconnected',
+      message: 'mirror_neuron@10.0.0.42 was removed from this box.',
+    });
+
+    render(<Dashboard />);
+
+    await waitFor(() => expect(screen.getByText('mirror_neuron@10.0.0.42')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /remove/i }));
+
+    await waitFor(() => expect(removeClusterNode).toHaveBeenCalledWith('mirror_neuron@10.0.0.42'));
+    await waitFor(() => expect(screen.queryByText('mirror_neuron@10.0.0.42')).not.toBeInTheDocument());
   });
 });

@@ -7,6 +7,8 @@ import {
   fetchWorkflowProgress,
   fetchSystemSummary,
   isServiceJob,
+  addClusterNode,
+  removeClusterNode,
 } from '../api';
 
 const mockApi = vi.hoisted(() => ({
@@ -74,6 +76,44 @@ describe('api parsing helpers', () => {
     });
 
     await expect(fetchSystemSummary()).resolves.toEqual({ nodes: [], jobs: [] });
+  });
+
+  it('adds cluster nodes through the system cluster endpoint', async () => {
+    mockApi.post.mockResolvedValue({
+      data: {
+        ok: true,
+        host: '10.0.0.42',
+        node_name: 'mirror_neuron@10.0.0.42',
+        status: 'connected',
+      },
+    });
+
+    await expect(addClusterNode({ host: '10.0.0.42', token: 'join-token' })).resolves.toEqual(
+      expect.objectContaining({
+        host: '10.0.0.42',
+        node_name: 'mirror_neuron@10.0.0.42',
+        status: 'connected',
+      }),
+    );
+    expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:add', { host: '10.0.0.42', token: 'join-token' });
+  });
+
+  it('removes cluster nodes through the system cluster endpoint', async () => {
+    mockApi.post.mockResolvedValue({
+      data: {
+        ok: true,
+        node_name: 'mirror_neuron@10.0.0.42',
+        status: 'disconnected',
+      },
+    });
+
+    await expect(removeClusterNode('mirror_neuron@10.0.0.42')).resolves.toEqual(
+      expect.objectContaining({
+        node_name: 'mirror_neuron@10.0.0.42',
+        status: 'disconnected',
+      }),
+    );
+    expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:remove', { node_name: 'mirror_neuron@10.0.0.42' });
   });
 
   it('keeps job detail screens renderable when the detail payload is malformed', async () => {

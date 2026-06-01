@@ -183,11 +183,11 @@ describe('JobDetails Component', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show agents as graph' }));
     expect(screen.getByTestId('react-flow-mock')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show code view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show agents as code' }));
     expect(screen.getByText(/"job_id": "test-job-1"/)).toBeInTheDocument();
     expect(screen.getByText(/"id": "agent-1"/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show graph view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show agents as graph' }));
     expect(screen.getByTestId('react-flow-mock')).toBeInTheDocument();
 
     // Switch to Logs tab
@@ -271,6 +271,139 @@ describe('JobDetails Component', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
     expect(screen.getByText('agent-1')).toBeInTheDocument();
+  });
+
+  it('populates the agents list from graph nodes when job details have no agents', async () => {
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'test-job-1',
+        graph_id: 'graph-1',
+        status: 'running',
+        submitted_at: '2026-04-16T12:00:00Z',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchJobAgentGraph).mockResolvedValue({
+      job_id: 'test-job-1',
+      graph_id: 'graph-1',
+      status: 'running',
+      nodes: [
+        {
+          id: 'planner',
+          alias: 'video_monitor',
+          display_name: 'Video Monitor',
+          label: 'Raw Planner',
+          agent_type: 'executor',
+          type: 'worker',
+          assigned_node: 'node-a',
+          status: 'declared',
+          processed_messages: 0,
+          mailbox_depth: 0,
+        },
+      ],
+      edges: [],
+      stats: { agent_count: 1, edge_count: 0, message_count: 0, event_count: 0 },
+    });
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
+    expect(screen.getByText('video_monitor')).toBeInTheDocument();
+    expect(screen.queryByText('Raw Planner')).not.toBeInTheDocument();
+    expect(screen.getByText('executor / worker')).toBeInTheDocument();
+    expect(screen.getByText('node-a')).toBeInTheDocument();
+  });
+
+  it('uses workflow progress aliases when the graph only has runtime infrastructure nodes', async () => {
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'video-job-1',
+        graph_id: 'video_watch_assistant_v1',
+        status: 'running',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchJobAgentGraph).mockResolvedValue({
+      job_id: 'video-job-1',
+      graph_id: 'runtime-wrapper',
+      status: 'running',
+      nodes: [
+        { id: 'runtime', label: 'System Runtime', agent_type: 'system', type: 'runtime', assigned_node: 'system/runtime', status: 'observed', processed_messages: 0, mailbox_depth: 0 },
+        { id: 'workflow_manifest_executor', label: 'Workflow Manifest Executor', agent_type: 'executor', type: 'worker', assigned_node: 'node-a', status: 'paused', processed_messages: 0, mailbox_depth: 1 },
+        { id: 'web_ui_dashboard', label: 'Web Ui Dashboard', agent_type: 'executor', type: 'worker', assigned_node: 'node-a', status: 'paused', processed_messages: 0, mailbox_depth: 1 },
+      ],
+      edges: [],
+      stats: { agent_count: 3, edge_count: 0, message_count: 0, event_count: 0 },
+    });
+    vi.mocked(fetchWorkflowProgress).mockResolvedValue({
+      schema_version: 1,
+      job_id: 'video-job-1',
+      workflow_id: 'video_watch_assistant',
+      name: 'Video Watch Assistant',
+      description: '',
+      status: 'running',
+      workflow_kind: 'service',
+      elapsed_seconds: 12,
+      agent_count: { done: 0, running: 1, idle: 0, ready: 1, failed: 0, total: 1 },
+      current_step_id: 'start_video_monitor',
+      current_step: null,
+      steps: [
+        {
+          id: 'start_video_monitor',
+          label: 'Start Video Monitor',
+          goal: 'Validate the mapped stream source and start the monitoring session.',
+          status: 'running',
+          current: true,
+          done_count: 0,
+          running_count: 1,
+          idle_count: 0,
+          ready_count: 1,
+          failed_count: 0,
+          total_count: 1,
+          live: true,
+          elapsed_seconds: 12,
+          agents: [
+            {
+              id: 'video_monitor',
+              alias: 'video_monitor',
+              display_name: 'Video Monitor',
+              role: 'Coordinate video monitoring',
+              working_on: 'Coordinate video monitoring',
+              model: 'runtime',
+              assigned_node: 'node-a',
+              status: 'running',
+              progress: 0.5,
+              live: true,
+              elapsed_seconds: 12,
+            },
+          ],
+        },
+      ],
+      messages: [],
+      recent_events: [],
+    });
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('video-job-1')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
+
+    expect(screen.getByText('video_monitor')).toBeInTheDocument();
+    expect(screen.queryByText('Workflow Manifest Executor')).not.toBeInTheDocument();
+    expect(screen.queryByText('Web Ui Dashboard')).not.toBeInTheDocument();
+    expect(screen.getByText('node-a')).toBeInTheDocument();
   });
 
   it('shows runtime fallback progress when workflow progress is unavailable', async () => {

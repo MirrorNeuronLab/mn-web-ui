@@ -3,6 +3,10 @@ import { z } from 'zod';
 
 export const AgentSchema = z.object({
   agent_id: z.string().optional().default('unknown'),
+  alias: z.string().optional(),
+  display_name: z.string().optional(),
+  label: z.string().optional(),
+  role: z.string().optional(),
   agent_type: z.string().optional().default('unknown'),
   type: z.string().optional().default('unknown'),
   assigned_node: z.string().optional().default('unassigned'),
@@ -49,7 +53,10 @@ export const JobDetailsSchema = z.object({
 
 export const AgentGraphNodeSchema = z.object({
   id: z.string(),
+  alias: z.string().optional(),
+  display_name: z.string().optional(),
   label: z.string().optional(),
+  role: z.string().optional(),
   agent_type: z.string().optional().default('unknown'),
   type: z.string().optional().default('unknown'),
   assigned_node: z.string().optional().default('unassigned'),
@@ -99,6 +106,21 @@ export const SystemSummarySchema = z.object({
     job_id: z.string().optional().default('unknown'),
     status: z.string().optional().default('unknown'),
   }).passthrough()).optional().default([]),
+}).passthrough();
+
+export const ClusterNodeAddResponseSchema = z.object({
+  ok: z.boolean().optional().default(true),
+  host: z.string().optional().default(''),
+  node_name: z.string().optional().default(''),
+  status: z.string().optional().default('unknown'),
+  message: z.string().optional().default(''),
+}).passthrough();
+
+export const ClusterNodeRemoveResponseSchema = z.object({
+  ok: z.boolean().optional().default(true),
+  node_name: z.string().optional().default(''),
+  status: z.string().optional().default('unknown'),
+  message: z.string().optional().default(''),
 }).passthrough();
 
 export const RunUiComponentSchema = z.object({
@@ -172,9 +194,12 @@ export const BlueprintLaunchResponseSchema = z.object({
 
 export const WorkflowProgressAgentSchema = z.object({
   id: z.string().optional().default('unknown'),
+  alias: z.string().optional(),
+  display_name: z.string().optional(),
   role: z.string().optional().default('worker'),
   working_on: z.string().optional().default('worker'),
   model: z.string().optional().default('runtime'),
+  assigned_node: z.string().optional(),
   status: z.string().optional().default('pending'),
   progress: z.number().optional().default(0),
   live: z.boolean().optional().default(false),
@@ -251,6 +276,8 @@ export type Job = z.infer<typeof JobSchema>;
 export type JobDetails = z.infer<typeof JobDetailsSchema>;
 export type AgentGraph = z.infer<typeof AgentGraphSchema>;
 export type SystemSummary = z.infer<typeof SystemSummarySchema>;
+export type ClusterNodeAddResponse = z.infer<typeof ClusterNodeAddResponseSchema>;
+export type ClusterNodeRemoveResponse = z.infer<typeof ClusterNodeRemoveResponseSchema>;
 export type RunUiComponent = z.infer<typeof RunUiComponentSchema>;
 export type RunUiDefinition = z.infer<typeof RunUiDefinitionSchema>;
 export type WebUiHandle = z.infer<typeof WebUiHandleSchema>;
@@ -277,6 +304,24 @@ export const fetchSystemSummary = () => api.get('/system/summary').then(r => {
   if (!result.success) {
     console.error('SystemSummary validation failed:', result.error);
     return SystemSummarySchema.parse({}); // return default structured fallback
+  }
+  return result.data;
+});
+
+export const addClusterNode = (payload: { host: string; token: string }) => api.post('/system/cluster/nodes:add', payload).then(r => {
+  const result = ClusterNodeAddResponseSchema.safeParse(r.data);
+  if (!result.success) {
+    console.error('addClusterNode validation failed:', result.error);
+    return ClusterNodeAddResponseSchema.parse({});
+  }
+  return result.data;
+});
+
+export const removeClusterNode = (nodeName: string) => api.post('/system/cluster/nodes:remove', { node_name: nodeName }).then(r => {
+  const result = ClusterNodeRemoveResponseSchema.safeParse(r.data);
+  if (!result.success) {
+    console.error('removeClusterNode validation failed:', result.error);
+    return ClusterNodeRemoveResponseSchema.parse({ node_name: nodeName });
   }
   return result.data;
 });

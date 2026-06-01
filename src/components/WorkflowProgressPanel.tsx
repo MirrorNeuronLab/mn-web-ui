@@ -1,5 +1,6 @@
 import { Check, Circle, Clock3, Loader2, X } from 'lucide-react';
 import type { WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
+import { displayAgentName } from '../utils/agentGraph';
 
 type WorkflowProgressPanelProps = {
   progress: WorkflowProgress | null;
@@ -73,12 +74,17 @@ const StepRow = ({ step, index, workflowKind, showLayer }: { step: WorkflowProgr
 
 const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
   const progress = Math.max(0, Math.min(1, agent.progress || 0));
+  const agentName = displayAgentName({
+    id: agent.id,
+    alias: agent.alias,
+    display_name: agent.display_name,
+  });
   return (
     <tr className="border-b border-neutral-100 last:border-0">
       <td className="max-w-[280px] px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
           <StatusGlyph status={agent.status} current={agent.status === 'running'} />
-          <span className="truncate font-mono text-sm font-medium text-neutral-950">{agent.id}</span>
+          <span className="truncate font-mono text-sm font-medium text-neutral-950" title={agent.id}>{agentName}</span>
         </div>
       </td>
       <td className="w-[120px] px-4 py-3 text-sm">

@@ -3,10 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelJob, pauseJob, resumeJob, isServiceJob } from '../api';
 import type { AgentGraph, JobDetails as JobDetailsType, JobEvent, WebUiHandle, WorkflowProgress } from '../api';
 import { format } from 'date-fns';
-import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, RadioTower, MessageSquare, ExternalLink, List } from 'lucide-react';
+import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, RadioTower, MessageSquare, ExternalLink, List, Code2 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { WorkflowAgentGraph } from '../components/WorkflowAgentGraph';
 import { WorkflowProgressPanel } from '../components/WorkflowProgressPanel';
+import { buildDisplayGraph } from '../utils/agentGraph';
 
 const StatusIcon = ({ status }: { status: string }) => {
   switch (status) {
@@ -171,14 +172,19 @@ const buildFallbackWorkflowProgress = (
     const workingOn = stringValue(
       payloadType ? humanize(payloadType) : undefined,
       latest?.type ? humanize(latest.type) : undefined,
+      agent.alias,
+      agent.display_name,
       agent.label,
       agentType,
     ) || 'worker';
     return {
       id,
+      alias: stringValue(agent.alias),
+      display_name: stringValue(agent.display_name),
       role: agentType,
       working_on: workingOn,
       model: stringValue(agent.assigned_node, agent.node, agent.model) || 'runtime',
+      assigned_node: stringValue(agent.assigned_node, agent.node),
       status,
       progress: progressForStatus(status, jobStatus),
       live,
@@ -314,7 +320,7 @@ export default function JobDetails() {
   const [workflowProgress, setWorkflowProgress] = useState<WorkflowProgress | null>(null);
   const [runWebUi, setRunWebUi] = useState<WebUiHandle | null>(null);
   const [activeTab, setActiveTab] = useState<'progress' | 'agents' | 'logs'>('progress');
-  const [agentView, setAgentView] = useState<'list' | 'graph'>('list');
+  const [agentView, setAgentView] = useState<'list' | 'graph' | 'code'>('list');
   
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -399,6 +405,9 @@ export default function JobDetails() {
   const displayStatus = normalizedStatus(details.job.status, workflowProgress?.status, graph?.status);
   const graphId = knownStringValue(details.job.graph_id, workflowProgress?.workflow_id, graph?.graph_id);
   const submittedAt = formattedTimestamp(details.job.submitted_at, workflowProgress?.submitted_at);
+  const displayGraph = buildDisplayGraph(graph, details.agents || [], jobId, graphId, displayStatus, workflowProgress);
+  const displayAgents = displayGraph.nodes;
+  const graphCode = JSON.stringify(displayGraph, null, 2);
 
   const handleCancel = async () => {
     try {
@@ -496,17 +505,17 @@ export default function JobDetails() {
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-lg border border-neutral-200 p-4 shadow-sm">
             <Network className="w-4 h-4 text-neutral-400 mb-3" />
-            <div className="text-2xl font-semibold text-neutral-950">{graph?.stats.agent_count || details.agents.length}</div>
+            <div className="text-2xl font-semibold text-neutral-950">{displayGraph.stats.agent_count}</div>
             <div className="text-xs font-medium text-neutral-500">Agents</div>
           </div>
           <div className="bg-white rounded-lg border border-neutral-200 p-4 shadow-sm">
             <RadioTower className="w-4 h-4 text-neutral-400 mb-3" />
-            <div className="text-2xl font-semibold text-neutral-950">{graph?.stats.edge_count ?? 0}</div>
+            <div className="text-2xl font-semibold text-neutral-950">{displayGraph.stats.edge_count}</div>
             <div className="text-xs font-medium text-neutral-500">Links</div>
           </div>
           <div className="bg-white rounded-lg border border-neutral-200 p-4 shadow-sm">
             <MessageSquare className="w-4 h-4 text-neutral-400 mb-3" />
-            <div className="text-2xl font-semibold text-neutral-950">{graph?.stats.message_count ?? 0}</div>
+            <div className="text-2xl font-semibold text-neutral-950">{displayGraph.stats.message_count}</div>
             <div className="text-xs font-medium text-neutral-500">Messages</div>
           </div>
         </div>
@@ -548,10 +557,21 @@ export default function JobDetails() {
                     aria-pressed={agentView === 'graph'}
                     title="Graph view"
                     onClick={() => setAgentView('graph')}
-                    className={`flex h-9 items-center gap-2 px-3 text-xs font-medium ${agentView === 'graph' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                    className={`flex h-9 items-center gap-2 border-r border-neutral-200 px-3 text-xs font-medium ${agentView === 'graph' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
                   >
                     <Network className="h-4 w-4" />
                     Graph
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Show agents as code"
+                    aria-pressed={agentView === 'code'}
+                    title="Code view"
+                    onClick={() => setAgentView('code')}
+                    className={`flex h-9 items-center gap-2 px-3 text-xs font-medium ${agentView === 'code' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                  >
+                    <Code2 className="h-4 w-4" />
+                    Code
                   </button>
                 </div>
               </div>
@@ -563,31 +583,44 @@ export default function JobDetails() {
                     fallbackJobId={jobId}
                     fallbackGraphId={graphId}
                     fallbackStatus={displayStatus}
+                    progress={workflowProgress}
                   />
+                ) : agentView === 'code' ? (
+                  <div className="absolute inset-0 overflow-auto bg-neutral-950 p-4">
+                    <pre className="font-mono text-xs leading-5 text-neutral-200">{graphCode}</pre>
+                  </div>
                 ) : (
                   <div className="overflow-auto absolute inset-0">
-                    <table className="w-full text-left border-collapse">
-                      <thead className="bg-neutral-50 sticky top-0">
-                        <tr className="text-sm text-neutral-500">
-                          <th className="px-6 py-3 font-medium">Agent ID</th>
-                          <th className="px-6 py-3 font-medium">Type</th>
-                          <th className="px-6 py-3 font-medium">Status</th>
-                          <th className="px-6 py-3 font-medium">Messages</th>
-                          <th className="px-6 py-3 font-medium">Node</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-100">
-                        {(details.agents || []).map((agent, i) => (
-                          <tr key={agent.agent_id || i} className="hover:bg-neutral-50">
-                            <td className="px-6 py-4 font-mono text-sm text-neutral-950 font-medium">{agent.agent_id || 'unknown'}</td>
-                            <td className="px-6 py-4 text-sm text-neutral-600">{agent.agent_type || 'unknown'} / {agent.type || 'unknown'}</td>
-                            <td className="px-6 py-4 text-sm capitalize">{agent.status || 'unknown'}</td>
-                            <td className="px-6 py-4 text-sm text-neutral-600">{agent.processed_messages ?? 0} processed, {agent.mailbox_depth ?? 0} in queue</td>
-                            <td className="px-6 py-4 text-sm text-neutral-500">{agent.assigned_node || 'unassigned'}</td>
+                    {displayAgents.length === 0 ? (
+                      <div className="flex h-full items-center justify-center text-sm text-neutral-500">
+                        No agents reported yet.
+                      </div>
+                    ) : (
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-neutral-50 sticky top-0">
+                          <tr className="text-sm text-neutral-500">
+                            <th className="px-6 py-3 font-medium">Agent ID</th>
+                            <th className="px-6 py-3 font-medium">Type</th>
+                            <th className="px-6 py-3 font-medium">Status</th>
+                            <th className="px-6 py-3 font-medium">Messages</th>
+                            <th className="px-6 py-3 font-medium">Node</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-100">
+                          {displayAgents.map((agent, i) => (
+                            <tr key={agent.id || i} className="hover:bg-neutral-50">
+                              <td className="px-6 py-4 font-mono text-sm text-neutral-950 font-medium">{agent.label || agent.id || 'unknown'}</td>
+                              <td className="px-6 py-4 text-sm text-neutral-600">{agent.agent_type || 'unknown'} / {agent.type || 'unknown'}</td>
+                              <td className="px-6 py-4 text-sm">
+                                <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${statusClass(agent.status)}`}>{agent.status || 'unknown'}</span>
+                              </td>
+                              <td className="px-6 py-4 text-sm text-neutral-600">{agent.processed_messages ?? 0} processed, {agent.mailbox_depth ?? 0} in queue</td>
+                              <td className="px-6 py-4 text-sm text-neutral-500">{agent.assigned_node || 'unassigned'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 )}
               </div>
