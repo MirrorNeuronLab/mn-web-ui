@@ -2,7 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import JobDetails from '../pages/JobDetails';
-import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, cancelJob, pauseJob, resumeJob } from '../api';
+import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelJob, pauseJob, resumeJob } from '../api';
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>();
@@ -12,6 +12,8 @@ vi.mock('../api', async (importOriginal) => {
     fetchJobEvents: vi.fn(),
     fetchJobAgentGraph: vi.fn(),
     fetchRunUi: vi.fn(),
+    fetchWorkflowProgress: vi.fn(),
+    streamWorkflowProgress: vi.fn(),
     cancelJob: vi.fn(),
     pauseJob: vi.fn(),
     resumeJob: vi.fn(),
@@ -58,6 +60,49 @@ describe('JobDetails Component', () => {
       run: {},
       events: [],
     });
+    vi.mocked(fetchWorkflowProgress).mockResolvedValue({
+      schema_version: 1,
+      job_id: 'test-job-1',
+      workflow_id: 'test-workflow',
+      name: 'Test Workflow',
+      description: 'Workflow progress test',
+      status: 'running',
+      workflow_kind: 'batch',
+      elapsed_seconds: 12,
+      agent_count: { done: 0, running: 1, idle: 0, ready: 1, failed: 0, total: 1 },
+      current_step_id: 'step-1',
+      current_step: {
+        id: 'step-1',
+        label: 'Step One',
+        goal: 'Run the first worker',
+        status: 'running',
+        current: true,
+        done_count: 0,
+        running_count: 1,
+        idle_count: 0,
+        ready_count: 1,
+        failed_count: 0,
+        total_count: 1,
+        live: false,
+        elapsed_seconds: 12,
+        agents: [
+          {
+            id: 'agent-1',
+            role: 'executor',
+            working_on: 'Run the first worker',
+            model: 'runtime',
+            status: 'running',
+            progress: 0.5,
+            live: false,
+            elapsed_seconds: 12,
+          },
+        ],
+      },
+      steps: [],
+      messages: ['Running: streaming live job events...'],
+      recent_events: [],
+    });
+    vi.mocked(streamWorkflowProgress).mockResolvedValue(undefined);
     // mock window.location to ensure useParams picks it up
     window.history.pushState({}, 'Test page', '/jobs/test-job-1');
   });
@@ -180,6 +225,149 @@ describe('JobDetails Component', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
     expect(screen.getByText('agent-1')).toBeInTheDocument();
+  });
+
+  it('shows runtime fallback progress when workflow progress is unavailable', async () => {
+    const mockDetails = {
+      job: {
+        job_id: 'test-job-1',
+        graph_id: 'graph-1',
+        status: 'running',
+        submitted_at: '2026-04-16T12:00:00Z',
+      },
+      agents: [
+        {
+          agent_id: 'agent-1',
+          agent_type: 'executor',
+          type: 'worker',
+          status: 'observed',
+          processed_messages: 5,
+          mailbox_depth: 0,
+          assigned_node: 'node-1'
+        }
+      ],
+      sandboxes: [],
+      recent_events: [
+        { timestamp: '2026-04-16T12:00:01Z', type: 'executor_lease_acquired', agent_id: 'agent-1', payload: { type: 'video_frame_tick' } }
+      ],
+    };
+
+    vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchWorkflowProgress).mockRejectedValue(new Error('Not Found'));
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Progress' }));
+    expect(screen.queryByText(/Loading workflow progress/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Runtime Agents/).length).toBeGreaterThan(0);
+    expect(screen.getByText('agent-1')).toBeInTheDocument();
+    expect(screen.getAllByText(/Showing runtime job status/i).length).toBeGreaterThan(0);
+  });
+
+  it('renders service workflow agents as idle instead of done while the job is running', async () => {
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'test-job-1',
+        graph_id: 'video_watch_assistant_v1',
+        status: 'running',
+        submitted_at: '2026-04-16T12:00:00Z',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchWorkflowProgress).mockResolvedValue({
+      schema_version: 1,
+      job_id: 'test-job-1',
+      workflow_id: 'video_watch_assistant_v1',
+      name: 'Video Watch Assistant',
+      description: '',
+      status: 'running',
+      workflow_kind: 'service',
+      elapsed_seconds: 342,
+      agent_count: { done: 1, running: 0, idle: 1, ready: 2, failed: 0, total: 2 },
+      current_step_id: 'visual_detector',
+      current_step: {
+        id: 'visual_detector',
+        label: 'Visual Detector',
+        goal: 'Analyze sampled frames',
+        status: 'idle',
+        current: true,
+        done_count: 0,
+        running_count: 0,
+        idle_count: 1,
+        ready_count: 1,
+        failed_count: 0,
+        total_count: 1,
+        live: true,
+        elapsed_seconds: 0,
+        agents: [
+          {
+            id: 'visual_detector',
+            role: 'executor',
+            working_on: 'Review visual detection',
+            model: 'runtime',
+            status: 'idle',
+            progress: 0.2,
+            live: true,
+            elapsed_seconds: 0,
+          },
+        ],
+      },
+      steps: [
+        {
+          id: 'ingress',
+          label: 'Ingress',
+          goal: 'router',
+          status: 'done',
+          current: false,
+          done_count: 1,
+          running_count: 0,
+          idle_count: 0,
+          ready_count: 1,
+          failed_count: 0,
+          total_count: 1,
+          live: false,
+          elapsed_seconds: 1,
+          agents: [],
+        },
+        {
+          id: 'visual_detector',
+          label: 'Visual Detector',
+          goal: 'executor',
+          status: 'idle',
+          current: true,
+          done_count: 0,
+          running_count: 0,
+          idle_count: 1,
+          ready_count: 1,
+          failed_count: 0,
+          total_count: 1,
+          live: true,
+          elapsed_seconds: 0,
+          agents: [],
+        },
+      ],
+      messages: ['Observing: latest event video_watch_frame_observed'],
+      recent_events: [],
+    });
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Progress' }));
+
+    expect(screen.getByText(/2\/2 agents/)).toBeInTheDocument();
+    expect(screen.getAllByText('idle').length).toBeGreaterThan(0);
+    expect(screen.getByText('Review visual detection')).toBeInTheDocument();
   });
 
   it('shows blueprint web ui from the run ui endpoint when job details are compact', async () => {

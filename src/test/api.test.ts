@@ -4,6 +4,7 @@ import {
   fetchJobDetails,
   fetchJobEvents,
   fetchJobs,
+  fetchWorkflowProgress,
   fetchSystemSummary,
   isServiceJob,
 } from '../api';
@@ -145,6 +146,47 @@ describe('api parsing helpers', () => {
       }),
     );
   });
+
+  it('parses workflow progress snapshots', async () => {
+    mockApi.get.mockResolvedValue({
+      data: {
+        job_id: 'job-1',
+        workflow_id: 'workflow-1',
+        name: 'Workflow One',
+        status: 'running',
+        workflow_kind: 'service',
+        agent_count: { done: 1, total: 2 },
+        current_step_id: 'research',
+        steps: [
+          {
+            id: 'research',
+            label: 'Research',
+            status: 'running',
+            current: true,
+            done_count: 1,
+            ready_count: 2,
+            total_count: 2,
+            agents: [{ id: 'research:docs', status: 'idle', progress: 0.2, live: true }],
+          },
+        ],
+      },
+    });
+
+    await expect(fetchWorkflowProgress('job-1')).resolves.toEqual(
+      expect.objectContaining({
+        job_id: 'job-1',
+        workflow_id: 'workflow-1',
+        workflow_kind: 'service',
+        steps: [
+          expect.objectContaining({
+            id: 'research',
+            agents: [expect.objectContaining({ id: 'research:docs', status: 'idle', live: true })],
+          }),
+        ],
+      }),
+    );
+    expect(mockApi.get).toHaveBeenCalledWith('/jobs/job-1/workflow-progress');
+  });
 });
 
 describe('isServiceJob', () => {
@@ -155,6 +197,11 @@ describe('isServiceJob', () => {
   it('detects service jobs from job fields', () => {
     expect(isServiceJob({ job_id: 'price-monitor', graph_id: 'stream', type: 'service' })).toBe(true);
     expect(isServiceJob({ job_id: 'job-1', graph_id: 'batch-flow', job_type: 'service' })).toBe(true);
+  });
+
+  it('detects live stream policies as service jobs', () => {
+    expect(isServiceJob({ job_id: 'watcher', graph_id: 'stream' }, { stream_mode: 'live' })).toBe(true);
+    expect(isServiceJob({ job_id: 'watcher', graph_id: 'stream' }, { policies: { stream_mode: 'live' } })).toBe(true);
   });
 
   it('does not mark normal batch jobs as service jobs by name', () => {

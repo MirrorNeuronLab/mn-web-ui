@@ -144,6 +144,69 @@ export const RunUiResponseSchema = z.object({
   events: z.array(JobEventSchema).optional().default([]),
 }).passthrough();
 
+export const WorkflowProgressAgentSchema = z.object({
+  id: z.string().optional().default('unknown'),
+  role: z.string().optional().default('worker'),
+  working_on: z.string().optional().default('worker'),
+  model: z.string().optional().default('runtime'),
+  status: z.string().optional().default('pending'),
+  progress: z.number().optional().default(0),
+  live: z.boolean().optional().default(false),
+  mailbox_depth: z.number().nullable().optional(),
+  tokens: z.number().nullable().optional(),
+  tools: z.number().nullable().optional(),
+  elapsed_seconds: z.number().optional().default(0),
+  started_at: z.string().nullable().optional(),
+  ended_at: z.string().nullable().optional(),
+  last_event_at: z.string().nullable().optional(),
+}).passthrough();
+
+export const WorkflowProgressStepSchema = z.object({
+  id: z.string().optional().default('step'),
+  label: z.string().optional().default('Step'),
+  goal: z.string().optional().default(''),
+  status: z.string().optional().default('pending'),
+  current: z.boolean().optional().default(false),
+  done_count: z.number().optional().default(0),
+  running_count: z.number().optional().default(0),
+  idle_count: z.number().optional().default(0),
+  ready_count: z.number().optional().default(0),
+  failed_count: z.number().optional().default(0),
+  total_count: z.number().optional().default(0),
+  live: z.boolean().optional().default(false),
+  elapsed_seconds: z.number().optional().default(0),
+  started_at: z.string().nullable().optional(),
+  ended_at: z.string().nullable().optional(),
+  last_event_at: z.string().nullable().optional(),
+  agents: z.array(WorkflowProgressAgentSchema).optional().default([]),
+}).passthrough();
+
+export const WorkflowProgressSchema = z.object({
+  schema_version: z.number().optional().default(1),
+  job_id: z.string().optional().default('unknown'),
+  workflow_id: z.string().optional().default('blueprint'),
+  name: z.string().optional().default('Blueprint'),
+  description: z.string().optional().default(''),
+  status: z.string().optional().default('unknown'),
+  workflow_kind: z.enum(['batch', 'service']).optional().default('batch'),
+  generated_at: z.string().nullable().optional(),
+  submitted_at: z.string().nullable().optional(),
+  elapsed_seconds: z.number().optional().default(0),
+  agent_count: z.object({
+    done: z.number().optional().default(0),
+    running: z.number().optional().default(0),
+    idle: z.number().optional().default(0),
+    ready: z.number().optional().default(0),
+    failed: z.number().optional().default(0),
+    total: z.number().optional().default(0),
+  }).optional().default({ done: 0, running: 0, idle: 0, ready: 0, failed: 0, total: 0 }),
+  current_step_id: z.string().nullable().optional(),
+  current_step: WorkflowProgressStepSchema.nullable().optional(),
+  steps: z.array(WorkflowProgressStepSchema).optional().default([]),
+  messages: z.array(z.string()).optional().default([]),
+  recent_events: z.array(JobEventSchema).optional().default([]),
+}).passthrough();
+
 export type Agent = z.infer<typeof AgentSchema>;
 export type JobEvent = z.infer<typeof JobEventSchema>;
 export type Job = z.infer<typeof JobSchema>;
@@ -154,11 +217,18 @@ export type RunUiComponent = z.infer<typeof RunUiComponentSchema>;
 export type RunUiDefinition = z.infer<typeof RunUiDefinitionSchema>;
 export type WebUiHandle = z.infer<typeof WebUiHandleSchema>;
 export type RunUiResponse = z.infer<typeof RunUiResponseSchema>;
+export type WorkflowProgressAgent = z.infer<typeof WorkflowProgressAgentSchema>;
+export type WorkflowProgressStep = z.infer<typeof WorkflowProgressStepSchema>;
+export type WorkflowProgress = z.infer<typeof WorkflowProgressSchema>;
 
-export const isServiceJob = (job: Partial<Job> | null | undefined, summary?: { type?: unknown; job_type?: unknown }): boolean => {
+export const isServiceJob = (job: Partial<Job> | null | undefined, summary?: { type?: unknown; job_type?: unknown; stream_mode?: unknown; policies?: unknown }): boolean => {
   const summaryType = typeof summary?.job_type === 'string' ? summary.job_type : typeof summary?.type === 'string' ? summary.type : '';
   const jobType = job?.job_type || job?.type || '';
-  return [summaryType, jobType].some((value) => value.toLowerCase() === 'service');
+  const summaryStreamMode = typeof summary?.stream_mode === 'string' ? summary.stream_mode : '';
+  const policies = summary?.policies && typeof summary.policies === 'object' && !Array.isArray(summary.policies) ? summary.policies as Record<string, unknown> : {};
+  const policyStreamMode = typeof policies.stream_mode === 'string' ? policies.stream_mode : '';
+  return [summaryType, jobType].some((value) => value.toLowerCase() === 'service')
+    || [summaryStreamMode, policyStreamMode].some((value) => value.toLowerCase() === 'live');
 };
 
 export const fetchSystemSummary = () => api.get('/system/summary').then(r => {
@@ -214,6 +284,60 @@ export const fetchRunUi = (id: string) => api.get(`/runs/${encodeURIComponent(id
   }
   return result.data;
 });
+export const fetchWorkflowProgress = (id: string) => api.get(`/jobs/${encodeURIComponent(id)}/workflow-progress`).then(r => {
+  const result = WorkflowProgressSchema.safeParse(r.data);
+  if (!result.success) {
+    console.error(`fetchWorkflowProgress(${id}) validation failed:`, result.error);
+    return WorkflowProgressSchema.parse({ job_id: id, workflow_id: id, name: id });
+  }
+  return result.data;
+});
+
+const apiBaseUrl = () => String(api.defaults.baseURL || '/api/v1').replace(/\/$/, '');
+const authHeader = (): Record<string, string> => {
+  const header = api.defaults.headers.common.Authorization;
+  return typeof header === 'string' && header ? { Authorization: header } : {};
+};
+const workflowProgressStreamUrl = (id: string) => `${apiBaseUrl()}/jobs/${encodeURIComponent(id)}/workflow-progress/stream`;
+
+export const streamWorkflowProgress = async (
+  id: string,
+  onSnapshot: (snapshot: WorkflowProgress) => void,
+  signal?: AbortSignal,
+) => {
+  const response = await fetch(workflowProgressStreamUrl(id), {
+    headers: authHeader(),
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`workflow progress stream failed: ${response.status}`);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split(/\n\n/);
+    buffer = chunks.pop() || '';
+    for (const chunk of chunks) {
+      const eventName = chunk.split('\n').find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message';
+      const data = chunk
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart())
+        .join('\n');
+      if (eventName !== 'snapshot' || !data) continue;
+      const parsed = WorkflowProgressSchema.safeParse(JSON.parse(data));
+      if (parsed.success) {
+        onSnapshot(parsed.data);
+      } else {
+        console.error(`streamWorkflowProgress(${id}) validation failed:`, parsed.error);
+      }
+    }
+  }
+};
 export const clearJobs = () => api.post('/jobs:cleanup').then(r => r.data as { cleared_count: number });
 export const cancelJob = (id: string) => api.post(`/jobs/${id}/cancel`).then(r => r.data);
 export const reloadBundle = (bundle_id: string) => api.post(`/bundles/${bundle_id}/reload`).then(r => r.data);

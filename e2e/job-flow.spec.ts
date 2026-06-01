@@ -70,6 +70,56 @@ test('submits a bundle and controls the job from the real app shell', async ({ p
     });
   });
 
+  const workflowProgress = () => ({
+    schema_version: 1,
+    job_id: 'browser-job-1',
+    workflow_id: 'browser_flow_graph',
+    name: 'Browser flow job',
+    description: 'Browser flow job',
+    status: jobStatus,
+    elapsed_seconds: 4,
+    agent_count: { done: jobStatus === 'running' ? 0 : 1, total: 1 },
+    current_step_id: 'node_1',
+    current_step: {
+      id: 'node_1',
+      label: 'Node 1',
+      goal: 'router',
+      status: jobStatus,
+      current: true,
+      done_count: jobStatus === 'running' ? 0 : 1,
+      total_count: 1,
+      elapsed_seconds: 4,
+      agents: [
+        {
+          id: 'node_1',
+          role: 'router',
+          working_on: 'router',
+          model: 'runtime',
+          status: jobStatus,
+          progress: jobStatus === 'running' ? 0.5 : 1,
+          elapsed_seconds: 4,
+        },
+      ],
+    },
+    steps: [],
+    messages: [`Running: ${jobStatus}`],
+    recent_events: [],
+  });
+
+  await page.route('**/api/v1/jobs/browser-job-1/workflow-progress', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(workflowProgress()),
+    });
+  });
+
+  await page.route('**/api/v1/jobs/browser-job-1/workflow-progress/stream*', async (route) => {
+    await route.fulfill({
+      contentType: 'text/event-stream',
+      body: `event: snapshot\ndata: ${JSON.stringify(workflowProgress())}\n\n`,
+    });
+  });
+
   await page.route('**/api/v1/jobs/browser-job-1/events', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
