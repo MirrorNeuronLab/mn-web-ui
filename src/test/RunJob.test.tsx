@@ -2,11 +2,12 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import RunJob from '../pages/RunJob';
-import { uploadBundle, createJob } from '../api';
+import { fetchBlueprints, launchBlueprintJob, uploadBundle } from '../api';
 
 vi.mock('../api', () => ({
+  fetchBlueprints: vi.fn(),
+  launchBlueprintJob: vi.fn(),
   uploadBundle: vi.fn(),
-  createJob: vi.fn()
 }));
 
 const mockNavigate = vi.fn();
@@ -14,115 +15,121 @@ vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual,
-    useNavigate: () => mockNavigate
+    useNavigate: () => mockNavigate,
   };
 });
+
+const renderRunJob = () => render(<BrowserRouter><RunJob /></BrowserRouter>);
 
 describe('RunJob Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(fetchBlueprints).mockResolvedValue({
+      repo_dir: '/repo',
+      blueprints: [
+        { id: 'worker_one', name: 'Worker One', description: 'Runs one worker.' },
+        { id: 'tax_expert', name: 'Tax Expert', description: 'Prepare tax workpapers.' },
+      ],
+      categories: [],
+    });
   });
 
-  it('renders upload area initially', () => {
-    render(<BrowserRouter><RunJob /></BrowserRouter>);
-    expect(screen.getByText('Submit New Job Bundle')).toBeInTheDocument();
-    expect(screen.getByText(/upload a zipped job bundle/i)).toBeInTheDocument();
+  it('renders run a job with source tabs', async () => {
+    renderRunJob();
+    expect(screen.getByText('Run a job')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Blueprint' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'File system path' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ZIP bundle' })).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
+    });
   });
 
-  it('handles bundle upload and job submission', async () => {
-    const mockBundleData = {
+  it('launches a selected blueprint through the launch endpoint', async () => {
+    vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-blueprint-123', id: 'job-blueprint-123', status: 'pending' });
+    renderRunJob();
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+
+    await waitFor(() => {
+      expect(launchBlueprintJob).toHaveBeenCalledWith({ source: 'catalog', blueprint_id: 'worker_one' });
+      expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-blueprint-123');
+    });
+  });
+
+  it('launches a manually entered filesystem path', async () => {
+    vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-path-123', id: 'job-path-123', status: 'pending' });
+    renderRunJob();
+
+    fireEvent.click(screen.getByRole('button', { name: 'File system path' }));
+    fireEvent.change(screen.getByLabelText('Blueprint folder path'), {
+      target: { value: '/Users/homer/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+
+    await waitFor(() => {
+      expect(launchBlueprintJob).toHaveBeenCalledWith({
+        source: 'path',
+        path: '/Users/homer/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant',
+      });
+      expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-path-123');
+    });
+  });
+
+  it('uploads and launches a zip bundle through the launch endpoint', async () => {
+    vi.mocked(uploadBundle).mockResolvedValue({
       bundle_path: '/tmp/test_bundle',
-      manifest: { graph_id: 'test_graph' }
-    };
-    
-    vi.mocked(uploadBundle).mockResolvedValue(mockBundleData);
-    vi.mocked(createJob).mockResolvedValue({ id: 'new-job-123' });
+      manifest: { graph_id: 'test_graph' },
+    });
+    vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-zip-123', id: 'job-zip-123', status: 'pending' });
 
-    render(<BrowserRouter><RunJob /></BrowserRouter>);
-    
-    // Simulate file upload
+    renderRunJob();
+    fireEvent.click(screen.getByRole('button', { name: 'ZIP bundle' }));
+
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['dummy content'], 'bundle.zip', { type: 'application/zip' });
     fireEvent.change(fileInput, { target: { files: [file] } });
 
-    // Wait for the mock api to return and the UI to show the manifest
     await waitFor(() => {
       expect(uploadBundle).toHaveBeenCalled();
-      expect(screen.getByText('Bundle validated successfully')).toBeInTheDocument();
+      expect(screen.getByText('Bundle uploaded')).toBeInTheDocument();
       expect(screen.getByText('test_graph')).toBeInTheDocument();
     });
 
-    // Submit the job
-    fireEvent.click(screen.getByText('Run Job Now'));
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
 
     await waitFor(() => {
-      expect(createJob).toHaveBeenCalledWith({ _bundle_path: '/tmp/test_bundle' });
-      expect(mockNavigate).toHaveBeenCalledWith('/jobs/new-job-123');
+      expect(launchBlueprintJob).toHaveBeenCalledWith({ source: 'bundle', _bundle_path: '/tmp/test_bundle' });
+      expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-zip-123');
     });
   });
 
-  it('shows error on upload failure', async () => {
-    vi.mocked(uploadBundle).mockRejectedValue(new Error('Invalid bundle'));
-
-    render(<BrowserRouter><RunJob /></BrowserRouter>);
-    
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = new File(['bad'], 'bad.zip', { type: 'application/zip' });
-    fireEvent.change(fileInput, { target: { files: [file] } });
-
-    await waitFor(() => {
-      expect(screen.getByText(/invalid bundle/i)).toBeInTheDocument();
-    });
-  });
-
-  it('shows backend validation detail when bundle upload is rejected', async () => {
-    vi.mocked(uploadBundle).mockRejectedValue({
-      response: { data: { detail: 'bundle zip must contain manifest.json and payloads/' } },
-      message: 'Request failed with status code 400',
-    });
-
-    render(<BrowserRouter><RunJob /></BrowserRouter>);
-
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = new File(['bad'], 'bad.zip', { type: 'application/zip' });
-    fireEvent.change(fileInput, { target: { files: [file] } });
-
-    await waitFor(() => {
-      expect(screen.getByText('bundle zip must contain manifest.json and payloads/')).toBeInTheDocument();
-    });
-    expect(screen.queryByText(/request failed with status code 400/i)).not.toBeInTheDocument();
-  });
-
-  it('shows backend detail message when job submission fails', async () => {
-    vi.mocked(uploadBundle).mockResolvedValue({
-      bundle_path: '/tmp/test_bundle',
-      manifest: { graph_id: 'test_graph' }
-    });
-    vi.mocked(createJob).mockRejectedValue({
+  it('shows mn blueprint validate errors from launch', async () => {
+    vi.mocked(launchBlueprintJob).mockRejectedValue({
       response: {
         data: {
-          detail: {
-            message: 'manifest_json or _bundle_path is required',
+          detail: 'Fix the highlighted blueprint validation issues and launch again.',
+          validation: {
+            errors: ['video_source.uri must use http:// or https://'],
           },
         },
       },
       message: 'Request failed with status code 422',
     });
 
-    render(<BrowserRouter><RunJob /></BrowserRouter>);
-
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = new File(['dummy content'], 'bundle.zip', { type: 'application/zip' });
-    fireEvent.change(fileInput, { target: { files: [file] } });
-
+    renderRunJob();
     await waitFor(() => {
-      expect(screen.getByText('Bundle validated successfully')).toBeInTheDocument();
+      expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
     });
-
-    fireEvent.click(screen.getByText('Run Job Now'));
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
 
     await waitFor(() => {
-      expect(screen.getByText('manifest_json or _bundle_path is required')).toBeInTheDocument();
+      expect(screen.getByText('video_source.uri must use http:// or https://')).toBeInTheDocument();
     });
     expect(mockNavigate).not.toHaveBeenCalled();
   });

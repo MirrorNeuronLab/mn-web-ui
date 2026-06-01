@@ -170,24 +170,70 @@ describe('JobDetails Component', () => {
     expect(screen.getByRole('link', { name: 'Web UI' })).toHaveAttribute('href', 'http://localhost:61000/');
     expect(screen.queryByText(/Executors:/i)).not.toBeInTheDocument();
 
-    // Default tab is graph
+    // Default tab is Progress
+    expect(screen.queryByRole('button', { name: 'Graph View' })).not.toBeInTheDocument();
+    expect(screen.getByText('test-workflow')).toBeInTheDocument();
+    expect(screen.getByText(/Step One/)).toBeInTheDocument();
+
+    // Switch to Agents tab; list view is the default, graph view is available there.
+    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
+    expect(screen.getByText('agent-1')).toBeInTheDocument();
+    expect(screen.getByText('executor / worker')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show agents as graph' }));
     expect(screen.getByTestId('react-flow-mock')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show code view' }));
     expect(screen.getByText(/"job_id": "test-job-1"/)).toBeInTheDocument();
     expect(screen.getByText(/"id": "agent-1"/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show workflow view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show graph view' }));
     expect(screen.getByTestId('react-flow-mock')).toBeInTheDocument();
-
-    // Switch to Agents tab
-    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
-    expect(screen.getByText('agent-1')).toBeInTheDocument();
-    expect(screen.getByText('executor / worker')).toBeInTheDocument();
 
     // Switch to Logs tab
     fireEvent.click(screen.getByText('Communication Logs'));
     expect(screen.getByText('[agent_started]')).toBeInTheDocument();
+  });
+
+  it('uses workflow progress status and hides unknown header metadata', async () => {
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'vwav-be7cc6d4',
+        graph_id: 'unknown',
+        status: 'unknown',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchWorkflowProgress).mockResolvedValue({
+      schema_version: 1,
+      job_id: 'vwav-be7cc6d4',
+      workflow_id: 'unknown',
+      name: 'Video Watch Assistant',
+      description: '',
+      status: 'running',
+      workflow_kind: 'service',
+      elapsed_seconds: 10,
+      agent_count: { done: 0, running: 1, idle: 0, ready: 1, failed: 0, total: 1 },
+      current_step_id: null,
+      current_step: null,
+      steps: [],
+      messages: [],
+      recent_events: [],
+    });
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('vwav-be7cc6d4')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('running').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Graph:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Submitted:/i)).not.toBeInTheDocument();
   });
 
   it('renders job details when agent graph is unavailable', async () => {

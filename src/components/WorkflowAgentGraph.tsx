@@ -179,14 +179,14 @@ export function WorkflowAgentGraph({
       <div className="absolute right-3 top-3 z-20 flex overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
         <button
           type="button"
-          aria-label="Show workflow view"
+          aria-label="Show graph view"
           aria-pressed={viewMode === 'workflow'}
-          title="Workflow view"
+          title="Graph view"
           onClick={() => setViewMode('workflow')}
           className={`flex h-9 items-center gap-2 border-r border-neutral-200 px-3 text-xs font-medium ${viewMode === 'workflow' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
         >
           <Workflow className="h-4 w-4" />
-          Workflow
+          Graph
         </button>
         <button
           type="button"

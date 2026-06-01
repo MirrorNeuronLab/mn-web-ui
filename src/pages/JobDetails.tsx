@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelJob, pauseJob, resumeJob, isServiceJob } from '../api';
 import type { AgentGraph, JobDetails as JobDetailsType, JobEvent, WebUiHandle, WorkflowProgress } from '../api';
 import { format } from 'date-fns';
-import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, RadioTower, MessageSquare, ExternalLink } from 'lucide-react';
+import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, RadioTower, MessageSquare, ExternalLink, List } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { WorkflowAgentGraph } from '../components/WorkflowAgentGraph';
 import { WorkflowProgressPanel } from '../components/WorkflowProgressPanel';
@@ -53,6 +53,28 @@ const stringValue = (...values: unknown[]): string | undefined => {
     }
   }
   return undefined;
+};
+
+const knownStringValue = (...values: unknown[]): string | undefined => {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed && trimmed.toLowerCase() !== 'unknown') return trimmed;
+  }
+  return undefined;
+};
+
+const normalizedStatus = (...values: unknown[]): string | undefined => {
+  const value = knownStringValue(...values);
+  return value ? value.toLowerCase() : undefined;
+};
+
+const formattedTimestamp = (...values: unknown[]): string | undefined => {
+  const raw = knownStringValue(...values);
+  if (!raw) return undefined;
+  const parsed = new Date(raw);
+  if (!Number.isFinite(parsed.getTime())) return undefined;
+  return format(parsed, 'PP p');
 };
 
 const safeWebUiUrl = (...values: unknown[]): string | undefined => {
@@ -291,7 +313,8 @@ export default function JobDetails() {
   const [graph, setGraph] = useState<AgentGraph | null>(null);
   const [workflowProgress, setWorkflowProgress] = useState<WorkflowProgress | null>(null);
   const [runWebUi, setRunWebUi] = useState<WebUiHandle | null>(null);
-  const [activeTab, setActiveTab] = useState<'graph' | 'progress' | 'agents' | 'logs'>('graph');
+  const [activeTab, setActiveTab] = useState<'progress' | 'agents' | 'logs'>('progress');
+  const [agentView, setAgentView] = useState<'list' | 'graph'>('list');
   
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -372,6 +395,10 @@ export default function JobDetails() {
 
   if (!details || !details.job) return <div className="p-8">Loading or Invalid Job...</div>;
   const webUi = blueprintWebUiInfo(details) || webUiInfoFromRecord(runWebUi);
+  const jobId = knownStringValue(details.job.job_id, id) || id || 'job';
+  const displayStatus = normalizedStatus(details.job.status, workflowProgress?.status, graph?.status);
+  const graphId = knownStringValue(details.job.graph_id, workflowProgress?.workflow_id, graph?.graph_id);
+  const submittedAt = formattedTimestamp(details.job.submitted_at, workflowProgress?.submitted_at);
 
   const handleCancel = async () => {
     try {
@@ -417,15 +444,17 @@ export default function JobDetails() {
         <div className="bg-white rounded-lg border border-neutral-200 shadow-sm p-6 flex justify-between items-start">
         <div>
           <div className="flex items-center space-x-3 mb-2">
-            <h2 className="text-xl font-bold font-mono text-neutral-950">{details.job.job_id}</h2>
-            <div className={`flex items-center px-3 py-1 rounded-full border ${statusClass(details.job.status)}`}>
-              <StatusIcon status={details.job.status} />
-              <span className="ml-2 text-sm font-medium capitalize">{details.job.status}</span>
-            </div>
+            <h2 className="text-xl font-bold font-mono text-neutral-950">{jobId}</h2>
+            {displayStatus ? (
+              <div className={`flex items-center px-3 py-1 rounded-full border ${statusClass(displayStatus)}`}>
+                <StatusIcon status={displayStatus} />
+                <span className="ml-2 text-sm font-medium capitalize">{displayStatus}</span>
+              </div>
+            ) : null}
           </div>
           <div className="text-neutral-500 text-sm flex flex-wrap gap-x-4 gap-y-2">
-            <span>Graph: <strong className="text-neutral-700">{details.job.graph_id || 'unknown'}</strong></span>
-            <span>Submitted: <strong className="text-neutral-700">{details.job.submitted_at ? format(new Date(details.job.submitted_at), 'PP p') : 'unknown'}</strong></span>
+            {graphId ? <span>Graph: <strong className="text-neutral-700">{graphId}</strong></span> : null}
+            {submittedAt ? <span>Submitted: <strong className="text-neutral-700">{submittedAt}</strong></span> : null}
             {webUi ? (
               <span>
                 Web UI:{' '}
@@ -448,16 +477,16 @@ export default function JobDetails() {
               <ExternalLink className="w-4 h-4 mr-2" /> Web UI
             </a>
           ) : null}
-          {details.job.status === 'running' ? (
+          {displayStatus === 'running' ? (
             <button disabled={isPausing} onClick={handlePause} className="px-4 py-2 bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-md font-medium text-sm hover:bg-neutral-50 transition-colors flex items-center disabled:opacity-50">
               {isPausing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PauseCircle className="w-4 h-4 mr-2" />} Pause
             </button>
-          ) : details.job.status === 'paused' ? (
+          ) : displayStatus === 'paused' ? (
             <button disabled={isResuming} onClick={handleResume} className="px-4 py-2 bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-md font-medium text-sm hover:bg-neutral-50 transition-colors flex items-center disabled:opacity-50">
               {isResuming ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />} Resume
             </button>
           ) : null}
-          {(details.job.status === 'running' || details.job.status === 'pending' || details.job.status === 'paused') ? (
+          {(displayStatus === 'running' || displayStatus === 'pending' || displayStatus === 'paused') ? (
             <button disabled={isCancelling} onClick={() => setShowCancelConfirm(true)} className="px-4 py-2 bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-md font-medium text-sm hover:bg-neutral-50 transition-colors flex items-center disabled:opacity-50">
               {isCancelling ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Ban className="w-4 h-4 mr-2" />} Cancel
             </button>
@@ -485,54 +514,83 @@ export default function JobDetails() {
 
       <div className="bg-white rounded-lg border border-neutral-200 shadow-sm flex-1 flex flex-col min-h-[560px] overflow-hidden">
         <div className="flex border-b border-neutral-200 bg-neutral-50 px-4">
-          <button onClick={() => setActiveTab('graph')} className={`px-4 py-3 text-sm font-medium border-b-2 ${activeTab === 'graph' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Graph View</button>
           <button onClick={() => setActiveTab('progress')} className={`px-4 py-3 text-sm font-medium border-b-2 ${activeTab === 'progress' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Progress</button>
           <button onClick={() => setActiveTab('agents')} className={`px-4 py-3 text-sm font-medium border-b-2 ${activeTab === 'agents' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Agents</button>
           <button onClick={() => setActiveTab('logs')} className={`px-4 py-3 text-sm font-medium border-b-2 ${activeTab === 'logs' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Communication Logs</button>
         </div>
 
         <div className="flex-1 relative">
-          {activeTab === 'graph' && (
-            <WorkflowAgentGraph
-              graph={graph}
-              agents={details.agents || []}
-              fallbackJobId={details.job.job_id}
-              fallbackGraphId={details.job.graph_id}
-              fallbackStatus={details.job.status}
-            />
-          )}
-
           {activeTab === 'progress' && (
             <WorkflowProgressPanel
               progress={workflowProgress}
-              status={details.job.status}
+              status={displayStatus || 'unknown'}
             />
           )}
 
           {activeTab === 'agents' && (
-            <div className="overflow-auto absolute inset-0">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-neutral-50 sticky top-0">
-                  <tr className="text-sm text-neutral-500">
-                    <th className="px-6 py-3 font-medium">Agent ID</th>
-                    <th className="px-6 py-3 font-medium">Type</th>
-                    <th className="px-6 py-3 font-medium">Status</th>
-                    <th className="px-6 py-3 font-medium">Messages</th>
-                    <th className="px-6 py-3 font-medium">Node</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {(details.agents || []).map((agent, i) => (
-                    <tr key={agent.agent_id || i} className="hover:bg-neutral-50">
-                      <td className="px-6 py-4 font-mono text-sm text-neutral-950 font-medium">{agent.agent_id || 'unknown'}</td>
-                      <td className="px-6 py-4 text-sm text-neutral-600">{agent.agent_type || 'unknown'} / {agent.type || 'unknown'}</td>
-                      <td className="px-6 py-4 text-sm capitalize">{agent.status || 'unknown'}</td>
-                      <td className="px-6 py-4 text-sm text-neutral-600">{agent.processed_messages ?? 0} processed, {agent.mailbox_depth ?? 0} in queue</td>
-                      <td className="px-6 py-4 text-sm text-neutral-500">{agent.assigned_node || 'unassigned'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="absolute inset-0 flex flex-col bg-white">
+              <div className="flex items-center justify-end border-b border-neutral-200 bg-white px-4 py-3">
+                <div className="flex overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
+                  <button
+                    type="button"
+                    aria-label="Show agents as list"
+                    aria-pressed={agentView === 'list'}
+                    title="List view"
+                    onClick={() => setAgentView('list')}
+                    className={`flex h-9 items-center gap-2 border-r border-neutral-200 px-3 text-xs font-medium ${agentView === 'list' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                  >
+                    <List className="h-4 w-4" />
+                    List
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Show agents as graph"
+                    aria-pressed={agentView === 'graph'}
+                    title="Graph view"
+                    onClick={() => setAgentView('graph')}
+                    className={`flex h-9 items-center gap-2 px-3 text-xs font-medium ${agentView === 'graph' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                  >
+                    <Network className="h-4 w-4" />
+                    Graph
+                  </button>
+                </div>
+              </div>
+              <div className="relative flex-1">
+                {agentView === 'graph' ? (
+                  <WorkflowAgentGraph
+                    graph={graph}
+                    agents={details.agents || []}
+                    fallbackJobId={jobId}
+                    fallbackGraphId={graphId}
+                    fallbackStatus={displayStatus}
+                  />
+                ) : (
+                  <div className="overflow-auto absolute inset-0">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-neutral-50 sticky top-0">
+                        <tr className="text-sm text-neutral-500">
+                          <th className="px-6 py-3 font-medium">Agent ID</th>
+                          <th className="px-6 py-3 font-medium">Type</th>
+                          <th className="px-6 py-3 font-medium">Status</th>
+                          <th className="px-6 py-3 font-medium">Messages</th>
+                          <th className="px-6 py-3 font-medium">Node</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-100">
+                        {(details.agents || []).map((agent, i) => (
+                          <tr key={agent.agent_id || i} className="hover:bg-neutral-50">
+                            <td className="px-6 py-4 font-mono text-sm text-neutral-950 font-medium">{agent.agent_id || 'unknown'}</td>
+                            <td className="px-6 py-4 text-sm text-neutral-600">{agent.agent_type || 'unknown'} / {agent.type || 'unknown'}</td>
+                            <td className="px-6 py-4 text-sm capitalize">{agent.status || 'unknown'}</td>
+                            <td className="px-6 py-4 text-sm text-neutral-600">{agent.processed_messages ?? 0} processed, {agent.mailbox_depth ?? 0} in queue</td>
+                            <td className="px-6 py-4 text-sm text-neutral-500">{agent.assigned_node || 'unassigned'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

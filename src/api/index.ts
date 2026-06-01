@@ -144,6 +144,32 @@ export const RunUiResponseSchema = z.object({
   events: z.array(JobEventSchema).optional().default([]),
 }).passthrough();
 
+export const BlueprintSchema = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  description: z.string().optional().default(''),
+  category: z.string().optional(),
+  category_slug: z.string().optional(),
+  path: z.string().optional(),
+}).passthrough();
+
+export const BlueprintListResponseSchema = z.object({
+  repo_dir: z.string().optional(),
+  blueprints: z.array(BlueprintSchema).optional().default([]),
+  categories: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+}).passthrough();
+
+export const BlueprintLaunchResponseSchema = z.object({
+  id: z.string().optional(),
+  job_id: z.string().optional(),
+  run_id: z.string().optional().nullable(),
+  status: z.string().optional().default('pending'),
+  source: z.string().optional(),
+  blueprint: BlueprintSchema.optional(),
+  validation: z.record(z.string(), z.unknown()).optional(),
+  command: z.string().optional(),
+}).passthrough();
+
 export const WorkflowProgressAgentSchema = z.object({
   id: z.string().optional().default('unknown'),
   role: z.string().optional().default('worker'),
@@ -229,6 +255,9 @@ export type RunUiComponent = z.infer<typeof RunUiComponentSchema>;
 export type RunUiDefinition = z.infer<typeof RunUiDefinitionSchema>;
 export type WebUiHandle = z.infer<typeof WebUiHandleSchema>;
 export type RunUiResponse = z.infer<typeof RunUiResponseSchema>;
+export type Blueprint = z.infer<typeof BlueprintSchema>;
+export type BlueprintListResponse = z.infer<typeof BlueprintListResponseSchema>;
+export type BlueprintLaunchResponse = z.infer<typeof BlueprintLaunchResponseSchema>;
 export type WorkflowProgressAgent = z.infer<typeof WorkflowProgressAgentSchema>;
 export type WorkflowProgressStep = z.infer<typeof WorkflowProgressStepSchema>;
 export type WorkflowProgress = z.infer<typeof WorkflowProgressSchema>;
@@ -293,6 +322,14 @@ export const fetchRunUi = (id: string) => api.get(`/runs/${encodeURIComponent(id
   if (!result.success) {
     console.error(`fetchRunUi(${id}) validation failed:`, result.error);
     return RunUiResponseSchema.parse({ run_id: id, ui: { run_id: id, title: 'Blueprint Run' } });
+  }
+  return result.data;
+});
+export const fetchBlueprints = () => api.get('/blueprints').then(r => {
+  const result = BlueprintListResponseSchema.safeParse(r.data);
+  if (!result.success) {
+    console.error('fetchBlueprints validation failed:', result.error);
+    return BlueprintListResponseSchema.parse({});
   }
   return result.data;
 });
@@ -364,3 +401,11 @@ export const uploadBundle = (file: File) => {
   }).then(r => r.data);
 };
 export const createJob = (payload: unknown) => api.post('/jobs', payload).then(r => r.data);
+export const launchBlueprintJob = (payload: unknown) => api.post('/blueprints/launch/runs', payload).then(r => {
+  const result = BlueprintLaunchResponseSchema.safeParse(r.data);
+  if (!result.success) {
+    console.error('launchBlueprintJob validation failed:', result.error);
+    return BlueprintLaunchResponseSchema.parse(r.data || {});
+  }
+  return result.data;
+});

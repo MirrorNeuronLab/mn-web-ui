@@ -6,7 +6,7 @@ import mnLogo from '../assets/mn-logo.svg';
 const navItems = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
   { name: 'Jobs', path: '/jobs', icon: List },
-  { name: 'Run Job', path: '/run', icon: Play },
+  { name: 'Run a job', path: '/run', icon: Play },
 ];
 
 export default function Layout() {
@@ -23,7 +23,7 @@ export default function Layout() {
             className="flex h-11 items-center gap-3 rounded-md bg-neutral-950 px-4 text-sm font-medium text-white hover:bg-neutral-800"
           >
             <Plus className="w-4 h-4" />
-            Quick Create
+            Run a job
           </NavLink>
         </div>
         <nav className="flex-1 px-4 py-2">
