@@ -55,6 +55,43 @@ describe('api parsing helpers', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/jobs');
   });
 
+  it('reconciles stale paused service rows with live workflow progress', async () => {
+    mockApi.get
+      .mockResolvedValueOnce({
+        data: {
+          data: [
+            {
+              job_id: 'service-job-1',
+              graph_id: 'video_watch_assistant_v1',
+              status: 'paused',
+              job_type: 'service',
+              'live?': true,
+              recovery_status: 'paused_for_review',
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          schema_version: 1,
+          job_id: 'service-job-1',
+          workflow_id: 'video_watch_assistant_v1',
+          name: 'Video Watch Assistant',
+          status: 'running',
+          workflow_kind: 'service',
+        },
+      });
+
+    await expect(fetchJobs()).resolves.toEqual([
+      expect.objectContaining({
+        job_id: 'service-job-1',
+        status: 'running',
+      }),
+    ]);
+    expect(mockApi.get).toHaveBeenNthCalledWith(1, '/jobs');
+    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/jobs/service-job-1/workflow-progress');
+  });
+
   it('falls back to an empty job list when the API shape is malformed', async () => {
     mockApi.get.mockResolvedValue({
       data: { data: [{ job_id: 123, status: 'running' }] },

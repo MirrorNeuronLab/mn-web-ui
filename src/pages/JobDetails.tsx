@@ -402,7 +402,7 @@ export default function JobDetails() {
   if (!details || !details.job) return <div className="p-8">Loading or Invalid Job...</div>;
   const webUi = blueprintWebUiInfo(details) || webUiInfoFromRecord(runWebUi);
   const jobId = knownStringValue(details.job.job_id, id) || id || 'job';
-  const displayStatus = normalizedStatus(details.job.status, workflowProgress?.status, graph?.status);
+  const displayStatus = normalizedStatus(workflowProgress?.status, details.job.status, graph?.status);
   const graphId = knownStringValue(details.job.graph_id, workflowProgress?.workflow_id, graph?.graph_id);
   const submittedAt = formattedTimestamp(details.job.submitted_at, workflowProgress?.submitted_at);
   const displayGraph = buildDisplayGraph(graph, details.agents || [], jobId, graphId, displayStatus, workflowProgress);

@@ -38,6 +38,11 @@ export const JobSchema = z.object({
   active_executors: z.number().optional(),
   type: z.string().optional(),
   job_type: z.string().optional(),
+  live: z.boolean().optional(),
+  'live?': z.boolean().optional(),
+  recovery_status: z.string().optional(),
+  recovery_requires_review: z.boolean().optional(),
+  recovery: z.record(z.string(), z.unknown()).optional(),
 }).passthrough();
 
 export const JobDetailsSchema = z.object({
@@ -299,6 +304,47 @@ export const isServiceJob = (job: Partial<Job> | null | undefined, summary?: { t
     || [summaryStreamMode, policyStreamMode].some((value) => value.toLowerCase() === 'live');
 };
 
+const ACTIVE_LIST_STATUSES = new Set(['pending', 'scheduled', 'validated', 'running']);
+const STALE_SERVICE_LIST_STATUSES = new Set(['paused', 'completed', 'unknown']);
+
+const normalizedText = (value: unknown): string => (
+  typeof value === 'string' ? value.trim().toLowerCase() : ''
+);
+
+const jobHasLiveSignal = (job: Job): boolean => Boolean(job.live || job['live?']);
+
+const jobRecoveryStatus = (job: Job): string => {
+  const recovery = job.recovery && typeof job.recovery === 'object' ? job.recovery : {};
+  return normalizedText(job.recovery_status) || normalizedText(recovery.status);
+};
+
+const shouldRefreshListStatus = (job: Job): boolean => {
+  const status = normalizedText(job.status);
+  if (!isServiceJob(job) || !STALE_SERVICE_LIST_STATUSES.has(status)) return false;
+  return status === 'paused' || jobHasLiveSignal(job) || Boolean(jobRecoveryStatus(job));
+};
+
+const listStatusFromProgress = (progress: WorkflowProgress): string | null => {
+  const status = normalizedText(progress.status);
+  if (progress.workflow_kind === 'service' && ACTIVE_LIST_STATUSES.has(status)) {
+    return status;
+  }
+  return null;
+};
+
+const refreshJobListStatus = async (job: Job): Promise<Job> => {
+  if (!shouldRefreshListStatus(job) || !job.job_id || job.job_id === 'unknown') return job;
+  try {
+    const response = await api.get(`/jobs/${encodeURIComponent(job.job_id)}/workflow-progress`);
+    const parsed = WorkflowProgressSchema.safeParse(response.data);
+    if (!parsed.success) return job;
+    const status = listStatusFromProgress(parsed.data);
+    return status ? { ...job, status } : job;
+  } catch {
+    return job;
+  }
+};
+
 export const fetchSystemSummary = () => api.get('/system/summary').then(r => {
   const result = SystemSummarySchema.safeParse(r.data);
   if (!result.success) {
@@ -326,15 +372,16 @@ export const removeClusterNode = (nodeName: string) => api.post('/system/cluster
   return result.data;
 });
 
-export const fetchJobs = () => api.get('/jobs').then(r => {
+export const fetchJobs = async () => {
+  const r = await api.get('/jobs');
   const data = r.data?.data || [];
   const result = z.array(JobSchema).safeParse(data);
   if (!result.success) {
     console.error('fetchJobs validation failed:', result.error);
     return [];
   }
-  return result.data;
-});
+  return Promise.all(result.data.map(refreshJobListStatus));
+};
 
 export const fetchJobDetails = (id: string) => api.get(`/jobs/${id}`).then(r => {
   const result = JobDetailsSchema.safeParse(r.data);

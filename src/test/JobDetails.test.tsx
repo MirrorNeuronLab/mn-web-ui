@@ -236,6 +236,45 @@ describe('JobDetails Component', () => {
     expect(screen.queryByText(/Submitted:/i)).not.toBeInTheDocument();
   });
 
+  it('prefers live workflow status over stale compact job status', async () => {
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'service-job-1',
+        graph_id: 'video_watch_assistant_v1',
+        status: 'completed',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchWorkflowProgress).mockResolvedValue({
+      schema_version: 1,
+      job_id: 'service-job-1',
+      workflow_id: 'video_watch_assistant_v1',
+      name: 'Video Watch Assistant',
+      description: '',
+      status: 'running',
+      workflow_kind: 'service',
+      elapsed_seconds: 10,
+      agent_count: { done: 0, running: 0, idle: 1, ready: 1, failed: 0, total: 1 },
+      current_step_id: null,
+      current_step: null,
+      steps: [],
+      messages: [],
+      recent_events: [],
+    });
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('service-job-1')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument();
+  });
+
   it('renders job details when agent graph is unavailable', async () => {
     const mockDetails = {
       job: {
@@ -744,6 +783,7 @@ describe('JobDetails Component', () => {
 
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchWorkflowProgress).mockRejectedValue(new Error('Not Found'));
     vi.mocked(resumeJob).mockResolvedValue({ status: 'resumed', job_id: 'test-job-1' });
 
     renderWithRouter(<JobDetails />);
