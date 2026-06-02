@@ -70,6 +70,29 @@ const normalizedStatus = (...values: unknown[]): string | undefined => {
   return value ? value.toLowerCase() : undefined;
 };
 
+const canonicalActionStatus = (response: unknown, fallback: string): string => {
+  const rawStatus = isRecord(response) ? response.status : undefined;
+  const status = normalizedStatus(rawStatus, fallback) || fallback;
+  if (status === 'resumed') return 'running';
+  if (status === 'canceled') return 'cancelled';
+  return status;
+};
+
+const displayStatusFromSources = (
+  actionStatus: string | null,
+  progressStatus: unknown,
+  jobStatus: unknown,
+  graphStatus: unknown,
+): string | undefined => {
+  const progress = normalizedStatus(progressStatus);
+  if (progress && isTerminalStatus(progress)) return progress;
+  const action = normalizedStatus(actionStatus);
+  if (action) return action;
+  const job = normalizedStatus(jobStatus);
+  if (job === 'paused') return job;
+  return normalizedStatus(progress, job, graphStatus);
+};
+
 const formattedTimestamp = (...values: unknown[]): string | undefined => {
   const raw = knownStringValue(...values);
   if (!raw) return undefined;
@@ -327,6 +350,7 @@ export default function JobDetails() {
   const [isPausing, setIsPausing] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [actionStatus, setActionStatus] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -383,6 +407,10 @@ export default function JobDetails() {
   }, [load]);
 
   useEffect(() => {
+    setActionStatus(null);
+  }, [id]);
+
+  useEffect(() => {
     if (!id) return;
     const controller = new AbortController();
     let cancelled = false;
@@ -402,10 +430,11 @@ export default function JobDetails() {
   if (!details || !details.job) return <div className="p-8">Loading or Invalid Job...</div>;
   const webUi = blueprintWebUiInfo(details) || webUiInfoFromRecord(runWebUi);
   const jobId = knownStringValue(details.job.job_id, id) || id || 'job';
-  const displayStatus = normalizedStatus(workflowProgress?.status, details.job.status, graph?.status);
+  const displayStatus = displayStatusFromSources(actionStatus, workflowProgress?.status, details.job.status, graph?.status);
   const graphId = knownStringValue(details.job.graph_id, workflowProgress?.workflow_id, graph?.graph_id);
   const submittedAt = formattedTimestamp(details.job.submitted_at, workflowProgress?.submitted_at);
-  const displayGraph = buildDisplayGraph(graph, details.agents || [], jobId, graphId, displayStatus, workflowProgress);
+  const displayWorkflowProgress = workflowProgress && displayStatus ? { ...workflowProgress, status: displayStatus } : workflowProgress;
+  const displayGraph = buildDisplayGraph(graph, details.agents || [], jobId, graphId, displayStatus, displayWorkflowProgress);
   const displayAgents = displayGraph.nodes;
   const graphCode = JSON.stringify(displayGraph, null, 2);
 
@@ -426,7 +455,8 @@ export default function JobDetails() {
   const handlePause = async () => {
     try {
       setIsPausing(true);
-      await pauseJob(id!);
+      const response = await pauseJob(jobId);
+      setActionStatus(canonicalActionStatus(response, 'paused'));
       await load();
     } catch (err) {
       console.error('Failed to pause job', err);
@@ -438,7 +468,8 @@ export default function JobDetails() {
   const handleResume = async () => {
     try {
       setIsResuming(true);
-      await resumeJob(id!);
+      const response = await resumeJob(jobId);
+      setActionStatus(canonicalActionStatus(response, 'running'));
       await load();
     } catch (err) {
       console.error('Failed to resume job', err);
@@ -531,7 +562,7 @@ export default function JobDetails() {
         <div className="flex-1 relative">
           {activeTab === 'progress' && (
             <WorkflowProgressPanel
-              progress={workflowProgress}
+              progress={displayWorkflowProgress}
               status={displayStatus || 'unknown'}
             />
           )}
@@ -583,7 +614,7 @@ export default function JobDetails() {
                     fallbackJobId={jobId}
                     fallbackGraphId={graphId}
                     fallbackStatus={displayStatus}
-                    progress={workflowProgress}
+                    progress={displayWorkflowProgress}
                   />
                 ) : agentView === 'code' ? (
                   <div className="absolute inset-0 overflow-auto bg-neutral-950 p-4">

@@ -55,6 +55,16 @@ describe('api parsing helpers', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/jobs');
   });
 
+  it('passes the terminal job visibility flag when requested', async () => {
+    mockApi.get.mockResolvedValue({ data: { data: [] } });
+
+    await expect(fetchJobs({ includeTerminal: false })).resolves.toEqual([]);
+
+    expect(mockApi.get).toHaveBeenCalledWith('/jobs', {
+      params: { include_terminal: false },
+    });
+  });
+
   it('reconciles stale paused service rows with live workflow progress', async () => {
     mockApi.get
       .mockResolvedValueOnce({
@@ -90,6 +100,76 @@ describe('api parsing helpers', () => {
     ]);
     expect(mockApi.get).toHaveBeenNthCalledWith(1, '/jobs');
     expect(mockApi.get).toHaveBeenNthCalledWith(2, '/jobs/service-job-1/workflow-progress');
+  });
+
+  it('reconciles stale paused batch rows with live workflow progress', async () => {
+    mockApi.get
+      .mockResolvedValueOnce({
+        data: {
+          data: [
+            {
+              job_id: 'batch-job-1',
+              graph_id: 'personal_income_tax_expert_v1',
+              status: 'paused',
+              job_type: 'batch',
+              recovery_status: 'paused_for_review',
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          schema_version: 1,
+          job_id: 'batch-job-1',
+          workflow_id: 'personal_income_tax_expert_v1',
+          name: 'Personal Income Tax Expert',
+          status: 'running',
+          workflow_kind: 'batch',
+        },
+      });
+
+    await expect(fetchJobs()).resolves.toEqual([
+      expect.objectContaining({
+        job_id: 'batch-job-1',
+        status: 'running',
+      }),
+    ]);
+    expect(mockApi.get).toHaveBeenNthCalledWith(1, '/jobs');
+    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/jobs/batch-job-1/workflow-progress');
+  });
+
+  it('refreshes active list row statuses from live workflow progress', async () => {
+    mockApi.get
+      .mockResolvedValueOnce({
+        data: {
+          data: [
+            {
+              job_id: 'job-1',
+              graph_id: 'workflow_v1',
+              status: 'running',
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          schema_version: 1,
+          job_id: 'job-1',
+          workflow_id: 'workflow_v1',
+          name: 'Workflow',
+          status: 'completed',
+          workflow_kind: 'batch',
+        },
+      });
+
+    await expect(fetchJobs()).resolves.toEqual([
+      expect.objectContaining({
+        job_id: 'job-1',
+        status: 'completed',
+      }),
+    ]);
+    expect(mockApi.get).toHaveBeenNthCalledWith(1, '/jobs');
+    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/jobs/job-1/workflow-progress');
   });
 
   it('falls back to an empty job list when the API shape is malformed', async () => {
@@ -165,6 +245,40 @@ describe('api parsing helpers', () => {
       expect.objectContaining({
         job: expect.objectContaining({ job_id: 'job-1', status: 'unknown' }),
         agents: [],
+      }),
+    );
+  });
+
+  it('preserves compact paused job details with nullable graph metadata', async () => {
+    mockApi.get.mockResolvedValue({
+      data: {
+        job: {
+          job_id: 'job-1',
+          graph_id: null,
+          run_id: 'run-1',
+          status: 'paused',
+          submitted_at: '2026-06-02T15:41:54Z',
+          updated_at: null,
+        },
+        summary: {
+          mode: 'compact',
+          graph_id: null,
+          status: 'paused',
+        },
+        agents: [],
+        recent_events: [],
+      },
+    });
+
+    await expect(fetchJobDetails('job-1')).resolves.toEqual(
+      expect.objectContaining({
+        job: expect.objectContaining({
+          job_id: 'job-1',
+          graph_id: null,
+          run_id: 'run-1',
+          status: 'paused',
+          updated_at: null,
+        }),
       }),
     );
   });

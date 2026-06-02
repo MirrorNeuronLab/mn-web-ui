@@ -13,6 +13,7 @@ const statusTone = (status: string | undefined) => {
   if (['partial', 'skipped'].includes(normalized)) return 'text-amber-700';
   if (['failed', 'cancelled', 'error'].includes(normalized)) return 'text-red-700';
   if (['running', 'active'].includes(normalized)) return 'text-sky-700';
+  if (['retry_wait', 'blocked', 'paused', 'pausing', 'queued'].includes(normalized)) return 'text-amber-700';
   if (['idle', 'ready'].includes(normalized)) return 'text-neutral-600';
   return 'text-neutral-500';
 };
@@ -23,6 +24,7 @@ const StatusGlyph = ({ status, current }: { status?: string; current?: boolean }
   if (['partial', 'skipped'].includes(normalized)) return <Circle className="h-4 w-4 text-amber-600" />;
   if (['failed', 'cancelled', 'error'].includes(normalized)) return <X className="h-4 w-4 text-red-700" />;
   if (current || ['running', 'active'].includes(normalized)) return <Loader2 className="h-4 w-4 animate-spin text-sky-700" />;
+  if (['retry_wait', 'blocked', 'paused', 'pausing', 'queued'].includes(normalized)) return <Clock3 className="h-4 w-4 text-amber-600" />;
   if (['idle', 'ready'].includes(normalized)) return <Circle className="h-4 w-4 text-neutral-500" />;
   if (['pending', 'scheduled', 'validated', 'preparing'].includes(normalized)) return <Clock3 className="h-4 w-4 text-neutral-500" />;
   return <Circle className="h-4 w-4 text-neutral-400" />;
@@ -91,7 +93,9 @@ const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
         <span className={`capitalize ${statusTone(agent.status)}`}>{agent.status || 'unknown'}</span>
       </td>
       <td className="max-w-[360px] px-4 py-3 text-sm text-neutral-700">
-        <div className="truncate">{agent.working_on || agent.role || 'worker'}</div>
+        <div className="truncate" title={agent.status_reason || undefined}>
+          {agent.status_reason || agent.working_on || agent.role || 'worker'}
+        </div>
       </td>
       <td className="max-w-[240px] px-4 py-3 text-sm text-neutral-600">
         <div className="truncate">{agent.model || 'runtime'}</div>

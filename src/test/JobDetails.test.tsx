@@ -236,6 +236,47 @@ describe('JobDetails Component', () => {
     expect(screen.queryByText(/Submitted:/i)).not.toBeInTheDocument();
   });
 
+  it('shows paused controls when compact details are paused but workflow progress is stale', async () => {
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'pitev-5d7781d6',
+        graph_id: null,
+        status: 'paused',
+        submitted_at: '2026-06-02T15:41:54Z',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchWorkflowProgress).mockResolvedValue({
+      schema_version: 1,
+      job_id: 'pitev-5d7781d6',
+      workflow_id: 'personal_income_tax_expert_v1',
+      name: 'Personal Income Tax Expert',
+      description: '',
+      status: 'running',
+      workflow_kind: 'batch',
+      elapsed_seconds: 2400,
+      agent_count: { done: 1, running: 3, idle: 0, ready: 4, failed: 0, total: 8 },
+      current_step_id: null,
+      current_step: null,
+      steps: [],
+      messages: [],
+      recent_events: [],
+    });
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('pitev-5d7781d6')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('paused').length).toBeGreaterThan(0);
+  });
+
   it('prefers live workflow status over stale compact job status', async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
       job: {
@@ -764,8 +805,9 @@ describe('JobDetails Component', () => {
 
     expect(pauseJob).toHaveBeenCalledWith('test-job-1');
     await waitFor(() => {
-      expect(fetchJobDetails).toHaveBeenCalled(); // Ensure it was called
+      expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
     });
+    expect(screen.getAllByText('paused').length).toBeGreaterThan(0);
   });
 
   it('resumes a paused job', async () => {

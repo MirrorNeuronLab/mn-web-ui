@@ -29,11 +29,11 @@ export const JobEventSchema = z.object({
 
 export const JobSchema = z.object({
   job_id: z.string().optional().default('unknown'),
-  graph_id: z.string().optional().default('unknown'),
+  graph_id: z.string().nullable().optional().default('unknown'),
   status: z.string().optional().default('unknown'),
-  submitted_at: z.string().optional(),
-  updated_at: z.string().optional(),
-  run_id: z.string().optional(),
+  submitted_at: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+  run_id: z.string().nullable().optional(),
   executor_count: z.number().optional(),
   active_executors: z.number().optional(),
   type: z.string().optional(),
@@ -215,6 +215,12 @@ export const WorkflowProgressAgentSchema = z.object({
   started_at: z.string().nullable().optional(),
   ended_at: z.string().nullable().optional(),
   last_event_at: z.string().nullable().optional(),
+  retry_at: z.string().nullable().optional(),
+  deadline_at: z.string().nullable().optional(),
+  heartbeat_deadline_at: z.string().nullable().optional(),
+  attempt: z.number().nullable().optional(),
+  attempt_id: z.string().nullable().optional(),
+  status_reason: z.string().nullable().optional(),
 }).passthrough();
 
 export const WorkflowProgressStepSchema = z.object({
@@ -239,6 +245,12 @@ export const WorkflowProgressStepSchema = z.object({
   started_at: z.string().nullable().optional(),
   ended_at: z.string().nullable().optional(),
   last_event_at: z.string().nullable().optional(),
+  retry_at: z.string().nullable().optional(),
+  deadline_at: z.string().nullable().optional(),
+  heartbeat_deadline_at: z.string().nullable().optional(),
+  attempt: z.number().nullable().optional(),
+  attempt_id: z.string().nullable().optional(),
+  status_reason: z.string().nullable().optional(),
   agents: z.array(WorkflowProgressAgentSchema).optional().default([]),
 }).passthrough();
 
@@ -304,32 +316,17 @@ export const isServiceJob = (job: Partial<Job> | null | undefined, summary?: { t
     || [summaryStreamMode, policyStreamMode].some((value) => value.toLowerCase() === 'live');
 };
 
-const ACTIVE_LIST_STATUSES = new Set(['pending', 'scheduled', 'validated', 'running']);
-const STALE_SERVICE_LIST_STATUSES = new Set(['paused', 'completed', 'unknown']);
-
 const normalizedText = (value: unknown): string => (
   typeof value === 'string' ? value.trim().toLowerCase() : ''
 );
 
-const jobHasLiveSignal = (job: Job): boolean => Boolean(job.live || job['live?']);
-
-const jobRecoveryStatus = (job: Job): string => {
-  const recovery = job.recovery && typeof job.recovery === 'object' ? job.recovery : {};
-  return normalizedText(job.recovery_status) || normalizedText(recovery.status);
-};
-
 const shouldRefreshListStatus = (job: Job): boolean => {
-  const status = normalizedText(job.status);
-  if (!isServiceJob(job) || !STALE_SERVICE_LIST_STATUSES.has(status)) return false;
-  return status === 'paused' || jobHasLiveSignal(job) || Boolean(jobRecoveryStatus(job));
+  return Boolean(job.job_id && job.job_id !== 'unknown');
 };
 
 const listStatusFromProgress = (progress: WorkflowProgress): string | null => {
   const status = normalizedText(progress.status);
-  if (progress.workflow_kind === 'service' && ACTIVE_LIST_STATUSES.has(status)) {
-    return status;
-  }
-  return null;
+  return status && status !== 'unknown' ? status : null;
 };
 
 const refreshJobListStatus = async (job: Job): Promise<Job> => {
@@ -372,8 +369,16 @@ export const removeClusterNode = (nodeName: string) => api.post('/system/cluster
   return result.data;
 });
 
-export const fetchJobs = async () => {
-  const r = await api.get('/jobs');
+export type FetchJobsOptions = {
+  includeTerminal?: boolean;
+};
+
+export const fetchJobs = async (options: FetchJobsOptions = {}) => {
+  const request =
+    typeof options.includeTerminal === 'boolean'
+      ? api.get('/jobs', { params: { include_terminal: options.includeTerminal } })
+      : api.get('/jobs');
+  const r = await request;
   const data = r.data?.data || [];
   const result = z.array(JobSchema).safeParse(data);
   if (!result.success) {

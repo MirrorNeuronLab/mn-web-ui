@@ -21,11 +21,12 @@ export default function Jobs() {
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<'pause' | 'cancel' | null>(null);
   const [isClearing, setIsClearing] = useState(false);
+  const [showTerminalJobs, setShowTerminalJobs] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await fetchJobs();
+        const data = await fetchJobs({ includeTerminal: showTerminalJobs });
         setJobs(data);
         setSelectedJobIds((current) => {
           const availableIds = new Set(data.map((job) => job.job_id));
@@ -37,13 +38,14 @@ export default function Jobs() {
         setLoading(false);
       }
     };
+    setLoading(true);
     load();
     const timer = setInterval(load, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [showTerminalJobs]);
 
   const refreshJobs = async () => {
-    const data = await fetchJobs();
+    const data = await fetchJobs({ includeTerminal: showTerminalJobs });
     setJobs(data);
     setSelectedJobIds((current) => {
       const availableIds = new Set(data.map((job) => job.job_id));
@@ -109,9 +111,31 @@ export default function Jobs() {
       <div className="flex items-center justify-between gap-4 border-b border-neutral-200 px-6 py-5">
         <div>
           <h2 className="text-lg font-semibold tracking-tight text-neutral-950">Jobs</h2>
-          <p className="mt-1 text-sm text-neutral-500">Active job runs. Select rows for bulk actions or open details explicitly.</p>
+          <p className="mt-1 text-sm text-neutral-500">
+            {showTerminalJobs ? 'Live and completed job runs.' : 'Live job runs only.'} Select rows for bulk actions or open details explicitly.
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showTerminalJobs}
+            onClick={() => setShowTerminalJobs((value) => !value)}
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+          >
+            <span
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                showTerminalJobs ? 'bg-neutral-950' : 'bg-neutral-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                  showTerminalJobs ? 'translate-x-4' : 'translate-x-1'
+                }`}
+              />
+            </span>
+            Past jobs
+          </button>
           <button
             type="button"
             disabled={!hasSelection || bulkAction !== null}
