@@ -66,6 +66,35 @@ describe('Dashboard Component', () => {
     expect(screen.getByText('Capacity')).toBeInTheDocument();
   });
 
+  it('uses an empty jobs response instead of stale summary jobs for metrics', async () => {
+    vi.mocked(fetchSystemSummary).mockResolvedValue({
+      nodes: [
+        {
+          name: 'mirror_neuron@192.168.4.34',
+          connected_nodes: ['mirror_neuron@192.168.4.34'],
+          self: false,
+          executor_pools: {
+            default: { capacity: 50, available: 50, in_use: 0, queued: 0, active: 0 }
+          }
+        }
+      ],
+      jobs: [
+        { job_id: 'stale-job', status: 'completed' }
+      ]
+    });
+    vi.mocked(fetchJobs).mockResolvedValue([]);
+
+    render(<Dashboard />);
+
+    await waitFor(() => expect(screen.getByText('Total Jobs')).toBeInTheDocument());
+
+    const totalJobsCard = screen.getByText('Total Jobs').parentElement?.parentElement;
+    expect(totalJobsCard).not.toBeNull();
+    expect(within(totalJobsCard as HTMLElement).getByText('0')).toBeInTheDocument();
+    expect(screen.getByText('0 terminal or idle jobs')).toBeInTheDocument();
+    expect(screen.getByText('1 cluster node connected')).toBeInTheDocument();
+  });
+
   it('adds a remote node with host and token', async () => {
     const localNode = {
       name: 'mn1@127.0.0.1',

@@ -34,7 +34,7 @@ describe('api parsing helpers', () => {
     mockApi.get.mockResolvedValue({
       data: {
         data: [
-          { job_id: 'job-1', graph_id: 'graph-1' },
+          { job_id: 'job-1', graph_id: 'graph-1', recovery_status: null },
           { status: 'running' },
         ],
       },
@@ -44,6 +44,7 @@ describe('api parsing helpers', () => {
       expect.objectContaining({
         job_id: 'job-1',
         graph_id: 'graph-1',
+        recovery_status: null,
         status: 'unknown',
       }),
       expect.objectContaining({

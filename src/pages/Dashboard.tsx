@@ -20,7 +20,7 @@ type ClusterActionMessage = {
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<SystemSummary | null>(null);
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobs, setJobs] = useState<Job[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [addNodeDialogOpen, setAddNodeDialogOpen] = useState(false);
   const [remoteNodeHost, setRemoteNodeHost] = useState('');
@@ -46,7 +46,7 @@ export default function Dashboard() {
       setJobs(jobsResult.value);
     } else {
       console.error('Failed to load jobs', jobsResult.reason);
-      setJobs([]);
+      setJobs(null);
     }
 
     setLoading(false);
@@ -118,12 +118,14 @@ export default function Dashboard() {
     }
   };
 
+  const metricJobs = useMemo<Partial<Job>[]>(() => jobs ?? summary?.jobs ?? [], [jobs, summary]);
+
   const executorSlots = useMemo(() => {
     const pools = summary?.nodes.flatMap((node) => Object.values(node.executor_pools || {}) as PoolStats[]) || [];
     const reportedCapacity = pools.reduce((total, pool) => total + (pool.capacity ?? 0), 0);
     const reportedActive = pools.reduce((total, pool) => total + (pool.active ?? pool.in_use ?? 0), 0);
-    const activeFromJobs = jobs.reduce((total, job) => total + (job.active_executors ?? 0), 0);
-    const requestedFromJobs = jobs.reduce((total, job) => total + (job.executor_count ?? 0), 0);
+    const activeFromJobs = metricJobs.reduce((total, job) => total + numberValue(job.active_executors), 0);
+    const requestedFromJobs = metricJobs.reduce((total, job) => total + numberValue(job.executor_count), 0);
     const active = Math.max(reportedActive, activeFromJobs);
     const capacity = reportedCapacity || Math.max(8, requestedFromJobs + 4, active + 4);
 
@@ -133,10 +135,10 @@ export default function Dashboard() {
       available: Math.max(capacity - active, 0),
       queued: pools.reduce((total, pool) => total + (pool.queued ?? 0), 0),
     };
-  }, [jobs, summary]);
+  }, [metricJobs, summary]);
 
-  const totalJobs = jobs.length || summary?.jobs.length || 0;
-  const activeJobs = jobs.filter((job) => activeStatuses.has(job.status)).length || summary?.jobs.filter((job) => activeStatuses.has(job.status)).length || 0;
+  const totalJobs = metricJobs.length;
+  const activeJobs = metricJobs.filter((job) => activeStatuses.has(job.status ?? '')).length;
   const clusterNodes = summary?.nodes.length || 0;
 
   if (loading) {
@@ -486,4 +488,8 @@ function apiErrorMessage(error: unknown, fallback: string) {
 
 function stringValue(value: unknown) {
   return typeof value === 'string' ? value : '';
+}
+
+function numberValue(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }

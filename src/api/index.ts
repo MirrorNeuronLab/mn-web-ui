@@ -40,7 +40,7 @@ export const JobSchema = z.object({
   job_type: z.string().optional(),
   live: z.boolean().optional(),
   'live?': z.boolean().optional(),
-  recovery_status: z.string().optional(),
+  recovery_status: z.string().nullable().optional(),
   recovery_requires_review: z.boolean().optional(),
   recovery: z.record(z.string(), z.unknown()).optional(),
 }).passthrough();
