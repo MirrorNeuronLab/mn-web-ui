@@ -564,6 +564,8 @@ export default function JobDetails() {
             <WorkflowProgressPanel
               progress={displayWorkflowProgress}
               status={displayStatus || 'unknown'}
+              details={details}
+              webUi={webUi}
             />
           )}
 

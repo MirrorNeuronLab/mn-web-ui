@@ -1,10 +1,24 @@
-import { Check, Circle, Clock3, Loader2, X } from 'lucide-react';
-import type { WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
+import { Check, Circle, Clock3, ExternalLink, FileText, FolderInput, Loader2, MousePointer2, X } from 'lucide-react';
+import type { JobDetails, WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
 import { displayAgentName } from '../utils/agentGraph';
 
 type WorkflowProgressPanelProps = {
   progress: WorkflowProgress | null;
   status?: string;
+  details?: JobDetails | null;
+  webUi?: {
+    url: string;
+    title: string;
+    status?: string;
+  } | null;
+};
+
+type ProgressResource = {
+  id: string;
+  label: string;
+  value: string;
+  href?: string;
+  kind: 'file' | 'url' | 'input' | 'text';
 };
 
 const statusTone = (status: string | undefined) => {
@@ -49,6 +63,183 @@ const formatProgress = (agent: WorkflowProgressAgent) => {
 const formatTokens = (tokens: number) => {
   if (tokens >= 1000) return `${(tokens / 1000).toFixed(tokens % 1000 === 0 ? 0 : 1)}k`;
   return String(tokens);
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+);
+
+const displayNameFromPath = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return 'Untitled';
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.hostname || trimmed;
+  } catch {
+    const normalized = trimmed.replace(/\/+$/, '');
+    return normalized.split('/').filter(Boolean).pop() || normalized;
+  }
+};
+
+const isUrl = (value: string) => /^https?:\/\//i.test(value.trim());
+
+const resourceFromValue = (value: unknown, id: string, fallbackLabel?: string): ProgressResource | null => {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    const text = String(value).trim();
+    if (!text) return null;
+    return {
+      id,
+      label: fallbackLabel || displayNameFromPath(text),
+      value: text,
+      href: isUrl(text) ? text : undefined,
+      kind: isUrl(text) ? 'url' : text.includes('/') || text.includes('.') ? 'file' : 'text',
+    };
+  }
+  if (!isRecord(value)) return null;
+  const rawValue = value.url || value.href || value.path || value.file || value.file_path || value.local_path || value.value || value.name;
+  if (typeof rawValue !== 'string' && typeof rawValue !== 'number' && typeof rawValue !== 'boolean') return null;
+  const text = String(rawValue).trim();
+  if (!text) return null;
+  const label = [value.label, value.title, value.name, fallbackLabel].find((candidate) => typeof candidate === 'string' && candidate.trim());
+  return {
+    id,
+    label: typeof label === 'string' ? label.trim() : displayNameFromPath(text),
+    value: text,
+    href: isUrl(text) ? text : undefined,
+    kind: isUrl(text) ? 'url' : 'file',
+  };
+};
+
+const collectResources = (source: unknown, keys: string[], prefix: string): ProgressResource[] => {
+  if (!isRecord(source)) return [];
+  const resources: ProgressResource[] = [];
+  keys.forEach((key) => {
+    const raw = source[key];
+    if (Array.isArray(raw)) {
+      raw.forEach((item, index) => {
+        const resource = resourceFromValue(item, `${prefix}-${key}-${index}`);
+        if (resource) resources.push(resource);
+      });
+      return;
+    }
+    if (isRecord(raw)) {
+      Object.entries(raw).forEach(([name, item], index) => {
+        const resource = resourceFromValue(item, `${prefix}-${key}-${name}-${index}`, name);
+        if (resource) resources.push(resource);
+      });
+      return;
+    }
+    const resource = resourceFromValue(raw, `${prefix}-${key}`, key);
+    if (resource) resources.push(resource);
+  });
+  return resources;
+};
+
+const uniqueResources = (resources: ProgressResource[]) => {
+  const seen = new Set<string>();
+  return resources.filter((resource) => {
+    const key = `${resource.kind}:${resource.value}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+const buildOutputResources = (progress: WorkflowProgress, details?: JobDetails | null): ProgressResource[] => {
+  const detailRoot = details as Record<string, unknown> | null | undefined;
+  const job = isRecord(details?.job) ? details.job : {};
+  const summary = isRecord(details?.summary) ? details.summary : {};
+  const events = [...(progress.recent_events || []), ...(details?.recent_events || [])];
+  return uniqueResources([
+    ...collectResources(progress, ['outputs', 'output', 'artifacts', 'artifact', 'files', 'urls', 'results', 'result'], 'progress'),
+    ...progress.steps.flatMap((step, index) => collectResources(step, ['outputs', 'output', 'artifacts', 'files', 'provides'], `step-${index}`)),
+    ...collectResources(detailRoot, ['outputs', 'output', 'artifacts', 'artifact', 'files', 'urls', 'results', 'result'], 'details'),
+    ...collectResources(job, ['outputs', 'output', 'artifacts', 'artifact', 'files', 'urls', 'results', 'result'], 'job'),
+    ...collectResources(summary, ['outputs', 'output', 'artifacts', 'artifact', 'files', 'urls', 'results', 'result'], 'summary'),
+    ...events.flatMap((event, index) => collectResources(event.payload, ['outputs', 'output', 'artifacts', 'artifact', 'files', 'urls', 'results', 'result'], `event-${index}`)),
+  ]);
+};
+
+const buildInputResources = (progress: WorkflowProgress, details?: JobDetails | null): ProgressResource[] => {
+  const detailRoot = details as Record<string, unknown> | null | undefined;
+  const job = isRecord(details?.job) ? details.job : {};
+  const summary = isRecord(details?.summary) ? details.summary : {};
+  return uniqueResources([
+    ...collectResources(progress, ['inputs', 'input', 'sources', 'source'], 'progress-input'),
+    ...progress.steps.flatMap((step, index) => collectResources(step, ['inputs', 'input', 'sources', 'source', 'requires'], `step-input-${index}`)),
+    ...collectResources(detailRoot, ['inputs', 'input', 'sources', 'source'], 'details-input'),
+    ...collectResources(job, ['inputs', 'input', 'sources', 'source'], 'job-input'),
+    ...collectResources(summary, ['inputs', 'input', 'sources', 'source', 'config'], 'summary-input'),
+  ]).map((resource) => ({ ...resource, kind: resource.kind === 'url' ? resource.kind : 'input' }));
+};
+
+const ResourceList = ({ resources, emptyText }: { resources: ProgressResource[]; emptyText: string }) => (
+  <div className="space-y-1">
+    {resources.length ? resources.slice(0, 8).map((resource) => {
+      const icon = resource.kind === 'url' ? <ExternalLink className="h-4 w-4 shrink-0" /> : <FileText className="h-4 w-4 shrink-0" />;
+      const content = (
+        <>
+          {icon}
+          <span className="min-w-0 truncate">{resource.label}</span>
+        </>
+      );
+      const className = "flex h-9 w-full items-center gap-3 rounded-md px-2 text-left text-sm text-neutral-900 hover:bg-neutral-100";
+      return resource.href ? (
+        <a key={resource.id} className={className} href={resource.href} target="_blank" rel="noreferrer" title={resource.value}>
+          {content}
+        </a>
+      ) : (
+        <div key={resource.id} className={className} title={resource.value}>
+          {content}
+        </div>
+      );
+    }) : <div className="px-2 py-1 text-sm text-neutral-500">{emptyText}</div>}
+  </div>
+);
+
+const ProgressResourcesColumn = ({ progress, details, webUi }: { progress: WorkflowProgress; details?: JobDetails | null; webUi?: WorkflowProgressPanelProps['webUi'] }) => {
+  const outputs = buildOutputResources(progress, details);
+  const inputs = buildInputResources(progress, details);
+  return (
+    <aside className="border-t border-neutral-200 p-4 xl:border-l xl:border-t-0">
+      <div className="space-y-5">
+        <section>
+          <div className="mb-3 text-sm font-semibold text-neutral-500">Outputs</div>
+          <ResourceList resources={outputs} emptyText="No outputs yet" />
+        </section>
+
+        <section className="border-t border-neutral-200 pt-5">
+          <div className="mb-3 text-sm font-semibold text-neutral-500">Browser</div>
+          {webUi?.url ? (
+            <a
+              className="flex h-9 items-center gap-3 rounded-md px-2 text-sm text-neutral-900 hover:bg-neutral-100"
+              href={webUi.url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Open dashboard in browser: ${webUi.title || webUi.url}`}
+              title={webUi.status ? `${webUi.title} (${webUi.status})` : webUi.title}
+            >
+              <MousePointer2 className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 truncate">{webUi.title || webUi.url}</span>
+            </a>
+          ) : (
+            <div className="flex h-9 items-center gap-3 px-2 text-sm text-neutral-400">
+              <MousePointer2 className="h-4 w-4 shrink-0" />
+              <span>No dashboard yet</span>
+            </div>
+          )}
+        </section>
+
+        <section className="border-t border-neutral-200 pt-5">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-neutral-500">
+            <FolderInput className="h-4 w-4" />
+            Inputs
+          </div>
+          <ResourceList resources={inputs} emptyText="No inputs reported yet" />
+        </section>
+      </div>
+    </aside>
+  );
 };
 
 const StepRow = ({ step, index, workflowKind, showLayer }: { step: WorkflowProgressStep; index: number; workflowKind: string; showLayer: boolean }) => {
@@ -112,7 +303,7 @@ const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
   );
 };
 
-export function WorkflowProgressPanel({ progress, status }: WorkflowProgressPanelProps) {
+export function WorkflowProgressPanel({ progress, status, details, webUi }: WorkflowProgressPanelProps) {
   if (!progress) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-white text-sm text-neutral-500">
@@ -150,7 +341,7 @@ export function WorkflowProgressPanel({ progress, status }: WorkflowProgressPane
         </div>
       </div>
 
-      <div className="grid min-h-[480px] grid-cols-1 lg:grid-cols-[360px_1fr]">
+      <div className="grid min-h-[480px] grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_280px]">
         <aside className="border-b border-neutral-200 p-4 lg:border-b-0 lg:border-r">
           <div className="mb-3 text-sm font-semibold text-neutral-950">Steps</div>
           <div className="space-y-1">
@@ -174,7 +365,7 @@ export function WorkflowProgressPanel({ progress, status }: WorkflowProgressPane
           </div>
 
           <div className="overflow-hidden rounded-md border border-neutral-200">
-            <table className="w-full min-w-[900px] table-fixed text-left">
+            <table className="w-full min-w-[760px] table-fixed text-left">
               <thead className="bg-neutral-50 text-xs text-neutral-500">
                 <tr>
                   <th className="px-4 py-3 font-medium">Agent</th>
@@ -204,6 +395,8 @@ export function WorkflowProgressPanel({ progress, status }: WorkflowProgressPane
             </div>
           </div>
         </section>
+
+        <ProgressResourcesColumn progress={progress} details={details} webUi={webUi} />
       </div>
     </div>
   );
