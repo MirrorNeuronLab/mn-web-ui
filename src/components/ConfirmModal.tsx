@@ -27,39 +27,39 @@ export function ConfirmModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-        <div className="flex justify-between items-start p-5 border-b border-neutral-100">
-          <div className="flex items-center gap-3 text-neutral-700">
-            <div className="bg-neutral-50 p-2 rounded-full">
-              <AlertTriangle className="w-5 h-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="animate-in fade-in zoom-in w-full max-w-md overflow-hidden rounded-lg bg-white shadow-xl duration-200">
+        <div className="flex items-start justify-between border-b border-neutral-100 p-4">
+          <div className="flex items-center gap-2.5 text-neutral-700">
+            <div className="rounded-full bg-neutral-50 p-1.5">
+              <AlertTriangle className="h-4 w-4" />
             </div>
-            <h3 className="font-semibold text-lg text-neutral-950">{title}</h3>
+            <h3 className="font-semibold text-neutral-950">{title}</h3>
           </div>
           <button 
             onClick={onCancel}
             disabled={isProcessing}
-            className="text-neutral-400 hover:text-neutral-600 transition-colors"
+            className="text-neutral-400 transition-colors hover:text-neutral-600"
           >
-            <X className="w-5 h-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
         
-        <div className="p-5 text-neutral-600">
+        <div className="p-4 text-sm text-neutral-600">
           {message}
           {error && (
-            <div className="mt-4 p-3 bg-neutral-50 border border-neutral-200 text-neutral-800 text-sm rounded-md">
+            <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-800">
               {error}
             </div>
           )}
         </div>
         
-        <div className="p-4 bg-neutral-50 flex justify-end gap-3 border-t border-neutral-100">
+        <div className="flex justify-end gap-2 border-t border-neutral-100 bg-neutral-50 p-3">
           <button
             type="button"
             onClick={onCancel}
             disabled={isProcessing}
-            className="px-4 py-2 font-medium text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 disabled:opacity-50 transition-colors"
+            className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50"
           >
             {cancelLabel}
           </button>
@@ -67,10 +67,10 @@ export function ConfirmModal({
             type="button"
             onClick={onConfirm}
             disabled={isProcessing}
-            className="px-4 py-2 font-medium text-white bg-neutral-950 rounded-lg hover:bg-neutral-800 disabled:opacity-70 flex items-center gap-2 transition-colors"
+            className="flex items-center gap-1.5 rounded-md bg-neutral-950 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-neutral-800 disabled:opacity-70"
           >
             {isProcessing && (
-              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <svg className="h-3.5 w-3.5 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>

@@ -1,23 +1,24 @@
 import { useEffect, useState, useCallback } from 'react';
+import type { ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelJob, pauseJob, resumeJob, isServiceJob } from '../api';
 import type { AgentGraph, JobDetails as JobDetailsType, JobEvent, WebUiHandle, WorkflowProgress } from '../api';
 import { format } from 'date-fns';
-import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, RadioTower, MessageSquare, ExternalLink, List, Code2 } from 'lucide-react';
+import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, MessageSquare, ExternalLink, List, Code2, FileText } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { WorkflowAgentGraph } from '../components/WorkflowAgentGraph';
-import { WorkflowProgressPanel } from '../components/WorkflowProgressPanel';
+import { WorkflowProgressPanel, buildOutputResources, formatElapsed } from '../components/WorkflowProgressPanel';
 import { buildDisplayGraph } from '../utils/agentGraph';
 
 const StatusIcon = ({ status }: { status: string }) => {
   switch (status) {
-    case 'running': return <PlayCircle className="w-5 h-5 text-neutral-700" />;
-    case 'completed': return <CheckCircle className="w-5 h-5 text-neutral-700" />;
-    case 'failed': return <XCircle className="w-5 h-5 text-neutral-700" />;
-    case 'pending': return <Clock className="w-5 h-5 text-neutral-700" />;
-    case 'paused': return <PauseCircle className="w-5 h-5 text-neutral-700" />;
-    case 'cancelled': return <Ban className="w-5 h-5 text-neutral-500" />;
-    default: return <AlertCircle className="w-5 h-5 text-neutral-400" />;
+    case 'running': return <PlayCircle className="h-3.5 w-3.5 text-neutral-700" />;
+    case 'completed': return <CheckCircle className="h-3.5 w-3.5 text-neutral-700" />;
+    case 'failed': return <XCircle className="h-3.5 w-3.5 text-neutral-700" />;
+    case 'pending': return <Clock className="h-3.5 w-3.5 text-neutral-700" />;
+    case 'paused': return <PauseCircle className="h-3.5 w-3.5 text-neutral-700" />;
+    case 'cancelled': return <Ban className="h-3.5 w-3.5 text-neutral-500" />;
+    default: return <AlertCircle className="h-3.5 w-3.5 text-neutral-400" />;
   }
 };
 
@@ -38,6 +39,14 @@ type WebUiInfo = {
   title: string;
   status?: string;
 };
+
+const SummaryCard = ({ icon, value, label }: { icon: ReactNode; value: string | number; label: string }) => (
+  <div className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm">
+    <div className="mb-2 text-neutral-400">{icon}</div>
+    <div className="text-xl font-semibold leading-6 text-neutral-950">{value}</div>
+    <div className="mt-0.5 text-[11px] font-medium leading-4 text-neutral-500">{label}</div>
+  </div>
+);
 
 const TERMINAL_STATUSES = new Set(['completed', 'done', 'finished', 'succeeded', 'success', 'failed', 'cancelled', 'canceled', 'error']);
 const ACTIVE_EVENT_TYPES = new Set(['agent_message_received', 'executor_lease_acquired', 'route_selected', 'video_frame_tick_generated']);
@@ -427,7 +436,7 @@ export default function JobDetails() {
     };
   }, [id]);
 
-  if (!details || !details.job) return <div className="p-8">Loading or Invalid Job...</div>;
+  if (!details || !details.job) return <div className="p-5 text-sm text-neutral-500">Loading or Invalid Job...</div>;
   const webUi = blueprintWebUiInfo(details) || webUiInfoFromRecord(runWebUi);
   const jobId = knownStringValue(details.job.job_id, id) || id || 'job';
   const displayStatus = displayStatusFromSources(actionStatus, workflowProgress?.status, details.job.status, graph?.status);
@@ -437,6 +446,20 @@ export default function JobDetails() {
   const displayGraph = buildDisplayGraph(graph, details.agents || [], jobId, graphId, displayStatus, displayWorkflowProgress);
   const displayAgents = displayGraph.nodes;
   const graphCode = JSON.stringify(displayGraph, null, 2);
+  const progressOutputs = displayWorkflowProgress ? buildOutputResources(displayWorkflowProgress, details) : [];
+  const liveAgentCount = displayWorkflowProgress
+    ? displayWorkflowProgress.agent_count.running
+    : displayGraph.nodes.filter((agent) => agent.status === 'running').length;
+  const totalAgentCount = displayWorkflowProgress
+    ? displayWorkflowProgress.agent_count.total
+    : displayGraph.stats.agent_count;
+  const eventCount = Math.max(
+    displayWorkflowProgress?.recent_events?.length || 0,
+    displayWorkflowProgress?.messages?.length || 0,
+    displayGraph.stats.event_count || 0,
+    displayGraph.stats.message_count || 0,
+  );
+  const runtime = formatElapsed(displayWorkflowProgress?.elapsed_seconds || 0);
 
   const handleCancel = async () => {
     try {
@@ -479,20 +502,20 @@ export default function JobDetails() {
   };
 
   return (
-    <div className="space-y-6 flex flex-col h-full">
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-4 shrink-0">
-        <div className="bg-white rounded-lg border border-neutral-200 shadow-sm p-6 flex justify-between items-start">
+    <div className="flex h-full flex-col space-y-4 font-sans">
+      <div className="grid shrink-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_560px]">
+        <div className="flex items-start justify-between rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
         <div>
-          <div className="flex items-center space-x-3 mb-2">
-            <h2 className="text-xl font-bold font-mono text-neutral-950">{jobId}</h2>
+          <div className="mb-2 flex items-center space-x-3">
+            <h2 className="text-lg font-bold leading-6 text-neutral-950">{jobId}</h2>
             {displayStatus ? (
-              <div className={`flex items-center px-3 py-1 rounded-full border ${statusClass(displayStatus)}`}>
+              <div className={`flex items-center rounded-full border px-2.5 py-0.5 ${statusClass(displayStatus)}`}>
                 <StatusIcon status={displayStatus} />
-                <span className="ml-2 text-sm font-medium capitalize">{displayStatus}</span>
+                <span className="ml-1.5 text-xs font-medium capitalize">{displayStatus}</span>
               </div>
             ) : null}
           </div>
-          <div className="text-neutral-500 text-sm flex flex-wrap gap-x-4 gap-y-2">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs leading-5 text-neutral-500">
             {graphId ? <span>Graph: <strong className="text-neutral-700">{graphId}</strong></span> : null}
             {submittedAt ? <span>Submitted: <strong className="text-neutral-700">{submittedAt}</strong></span> : null}
             {webUi ? (
@@ -511,59 +534,47 @@ export default function JobDetails() {
               href={webUi.url}
               target="_blank"
               rel="noreferrer"
-              className="px-4 py-2 bg-neutral-950 text-white border border-neutral-950 rounded-md font-medium text-sm hover:bg-neutral-800 transition-colors flex items-center"
+              className="flex items-center rounded-md border border-neutral-950 bg-neutral-950 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-neutral-800"
               title={webUi.status ? `${webUi.title} (${webUi.status})` : webUi.title}
             >
-              <ExternalLink className="w-4 h-4 mr-2" /> Web UI
+              <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Web UI
             </a>
           ) : null}
           {displayStatus === 'running' ? (
-            <button disabled={isPausing} onClick={handlePause} className="px-4 py-2 bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-md font-medium text-sm hover:bg-neutral-50 transition-colors flex items-center disabled:opacity-50">
-              {isPausing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PauseCircle className="w-4 h-4 mr-2" />} Pause
+            <button disabled={isPausing} onClick={handlePause} className="flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50">
+              {isPausing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <PauseCircle className="mr-1.5 h-3.5 w-3.5" />} Pause
             </button>
           ) : displayStatus === 'paused' ? (
-            <button disabled={isResuming} onClick={handleResume} className="px-4 py-2 bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-md font-medium text-sm hover:bg-neutral-50 transition-colors flex items-center disabled:opacity-50">
-              {isResuming ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />} Resume
+            <button disabled={isResuming} onClick={handleResume} className="flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50">
+              {isResuming ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-1.5 h-3.5 w-3.5" />} Resume
             </button>
           ) : null}
           {(displayStatus === 'running' || displayStatus === 'pending' || displayStatus === 'paused') ? (
-            <button disabled={isCancelling} onClick={() => setShowCancelConfirm(true)} className="px-4 py-2 bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-md font-medium text-sm hover:bg-neutral-50 transition-colors flex items-center disabled:opacity-50">
-              {isCancelling ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Ban className="w-4 h-4 mr-2" />} Cancel
+            <button disabled={isCancelling} onClick={() => setShowCancelConfirm(true)} className="flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50">
+              {isCancelling ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Ban className="mr-1.5 h-3.5 w-3.5" />} Cancel
             </button>
           ) : null}
         </div>
       </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-white rounded-lg border border-neutral-200 p-4 shadow-sm">
-            <Network className="w-4 h-4 text-neutral-400 mb-3" />
-            <div className="text-2xl font-semibold text-neutral-950">{displayGraph.stats.agent_count}</div>
-            <div className="text-xs font-medium text-neutral-500">Agents</div>
-          </div>
-          <div className="bg-white rounded-lg border border-neutral-200 p-4 shadow-sm">
-            <RadioTower className="w-4 h-4 text-neutral-400 mb-3" />
-            <div className="text-2xl font-semibold text-neutral-950">{displayGraph.stats.edge_count}</div>
-            <div className="text-xs font-medium text-neutral-500">Links</div>
-          </div>
-          <div className="bg-white rounded-lg border border-neutral-200 p-4 shadow-sm">
-            <MessageSquare className="w-4 h-4 text-neutral-400 mb-3" />
-            <div className="text-2xl font-semibold text-neutral-950">{displayGraph.stats.message_count}</div>
-            <div className="text-xs font-medium text-neutral-500">Messages</div>
-          </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <SummaryCard icon={<Network className="h-3.5 w-3.5" />} value={`${liveAgentCount}/${totalAgentCount}`} label="Live Agents" />
+          <SummaryCard icon={<FileText className="h-3.5 w-3.5" />} value={progressOutputs.length} label="Artifacts" />
+          <SummaryCard icon={<MessageSquare className="h-3.5 w-3.5" />} value={eventCount} label="Events" />
+          <SummaryCard icon={<Clock className="h-3.5 w-3.5" />} value={runtime} label="Runtime" />
         </div>
       </div>
 
       <div className="bg-white rounded-lg border border-neutral-200 shadow-sm flex-1 flex flex-col min-h-[560px] overflow-hidden">
-        <div className="flex border-b border-neutral-200 bg-neutral-50 px-4">
-          <button onClick={() => setActiveTab('progress')} className={`px-4 py-3 text-sm font-medium border-b-2 ${activeTab === 'progress' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Progress</button>
-          <button onClick={() => setActiveTab('agents')} className={`px-4 py-3 text-sm font-medium border-b-2 ${activeTab === 'agents' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Agents</button>
-          <button onClick={() => setActiveTab('logs')} className={`px-4 py-3 text-sm font-medium border-b-2 ${activeTab === 'logs' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Communication Logs</button>
+        <div className="flex border-b border-neutral-200 bg-neutral-50 px-3">
+          <button onClick={() => setActiveTab('progress')} className={`border-b-2 px-3 py-2 text-xs font-medium ${activeTab === 'progress' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Progress</button>
+          <button onClick={() => setActiveTab('agents')} className={`border-b-2 px-3 py-2 text-xs font-medium ${activeTab === 'agents' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Agents</button>
+          <button onClick={() => setActiveTab('logs')} className={`border-b-2 px-3 py-2 text-xs font-medium ${activeTab === 'logs' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Communication Logs</button>
         </div>
 
         <div className="flex-1 relative">
           {activeTab === 'progress' && (
             <WorkflowProgressPanel
               progress={displayWorkflowProgress}
-              status={displayStatus || 'unknown'}
               details={details}
               webUi={webUi}
             />
@@ -571,7 +582,7 @@ export default function JobDetails() {
 
           {activeTab === 'agents' && (
             <div className="absolute inset-0 flex flex-col bg-white">
-              <div className="flex items-center justify-end border-b border-neutral-200 bg-white px-4 py-3">
+              <div className="flex items-center justify-end border-b border-neutral-200 bg-white px-3 py-2">
                 <div className="flex overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
                   <button
                     type="button"
@@ -579,9 +590,9 @@ export default function JobDetails() {
                     aria-pressed={agentView === 'list'}
                     title="List view"
                     onClick={() => setAgentView('list')}
-                    className={`flex h-9 items-center gap-2 border-r border-neutral-200 px-3 text-xs font-medium ${agentView === 'list' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                    className={`flex h-8 items-center gap-1.5 border-r border-neutral-200 px-2.5 text-[11px] font-medium ${agentView === 'list' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
                   >
-                    <List className="h-4 w-4" />
+                    <List className="h-3.5 w-3.5" />
                     List
                   </button>
                   <button
@@ -590,9 +601,9 @@ export default function JobDetails() {
                     aria-pressed={agentView === 'graph'}
                     title="Graph view"
                     onClick={() => setAgentView('graph')}
-                    className={`flex h-9 items-center gap-2 border-r border-neutral-200 px-3 text-xs font-medium ${agentView === 'graph' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                    className={`flex h-8 items-center gap-1.5 border-r border-neutral-200 px-2.5 text-[11px] font-medium ${agentView === 'graph' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
                   >
-                    <Network className="h-4 w-4" />
+                    <Network className="h-3.5 w-3.5" />
                     Graph
                   </button>
                   <button
@@ -601,9 +612,9 @@ export default function JobDetails() {
                     aria-pressed={agentView === 'code'}
                     title="Code view"
                     onClick={() => setAgentView('code')}
-                    className={`flex h-9 items-center gap-2 px-3 text-xs font-medium ${agentView === 'code' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                    className={`flex h-8 items-center gap-1.5 px-2.5 text-[11px] font-medium ${agentView === 'code' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
                   >
-                    <Code2 className="h-4 w-4" />
+                    <Code2 className="h-3.5 w-3.5" />
                     Code
                   </button>
                 </div>
@@ -619,36 +630,36 @@ export default function JobDetails() {
                     progress={displayWorkflowProgress}
                   />
                 ) : agentView === 'code' ? (
-                  <div className="absolute inset-0 overflow-auto bg-neutral-950 p-4">
-                    <pre className="font-mono text-xs leading-5 text-neutral-200">{graphCode}</pre>
+                  <div className="absolute inset-0 overflow-auto bg-neutral-950 p-3">
+                    <pre className="font-mono text-[11px] leading-5 text-neutral-200">{graphCode}</pre>
                   </div>
                 ) : (
                   <div className="overflow-auto absolute inset-0">
                     {displayAgents.length === 0 ? (
-                      <div className="flex h-full items-center justify-center text-sm text-neutral-500">
+                      <div className="flex h-full items-center justify-center text-xs text-neutral-500">
                         No agents reported yet.
                       </div>
                     ) : (
-                      <table className="w-full text-left border-collapse">
+                      <table className="w-full border-collapse text-left">
                         <thead className="bg-neutral-50 sticky top-0">
-                          <tr className="text-sm text-neutral-500">
-                            <th className="px-6 py-3 font-medium">Agent ID</th>
-                            <th className="px-6 py-3 font-medium">Type</th>
-                            <th className="px-6 py-3 font-medium">Status</th>
-                            <th className="px-6 py-3 font-medium">Messages</th>
-                            <th className="px-6 py-3 font-medium">Node</th>
+                          <tr className="text-[11px] text-neutral-500">
+                            <th className="px-4 py-2 font-medium">Agent ID</th>
+                            <th className="px-4 py-2 font-medium">Type</th>
+                            <th className="px-4 py-2 font-medium">Status</th>
+                            <th className="px-4 py-2 font-medium">Messages</th>
+                            <th className="px-4 py-2 font-medium">Node</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-100">
                           {displayAgents.map((agent, i) => (
                             <tr key={agent.id || i} className="hover:bg-neutral-50">
-                              <td className="px-6 py-4 font-mono text-sm text-neutral-950 font-medium">{agent.label || agent.id || 'unknown'}</td>
-                              <td className="px-6 py-4 text-sm text-neutral-600">{agent.agent_type || 'unknown'} / {agent.type || 'unknown'}</td>
-                              <td className="px-6 py-4 text-sm">
-                                <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${statusClass(agent.status)}`}>{agent.status || 'unknown'}</span>
+                              <td className="px-4 py-2 font-mono text-xs font-medium text-neutral-950">{agent.label || agent.id || 'unknown'}</td>
+                              <td className="px-4 py-2 text-xs text-neutral-600">{agent.agent_type || 'unknown'} / {agent.type || 'unknown'}</td>
+                              <td className="px-4 py-2 text-xs">
+                                <span className={`inline-flex rounded-full border px-1.5 py-0.5 text-[11px] font-medium capitalize ${statusClass(agent.status)}`}>{agent.status || 'unknown'}</span>
                               </td>
-                              <td className="px-6 py-4 text-sm text-neutral-600">{agent.processed_messages ?? 0} processed, {agent.mailbox_depth ?? 0} in queue</td>
-                              <td className="px-6 py-4 text-sm text-neutral-500">{agent.assigned_node || 'unassigned'}</td>
+                              <td className="px-4 py-2 text-xs text-neutral-600">{agent.processed_messages ?? 0} processed, {agent.mailbox_depth ?? 0} in queue</td>
+                              <td className="px-4 py-2 text-xs text-neutral-500">{agent.assigned_node || 'unassigned'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -661,9 +672,9 @@ export default function JobDetails() {
           )}
 
           {activeTab === 'logs' && (
-            <div className="overflow-auto absolute inset-0 bg-neutral-950 text-neutral-300 font-mono text-sm p-4">
+            <div className="absolute inset-0 overflow-auto bg-neutral-950 p-3 font-mono text-xs leading-5 text-neutral-300">
               {(events || []).slice().reverse().map((ev, i) => (
-                <div key={i} className="mb-2">
+                <div key={i} className="mb-1">
                   <span className="text-neutral-500">{ev.timestamp ? format(new Date(ev.timestamp), 'HH:mm:ss.SSS') : 'unknown'}</span>{' '}
                   <span className="text-neutral-300">[{ev.type}]</span>{' '}
                   {ev.agent_id && <span className="text-neutral-300 font-bold">{ev.agent_id}</span>}{' '}

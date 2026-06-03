@@ -25,19 +25,19 @@ export default function RunUi() {
 
   return (
     <div className="flex min-h-[420px] items-center justify-center">
-      <div className="rounded-lg border border-neutral-200 bg-white p-6 text-center shadow-sm">
-        <Loader2 className="mx-auto mb-4 h-6 w-6 animate-spin text-neutral-500" />
-        <h2 className="text-lg font-semibold text-neutral-950">Opening Blueprint UI</h2>
-        <p className="mt-2 max-w-md text-sm text-neutral-600">
+      <div className="rounded-lg border border-neutral-200 bg-white p-5 text-center shadow-sm">
+        <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin text-neutral-500" />
+        <h2 className="font-semibold text-neutral-950">Opening Blueprint UI</h2>
+        <p className="mt-2 max-w-md text-xs text-neutral-600">
           This route is forwarded from React to the central Gradio dashboard.
         </p>
         {targetUrl && (
           <a
-            className="mt-4 inline-flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
             href={targetUrl}
           >
             Open Gradio UI
-            <ExternalLink className="h-4 w-4" />
+            <ExternalLink className="h-3.5 w-3.5" />
           </a>
         )}
       </div>

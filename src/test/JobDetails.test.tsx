@@ -172,7 +172,10 @@ describe('JobDetails Component', () => {
 
     // Default tab is Progress
     expect(screen.queryByRole('button', { name: 'Graph View' })).not.toBeInTheDocument();
-    expect(screen.getByText('test-workflow')).toBeInTheDocument();
+    expect(screen.queryByText('test-workflow')).not.toBeInTheDocument();
+    expect(screen.getByText('Live Agents')).toBeInTheDocument();
+    expect(screen.getByText('1/1')).toBeInTheDocument();
+    expect(screen.getByText('Events')).toBeInTheDocument();
     expect(screen.getByText(/Step One/)).toBeInTheDocument();
 
     // Switch to Agents tab; list view is the default, graph view is available there.
@@ -624,7 +627,7 @@ describe('JobDetails Component', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Progress' }));
 
-    expect(screen.getByText(/2\/2 agents/)).toBeInTheDocument();
+    expect(screen.getByText(/0\/2/)).toBeInTheDocument();
     expect(screen.getAllByText('idle').length).toBeGreaterThan(0);
     expect(screen.getByText('Review visual detection')).toBeInTheDocument();
   });

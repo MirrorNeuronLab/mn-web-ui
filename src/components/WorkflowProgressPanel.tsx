@@ -1,4 +1,4 @@
-import { Check, Circle, Clock3, ExternalLink, FileText, FolderInput, Loader2, MousePointer2, X } from 'lucide-react';
+import { Check, Circle, Clock3, ExternalLink, FileText, Loader2, MousePointer2, X } from 'lucide-react';
 import type { JobDetails, WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
 import { displayAgentName } from '../utils/agentGraph';
 
@@ -34,17 +34,17 @@ const statusTone = (status: string | undefined) => {
 
 const StatusGlyph = ({ status, current }: { status?: string; current?: boolean }) => {
   const normalized = String(status || '').toLowerCase();
-  if (['completed', 'done', 'succeeded'].includes(normalized)) return <Check className="h-4 w-4 text-emerald-700" />;
-  if (['partial', 'skipped'].includes(normalized)) return <Circle className="h-4 w-4 text-amber-600" />;
-  if (['failed', 'cancelled', 'error'].includes(normalized)) return <X className="h-4 w-4 text-red-700" />;
-  if (current || ['running', 'active'].includes(normalized)) return <Loader2 className="h-4 w-4 animate-spin text-sky-700" />;
-  if (['retry_wait', 'blocked', 'paused', 'pausing', 'queued'].includes(normalized)) return <Clock3 className="h-4 w-4 text-amber-600" />;
-  if (['idle', 'ready'].includes(normalized)) return <Circle className="h-4 w-4 text-neutral-500" />;
-  if (['pending', 'scheduled', 'validated', 'preparing'].includes(normalized)) return <Clock3 className="h-4 w-4 text-neutral-500" />;
-  return <Circle className="h-4 w-4 text-neutral-400" />;
+  if (['completed', 'done', 'succeeded'].includes(normalized)) return <Check className="h-3.5 w-3.5 text-emerald-700" />;
+  if (['partial', 'skipped'].includes(normalized)) return <Circle className="h-3.5 w-3.5 text-amber-600" />;
+  if (['failed', 'cancelled', 'error'].includes(normalized)) return <X className="h-3.5 w-3.5 text-red-700" />;
+  if (current || ['running', 'active'].includes(normalized)) return <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-700" />;
+  if (['retry_wait', 'blocked', 'paused', 'pausing', 'queued'].includes(normalized)) return <Clock3 className="h-3.5 w-3.5 text-amber-600" />;
+  if (['idle', 'ready'].includes(normalized)) return <Circle className="h-3.5 w-3.5 text-neutral-500" />;
+  if (['pending', 'scheduled', 'validated', 'preparing'].includes(normalized)) return <Clock3 className="h-3.5 w-3.5 text-neutral-500" />;
+  return <Circle className="h-3.5 w-3.5 text-neutral-400" />;
 };
 
-const formatElapsed = (seconds?: number) => {
+export const formatElapsed = (seconds?: number) => {
   const value = Number(seconds || 0);
   if (!Number.isFinite(value) || value <= 0) return '0s';
   if (value < 60) return `${Math.round(value)}s`;
@@ -145,7 +145,7 @@ const uniqueResources = (resources: ProgressResource[]) => {
   });
 };
 
-const buildOutputResources = (progress: WorkflowProgress, details?: JobDetails | null): ProgressResource[] => {
+export const buildOutputResources = (progress: WorkflowProgress, details?: JobDetails | null): ProgressResource[] => {
   const detailRoot = details as Record<string, unknown> | null | undefined;
   const job = isRecord(details?.job) ? details.job : {};
   const summary = isRecord(details?.summary) ? details.summary : {};
@@ -176,14 +176,14 @@ const buildInputResources = (progress: WorkflowProgress, details?: JobDetails | 
 const ResourceList = ({ resources, emptyText }: { resources: ProgressResource[]; emptyText: string }) => (
   <div className="space-y-1">
     {resources.length ? resources.slice(0, 8).map((resource) => {
-      const icon = resource.kind === 'url' ? <ExternalLink className="h-4 w-4 shrink-0" /> : <FileText className="h-4 w-4 shrink-0" />;
+      const icon = resource.kind === 'url' ? <ExternalLink className="h-3.5 w-3.5 shrink-0" /> : <FileText className="h-3.5 w-3.5 shrink-0" />;
       const content = (
         <>
           {icon}
           <span className="min-w-0 truncate">{resource.label}</span>
         </>
       );
-      const className = "flex h-9 w-full items-center gap-3 rounded-md px-2 text-left text-sm text-neutral-900 hover:bg-neutral-100";
+      const className = "flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-neutral-900 hover:bg-neutral-100";
       return resource.href ? (
         <a key={resource.id} className={className} href={resource.href} target="_blank" rel="noreferrer" title={resource.value}>
           {content}
@@ -193,7 +193,7 @@ const ResourceList = ({ resources, emptyText }: { resources: ProgressResource[];
           {content}
         </div>
       );
-    }) : <div className="px-2 py-1 text-sm text-neutral-500">{emptyText}</div>}
+    }) : <div className="px-2 py-1 text-xs text-neutral-500">{emptyText}</div>}
   </div>
 );
 
@@ -201,44 +201,41 @@ const ProgressResourcesColumn = ({ progress, details, webUi }: { progress: Workf
   const outputs = buildOutputResources(progress, details);
   const inputs = buildInputResources(progress, details);
   return (
-    <aside className="border-t border-neutral-200 p-4 xl:border-l xl:border-t-0">
-      <div className="space-y-5">
+    <div className="mt-3 border-t border-neutral-200 pt-3">
+      <div className="space-y-4">
         <section>
-          <div className="mb-3 text-sm font-semibold text-neutral-500">Outputs</div>
+          <div className="mb-2 text-xs font-semibold text-neutral-500">Outputs</div>
           <ResourceList resources={outputs} emptyText="No outputs yet" />
         </section>
 
-        <section className="border-t border-neutral-200 pt-5">
-          <div className="mb-3 text-sm font-semibold text-neutral-500">Browser</div>
+        <section className="border-t border-neutral-200 pt-4">
+          <div className="mb-2 text-xs font-semibold text-neutral-500">Browser</div>
           {webUi?.url ? (
             <a
-              className="flex h-9 items-center gap-3 rounded-md px-2 text-sm text-neutral-900 hover:bg-neutral-100"
+              className="flex h-7 items-center gap-2 rounded-md px-2 text-xs text-neutral-900 hover:bg-neutral-100"
               href={webUi.url}
               target="_blank"
               rel="noreferrer"
               aria-label={`Open dashboard in browser: ${webUi.title || webUi.url}`}
               title={webUi.status ? `${webUi.title} (${webUi.status})` : webUi.title}
             >
-              <MousePointer2 className="h-4 w-4 shrink-0" />
+              <MousePointer2 className="h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0 truncate">{webUi.title || webUi.url}</span>
             </a>
           ) : (
-            <div className="flex h-9 items-center gap-3 px-2 text-sm text-neutral-400">
-              <MousePointer2 className="h-4 w-4 shrink-0" />
+            <div className="flex h-7 items-center gap-2 px-2 text-xs text-neutral-400">
+              <MousePointer2 className="h-3.5 w-3.5 shrink-0" />
               <span>No dashboard yet</span>
             </div>
           )}
         </section>
 
-        <section className="border-t border-neutral-200 pt-5">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-neutral-500">
-            <FolderInput className="h-4 w-4" />
-            Inputs
-          </div>
+        <section className="border-t border-neutral-200 pt-4">
+          <div className="mb-2 text-xs font-semibold text-neutral-500">Inputs</div>
           <ResourceList resources={inputs} emptyText="No inputs reported yet" />
         </section>
       </div>
-    </aside>
+    </div>
   );
 };
 
@@ -246,7 +243,7 @@ const StepRow = ({ step, index, workflowKind, showLayer }: { step: WorkflowProgr
   const count = workflowKind === 'service' ? (step.ready_count || step.done_count || 0) : (step.done_count || 0);
   return (
     <div
-      className={`grid grid-cols-[24px_1fr_auto] items-center gap-2 rounded-md px-3 py-2 text-sm ${
+      className={`grid grid-cols-[20px_1fr_auto] items-center gap-2 rounded-md px-2 py-1.5 text-xs ${
         step.current ? 'bg-neutral-950 text-white' : 'text-neutral-700 hover:bg-neutral-50'
       }`}
     >
@@ -258,7 +255,7 @@ const StepRow = ({ step, index, workflowKind, showLayer }: { step: WorkflowProgr
         </div>
         {step.goal ? <div className={`truncate text-xs ${step.current ? 'text-neutral-300' : 'text-neutral-500'}`}>{step.goal}</div> : null}
       </div>
-      <div className={`font-mono text-xs ${step.current ? 'text-neutral-200' : 'text-neutral-500'}`}>
+      <div className={`font-mono text-[11px] ${step.current ? 'text-neutral-200' : 'text-neutral-500'}`}>
         {count}/{step.total_count}
       </div>
     </div>
@@ -274,39 +271,39 @@ const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
   });
   return (
     <tr className="border-b border-neutral-100 last:border-0">
-      <td className="max-w-[280px] px-4 py-3">
+      <td className="max-w-[260px] px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <StatusGlyph status={agent.status} current={agent.status === 'running'} />
-          <span className="truncate font-mono text-sm font-medium text-neutral-950" title={agent.id}>{agentName}</span>
+          <span className="truncate font-mono text-xs font-medium text-neutral-950" title={agent.id}>{agentName}</span>
         </div>
       </td>
-      <td className="w-[120px] px-4 py-3 text-sm">
+      <td className="w-[110px] px-3 py-2 text-xs">
         <span className={`capitalize ${statusTone(agent.status)}`}>{agent.status || 'unknown'}</span>
       </td>
-      <td className="max-w-[360px] px-4 py-3 text-sm text-neutral-700">
+      <td className="max-w-[340px] px-3 py-2 text-xs text-neutral-700">
         <div className="truncate" title={agent.status_reason || undefined}>
           {agent.status_reason || agent.working_on || agent.role || 'worker'}
         </div>
       </td>
-      <td className="max-w-[240px] px-4 py-3 text-sm text-neutral-600">
+      <td className="max-w-[220px] px-3 py-2 text-xs text-neutral-600">
         <div className="truncate">{agent.model || 'runtime'}</div>
       </td>
-      <td className="w-[240px] px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="h-2 w-24 overflow-hidden rounded-full bg-neutral-100">
+      <td className="w-[220px] px-3 py-2">
+        <div className="flex items-center gap-2">
+          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-neutral-100">
             <div className="h-full bg-neutral-950" style={{ width: `${progress * 100}%` }} />
           </div>
-          <span className="whitespace-nowrap font-mono text-xs text-neutral-600">{formatProgress(agent)}</span>
+          <span className="whitespace-nowrap font-mono text-[11px] text-neutral-600">{formatProgress(agent)}</span>
         </div>
       </td>
     </tr>
   );
 };
 
-export function WorkflowProgressPanel({ progress, status, details, webUi }: WorkflowProgressPanelProps) {
+export function WorkflowProgressPanel({ progress, details, webUi }: WorkflowProgressPanelProps) {
   if (!progress) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-white text-sm text-neutral-500">
+      <div className="absolute inset-0 flex items-center justify-center bg-white font-mono text-xs text-neutral-500">
         Loading workflow progress...
       </div>
     );
@@ -320,72 +317,57 @@ export function WorkflowProgressPanel({ progress, status, details, webUi }: Work
         .map((step) => currentStep?.id === step.id && (currentStep.agents || []).length ? currentStep : step)
     : (currentStep ? [currentStep] : []);
   const agents = activeSteps.flatMap((step) => step.agents || []);
-  const headlineStatus = progress.status || status || 'unknown';
   const workflowKind = progress.workflow_kind || 'batch';
-  const shownAgents = workflowKind === 'service'
-    ? (progress.agent_count.ready || progress.agent_count.done || 0)
-    : (progress.agent_count.done || 0);
   const showLayer = (progress.layers || []).length > 1 || progress.steps.some((step) => step.parents?.length || step.children?.length);
 
   return (
-    <div className="absolute inset-0 overflow-auto bg-white">
-      <div className="border-b border-neutral-200 px-5 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="truncate font-mono text-lg font-semibold text-neutral-950">{progress.workflow_id || progress.name}</h3>
-            {progress.description ? <p className="mt-1 max-w-5xl text-sm text-neutral-500">{progress.description}</p> : null}
-          </div>
-          <div className={`whitespace-nowrap font-mono text-sm font-semibold ${statusTone(headlineStatus)}`}>
-            {shownAgents}/{progress.agent_count.total} agents · {formatElapsed(progress.elapsed_seconds)} · {headlineStatus}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid min-h-[480px] grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_280px]">
-        <aside className="border-b border-neutral-200 p-4 lg:border-b-0 lg:border-r">
-          <div className="mb-3 text-sm font-semibold text-neutral-950">Steps</div>
-          <div className="space-y-1">
+    <div className="absolute inset-0 overflow-auto bg-white font-sans lg:overflow-hidden">
+      <div className="grid min-h-[480px] grid-cols-1 lg:h-full lg:min-h-0 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="border-b border-neutral-200 p-3 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+          <div className="mb-2 text-xs font-semibold text-neutral-950">Steps</div>
+          <div className="space-y-0.5">
             {progress.steps.map((step, index) => (
               <StepRow key={step.id || index} step={step} index={index} workflowKind={workflowKind} showLayer={showLayer} />
             ))}
           </div>
+          <ProgressResourcesColumn progress={progress} details={details} webUi={webUi} />
         </aside>
 
-        <section className="min-w-0 p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <section className="min-w-0 p-3 lg:min-h-0 lg:overflow-auto">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-neutral-950">
+              <div className="truncate text-xs font-semibold text-neutral-950">
                 {activeSteps.length > 1 ? `${activeSteps.length} active steps` : (currentStep?.label || 'Agents')} · {agents.length} agents
               </div>
               {activeSteps.length > 1 ? (
                 <div className="truncate text-xs text-neutral-500">{activeSteps.map((step) => step.label).join(' / ')}</div>
               ) : currentStep?.goal ? <div className="truncate text-xs text-neutral-500">{currentStep.goal}</div> : null}
             </div>
-            <div className={`text-xs font-medium capitalize ${statusTone(currentStep?.status)}`}>{currentStep?.status || 'unknown'}</div>
+            <div className={`text-[11px] font-medium capitalize ${statusTone(currentStep?.status)}`}>{currentStep?.status || 'unknown'}</div>
           </div>
 
           <div className="overflow-hidden rounded-md border border-neutral-200">
-            <table className="w-full min-w-[760px] table-fixed text-left">
-              <thead className="bg-neutral-50 text-xs text-neutral-500">
+            <table className="w-full min-w-[680px] table-fixed text-left">
+              <thead className="bg-neutral-50 text-[11px] text-neutral-500">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Agent</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Working on</th>
-                  <th className="px-4 py-3 font-medium">Model</th>
-                  <th className="px-4 py-3 font-medium">Progress</th>
+                  <th className="px-3 py-2 font-medium">Agent</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium">Working on</th>
+                  <th className="px-3 py-2 font-medium">Model</th>
+                  <th className="px-3 py-2 font-medium">Progress</th>
                 </tr>
               </thead>
               <tbody>
                 {agents.length ? agents.map((agent) => <AgentRow key={agent.id} agent={agent} />) : (
                   <tr>
-                    <td className="px-4 py-8 text-sm text-neutral-500" colSpan={5}>No agents reported for this step yet.</td>
+                    <td className="px-3 py-6 text-xs text-neutral-500" colSpan={5}>No agents reported for this step yet.</td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
 
-          <div className="mt-4 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+          <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-2.5">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Recent activity</div>
             <div className="space-y-1 font-mono text-xs text-neutral-600">
               {(progress.messages || []).slice(-4).map((message, index) => (
@@ -395,8 +377,6 @@ export function WorkflowProgressPanel({ progress, status, details, webUi }: Work
             </div>
           </div>
         </section>
-
-        <ProgressResourcesColumn progress={progress} details={details} webUi={webUi} />
       </div>
     </div>
   );

@@ -132,16 +132,16 @@ export default function RunJob() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
-        <div className="border-b border-neutral-200 bg-neutral-50/50 px-6 py-4">
+    <div className="mx-auto max-w-3xl space-y-4">
+      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
+        <div className="border-b border-neutral-200 bg-neutral-50/50 px-5 py-3">
           <h2 className="font-semibold text-neutral-950">Run a job</h2>
-          <p className="mt-1 text-sm text-neutral-600">
+          <p className="mt-1 text-xs text-neutral-600">
             Pick one source. The API validates with <span className="font-mono">mn blueprint validate</span>, then launches with <span className="font-mono">mn blueprint run --detached</span>.
           </p>
         </div>
 
-        <div className="border-b border-neutral-200 px-6 pt-4">
+        <div className="border-b border-neutral-200 px-5 pt-3">
           <div className="flex flex-wrap gap-2">
             {modeTabs.map((tab) => (
               <button
@@ -151,26 +151,26 @@ export default function RunJob() {
                   setMode(tab.id);
                   setError(null);
                 }}
-                className={`rounded-md border px-4 py-2 text-sm font-medium ${mode === tab.id ? 'border-neutral-950 bg-neutral-950 text-white' : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
+                className={`rounded-md border px-3 py-1.5 text-xs font-medium ${mode === tab.id ? 'border-neutral-950 bg-neutral-950 text-white' : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
               >
                 {tab.label}
               </button>
             ))}
           </div>
-          <p className="py-3 text-sm text-neutral-500">{modeTabs.find((tab) => tab.id === mode)?.description}</p>
+          <p className="py-2.5 text-xs text-neutral-500">{modeTabs.find((tab) => tab.id === mode)?.description}</p>
         </div>
 
-        <div className="space-y-6 p-6">
+        <div className="space-y-4 p-5">
           {mode === 'blueprint' ? (
-            <div className="space-y-4">
-              <label className="block text-sm font-medium text-neutral-700" htmlFor="blueprint-select">Blueprint</label>
-              <div className="flex items-center gap-3">
-                <Workflow className="h-5 w-5 text-neutral-400" />
+            <div className="space-y-3">
+              <label className="block text-xs font-medium text-neutral-700" htmlFor="blueprint-select">Blueprint</label>
+              <div className="flex items-center gap-2.5">
+                <Workflow className="h-4 w-4 text-neutral-400" />
                 <select
                   id="blueprint-select"
                   value={selectedBlueprintId}
                   onChange={(event) => setSelectedBlueprintId(event.target.value)}
-                  className="h-10 min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-950 focus:border-neutral-950 focus:outline-none"
+                  className="h-9 min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-3 text-xs text-neutral-950 focus:border-neutral-950 focus:outline-none"
                   disabled={loadingBlueprints || running}
                 >
                   {blueprints.map((blueprint) => (
@@ -180,10 +180,10 @@ export default function RunJob() {
                   ))}
                 </select>
               </div>
-              {loadingBlueprints ? <div className="text-sm text-neutral-500">Loading blueprints...</div> : null}
-              {!loadingBlueprints && blueprints.length === 0 ? <div className="text-sm text-neutral-500">No blueprints available.</div> : null}
+              {loadingBlueprints ? <div className="text-xs text-neutral-500">Loading blueprints...</div> : null}
+              {!loadingBlueprints && blueprints.length === 0 ? <div className="text-xs text-neutral-500">No blueprints available.</div> : null}
               {selectedBlueprint ? (
-                <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">
+                <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
                   <div className="font-medium text-neutral-950">{selectedBlueprint.name || selectedBlueprint.id}</div>
                   {selectedBlueprint.description ? <div className="mt-1">{selectedBlueprint.description}</div> : null}
                   <div className="mt-2 font-mono text-xs text-neutral-500">{selectedBlueprint.id}</div>
@@ -194,16 +194,16 @@ export default function RunJob() {
 
           {mode === 'path' ? (
             <div className="space-y-3">
-              <label className="block text-sm font-medium text-neutral-700" htmlFor="path-input">Blueprint folder path</label>
-              <div className="flex items-center gap-3">
-                <FolderInput className="h-5 w-5 text-neutral-400" />
+              <label className="block text-xs font-medium text-neutral-700" htmlFor="path-input">Blueprint folder path</label>
+              <div className="flex items-center gap-2.5">
+                <FolderInput className="h-4 w-4 text-neutral-400" />
                 <input
                   id="path-input"
                   type="text"
                   value={pathValue}
                   onChange={(event) => setPathValue(event.target.value)}
                   placeholder="/Users/homer/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant"
-                  className="h-10 min-w-0 flex-1 rounded-md border border-neutral-300 px-3 font-mono text-sm text-neutral-950 focus:border-neutral-950 focus:outline-none"
+                  className="h-9 min-w-0 flex-1 rounded-md border border-neutral-300 px-3 font-mono text-xs text-neutral-950 focus:border-neutral-950 focus:outline-none"
                   disabled={running}
                 />
               </div>
@@ -213,7 +213,7 @@ export default function RunJob() {
           {mode === 'bundle' ? (
             <div className="space-y-4">
               {!bundleData ? (
-                <div className="relative rounded-xl border-2 border-dashed border-neutral-300 p-8 text-center transition-colors hover:bg-neutral-50">
+                <div className="relative rounded-lg border-2 border-dashed border-neutral-300 p-6 text-center transition-colors hover:bg-neutral-50">
                   <input
                     type="file"
                     accept=".zip"
@@ -221,25 +221,25 @@ export default function RunJob() {
                     className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                     disabled={uploading || running}
                   />
-                  <UploadCloud className={`mx-auto mb-4 h-12 w-12 ${uploading ? 'animate-bounce text-neutral-500' : 'text-neutral-400'}`} />
+                  <UploadCloud className={`mx-auto mb-3 h-10 w-10 ${uploading ? 'animate-bounce text-neutral-500' : 'text-neutral-400'}`} />
                   {uploading ? (
                     <div className="flex items-center justify-center text-neutral-950">
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      <p className="text-sm font-medium">Uploading bundle...</p>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <p className="text-xs font-medium">Uploading bundle...</p>
                     </div>
                   ) : (
                     <>
-                      <p className="text-sm font-medium text-neutral-700">Click to upload or drag and drop</p>
+                      <p className="text-xs font-medium text-neutral-700">Click to upload or drag and drop</p>
                       <p className="mt-1 text-xs text-neutral-500">.zip files only</p>
                     </>
                   )}
                 </div>
               ) : (
-                <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-                  <div className="flex items-start gap-3">
-                    <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-neutral-700" />
+                <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                  <div className="flex items-start gap-2.5">
+                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-neutral-700" />
                     <div>
-                      <h3 className="text-sm font-medium text-neutral-950">Bundle uploaded</h3>
+                      <h3 className="text-xs font-medium text-neutral-950">Bundle uploaded</h3>
                       <p className="mt-1 text-xs text-neutral-700">
                         Graph ID: <strong className="font-mono">{bundleData.manifest.graph_id || bundleData.manifest.job_name || 'bundle'}</strong>
                       </p>
@@ -252,12 +252,12 @@ export default function RunJob() {
           ) : null}
 
           {error ? (
-            <div className="whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-800">
+            <div className="whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-800">
               {error}
             </div>
           ) : null}
 
-          <div className="flex justify-end gap-3 border-t border-neutral-200 pt-5">
+          <div className="flex justify-end gap-2 border-t border-neutral-200 pt-4">
             {mode === 'bundle' && bundleData ? (
               <button
                 type="button"
@@ -265,7 +265,7 @@ export default function RunJob() {
                   setBundleData(null);
                   setError(null);
                 }}
-                className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
+                className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
                 disabled={running}
               >
                 Choose another ZIP
@@ -275,7 +275,7 @@ export default function RunJob() {
               type="button"
               onClick={handleLaunch}
               disabled={!canLaunch}
-              className="flex items-center rounded-md bg-neutral-950 px-6 py-2 font-medium text-white transition-colors hover:bg-neutral-800 disabled:opacity-50"
+              className="flex items-center rounded-md bg-neutral-950 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-neutral-800 disabled:opacity-50"
             >
               {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : mode === 'bundle' ? <FileArchive className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
               {running ? 'Validating...' : 'Launch'}
