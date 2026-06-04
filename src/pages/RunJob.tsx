@@ -114,11 +114,18 @@ export default function RunJob() {
       description: `${selectedFile.name} will be uploaded and validated as a MirrorNeuron bundle source.`,
       confirmLabel: 'Upload ZIP',
       cancelLabel: 'Choose later',
-      loading: `Uploading ${selectedFile.name}...`,
-      success: (result: UploadedBundle) => (
-        `Uploaded ${String(result.manifest.graph_id || result.manifest.job_name || selectedFile.name)}.`
-      ),
-      error: (err) => errorMessage(err, 'Failed to upload bundle'),
+      loading: {
+        title: 'Uploading bundle',
+        description: selectedFile.name,
+      },
+      success: (result: UploadedBundle) => ({
+        title: 'Bundle uploaded',
+        description: String(result.manifest.graph_id || result.manifest.job_name || selectedFile.name),
+      }),
+      error: (err) => ({
+        title: 'Upload failed',
+        description: errorMessage(err, 'Failed to upload bundle'),
+      }),
       onCancel: resetFileInput,
       onConfirm: async () => {
         setUploading(true);
@@ -163,9 +170,18 @@ export default function RunJob() {
       description: `Source: ${summary}`,
       confirmLabel: 'Launch',
       cancelLabel: 'Review',
-      loading: 'Validating and launching job...',
-      success: (jobId: string) => `Launched job ${jobId}.`,
-      error: (err) => errorMessage(err, 'Failed to validate and launch job'),
+      loading: {
+        title: 'Launching job',
+        description: 'Validating source and payload.',
+      },
+      success: (jobId: string) => ({
+        title: 'Job launched',
+        description: jobId,
+      }),
+      error: (err) => ({
+        title: 'Launch failed',
+        description: errorMessage(err, 'Failed to validate and launch job'),
+      }),
       onConfirm: async () => {
         setRunning(true);
         setError(null);

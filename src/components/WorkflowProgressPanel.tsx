@@ -1,7 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
 import { Check, Circle, Clock3, ExternalLink, FileText, Loader2, MousePointer2, X } from 'lucide-react';
+import { toast } from 'sonner';
 import type { JobDetails, WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
+import { revealArtifact } from '../api';
 import { displayAgentName } from '../utils/agentGraph';
+import { artifactDisplayName, isOpenableHref } from '../utils/artifacts';
 import FailurePanel, { ErrorSummary } from './FailurePanel';
 
 type WorkflowProgressPanelProps = {
@@ -13,6 +16,7 @@ type WorkflowProgressPanelProps = {
     title: string;
     status?: string;
   } | null;
+  showFailurePanel?: boolean;
 };
 
 type ProgressResource = {
@@ -20,7 +24,17 @@ type ProgressResource = {
   label: string;
   value: string;
   href?: string;
+  revealUrl?: string;
   kind: 'file' | 'url' | 'input' | 'text';
+};
+
+type FailureArtifact = {
+  artifact_id?: string;
+  relative_path?: string;
+  path?: string;
+  url?: string;
+  reveal_url?: string;
+  size_bytes?: number;
 };
 
 const statusTone = (status: string | undefined) => {
@@ -85,6 +99,11 @@ const displayNameFromPath = (value: string) => {
 
 const isUrl = (value: string) => /^https?:\/\//i.test(value.trim());
 
+const stringProp = (source: Record<string, unknown>, key: string): string | undefined => {
+  const value = source[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+};
+
 const resourceFromValue = (value: unknown, id: string, fallbackLabel?: string): ProgressResource | null => {
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     const text = String(value).trim();
@@ -93,22 +112,34 @@ const resourceFromValue = (value: unknown, id: string, fallbackLabel?: string): 
       id,
       label: fallbackLabel || displayNameFromPath(text),
       value: text,
-      href: isUrl(text) ? text : undefined,
+      href: isOpenableHref(text) ? text : undefined,
       kind: isUrl(text) ? 'url' : text.includes('/') || text.includes('.') ? 'file' : 'text',
     };
   }
   if (!isRecord(value)) return null;
-  const rawValue = value.url || value.href || value.path || value.file || value.file_path || value.local_path || value.value || value.name;
+  const artifact = {
+    artifact_id: stringProp(value, 'artifact_id'),
+    relative_path: stringProp(value, 'relative_path'),
+    path: stringProp(value, 'path'),
+    url: stringProp(value, 'url'),
+    reveal_url: stringProp(value, 'reveal_url'),
+    label: stringProp(value, 'label'),
+    title: stringProp(value, 'title'),
+    name: stringProp(value, 'name'),
+  };
+  const rawValue = artifact.relative_path || artifact.path || value.file || value.file_path || value.local_path || value.value || artifact.url || value.href || artifact.name;
   if (typeof rawValue !== 'string' && typeof rawValue !== 'number' && typeof rawValue !== 'boolean') return null;
   const text = String(rawValue).trim();
   if (!text) return null;
-  const label = [value.label, value.title, value.name, fallbackLabel].find((candidate) => typeof candidate === 'string' && candidate.trim());
+  const hrefValue = stringProp(value, 'url') || stringProp(value, 'href');
+  const label = artifactDisplayName(artifact, fallbackLabel || displayNameFromPath(text));
   return {
     id,
-    label: typeof label === 'string' ? label.trim() : displayNameFromPath(text),
+    label,
     value: text,
-    href: isUrl(text) ? text : undefined,
-    kind: isUrl(text) ? 'url' : 'file',
+    href: isOpenableHref(hrefValue) ? hrefValue : isOpenableHref(text) ? text : undefined,
+    revealUrl: artifact.reveal_url,
+    kind: isUrl(hrefValue || text) ? 'url' : 'file',
   };
 };
 
@@ -140,7 +171,7 @@ const collectResources = (source: unknown, keys: string[], prefix: string): Prog
 const uniqueResources = (resources: ProgressResource[]) => {
   const seen = new Set<string>();
   return resources.filter((resource) => {
-    const key = `${resource.kind}:${resource.value}`;
+    const key = `${resource.kind}:${resource.revealUrl || resource.href || resource.value}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -150,7 +181,7 @@ const uniqueResources = (resources: ProgressResource[]) => {
 const artifactsFromDetails = (details?: JobDetails | null) => {
   const root = details as Record<string, unknown> | null | undefined;
   const artifacts = root?.artifacts || root?.output_files || details?.job?.artifacts;
-  return Array.isArray(artifacts) ? artifacts.filter(isRecord) as any[] : [];
+  return Array.isArray(artifacts) ? artifacts.filter(isRecord) as FailureArtifact[] : [];
 };
 
 export const buildOutputResources = (progress: WorkflowProgress, details?: JobDetails | null): ProgressResource[] => {
@@ -181,6 +212,13 @@ const buildInputResources = (progress: WorkflowProgress, details?: JobDetails | 
   ]).map((resource) => ({ ...resource, kind: resource.kind === 'url' ? resource.kind : 'input' }));
 };
 
+const openResourceLocation = (resource: ProgressResource) => {
+  if (!resource.revealUrl) return;
+  void revealArtifact(resource.revealUrl)
+    .then(() => toast.message('Opened file location', { description: resource.label }))
+    .catch(() => toast.error('Could not open file location', { description: resource.label }));
+};
+
 const ResourceList = ({ resources, emptyText }: { resources: ProgressResource[]; emptyText: string }) => (
   <div className="space-y-1">
     {resources.length ? resources.slice(0, 8).map((resource) => {
@@ -192,7 +230,11 @@ const ResourceList = ({ resources, emptyText }: { resources: ProgressResource[];
         </>
       );
       const className = "flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-neutral-900 hover:bg-neutral-100";
-      return resource.href ? (
+      return resource.revealUrl ? (
+        <button key={resource.id} type="button" className={className} onClick={() => openResourceLocation(resource)} title={`Open ${resource.label} in local file system`}>
+          {content}
+        </button>
+      ) : resource.href ? (
         <a key={resource.id} className={className} href={resource.href} target="_blank" rel="noreferrer" title={resource.value}>
           {content}
         </a>
@@ -312,7 +354,7 @@ const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
   );
 };
 
-export function WorkflowProgressPanel({ progress, details, webUi }: WorkflowProgressPanelProps) {
+export function WorkflowProgressPanel({ progress, details, webUi, showFailurePanel = true }: WorkflowProgressPanelProps) {
   if (!progress) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-white font-mono text-xs text-neutral-500">
@@ -348,9 +390,11 @@ export function WorkflowProgressPanel({ progress, details, webUi }: WorkflowProg
         </aside>
 
         <section className="min-w-0 p-3 lg:min-h-0 lg:overflow-auto">
-          <div className="mb-3">
-            <FailurePanel failure={visibleFailure} title={progress.failure ? 'Job Failure' : 'Step Failure'} artifacts={failureArtifacts} />
-          </div>
+          {showFailurePanel && visibleFailure ? (
+            <div className="mb-3">
+              <FailurePanel failure={visibleFailure} title={progress.failure ? 'Job Failure' : 'Step Failure'} artifacts={failureArtifacts} />
+            </div>
+          ) : null}
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="truncate text-xs font-semibold text-neutral-950">

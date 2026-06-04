@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { toast } from 'sonner';
 import JobDetails from '../pages/JobDetails';
-import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelJob, pauseJob, resumeJob } from '../api';
+import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelJob, pauseJob, resumeJob, revealArtifact } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
 
@@ -20,6 +20,7 @@ vi.mock('../api', async (importOriginal) => {
     cancelJob: vi.fn(),
     pauseJob: vi.fn(),
     resumeJob: vi.fn(),
+    revealArtifact: vi.fn(),
   };
 });
 
@@ -110,6 +111,7 @@ describe('JobDetails Component', () => {
       recent_events: [],
     });
     vi.mocked(streamWorkflowProgress).mockResolvedValue(undefined);
+    vi.mocked(revealArtifact).mockResolvedValue({ ok: true });
     // mock window.location to ensure useParams picks it up
     window.history.pushState({}, 'Test page', '/jobs/test-job-1');
   });
@@ -203,6 +205,208 @@ describe('JobDetails Component', () => {
     // Switch to Logs tab
     fireEvent.click(screen.getByText('Communication Logs'));
     expect(screen.getByText('[agent_started]')).toBeInTheDocument();
+  });
+
+  it('renders observability summary with trace and artifact links', async () => {
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'test-job-1',
+        run_id: 'trace-run',
+        trace_id: 'trc_test',
+        graph_id: 'graph-1',
+        status: 'failed',
+      },
+      summary: { status: 'failed' },
+      observability_summary: {
+        schema_version: 'mn.observability_summary.v1',
+        trace_id: 'trc_test',
+        status: 'failed',
+        duration_ms: 125000,
+        counts: { events: 4, logs: 2, errors: 1, warnings: 1, timeline: 5 },
+        retry_count: 2,
+        resource_peaks: { max_memory_rss_mb: 256 },
+        token_totals: { total_tokens: 1200 },
+      },
+      artifacts: [
+        { artifact_id: 'timeline_jsonl', url: '/api/v1/runs/trace-run/artifacts/timeline.jsonl' },
+        { artifact_id: 'events_jsonl', url: '/api/v1/runs/trace-run/artifacts/events.jsonl' },
+        { artifact_id: 'logs_jsonl', url: '/api/v1/runs/trace-run/artifacts/logs.jsonl' },
+        { artifact_id: 'errors_jsonl', url: '/api/v1/runs/trace-run/artifacts/errors.jsonl' },
+      ],
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Observability Summary')).toBeInTheDocument();
+    });
+    expect(screen.getByText('trc_test')).toBeInTheDocument();
+    expect(screen.getByText('4 / 2 / 1')).toBeInTheDocument();
+    expect(screen.getByText('1 / 2')).toBeInTheDocument();
+    expect(screen.getByText('256 MB / 1,200')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'timeline.jsonl' })[0].getAttribute('href')).toContain('/api/v1/runs/trace-run/artifacts/timeline.jsonl');
+    expect(screen.getAllByRole('link', { name: 'errors.jsonl' })[0].getAttribute('href')).toContain('/api/v1/runs/trace-run/artifacts/errors.jsonl');
+  });
+
+  it('renders artifact filenames and opens local file locations from failure and outputs', async () => {
+    const artifacts = [
+      {
+        artifact_id: 'errors_jsonl',
+        relative_path: 'errors.jsonl',
+        url: '/api/v1/runs/artifact-run/artifacts/errors.jsonl',
+        reveal_url: '/api/v1/runs/artifact-run/artifacts/errors.jsonl/reveal',
+      },
+      {
+        artifact_id: 'events_jsonl',
+        relative_path: 'events.jsonl',
+        url: '/api/v1/runs/artifact-run/artifacts/events.jsonl',
+        reveal_url: '/api/v1/runs/artifact-run/artifacts/events.jsonl/reveal',
+      },
+      {
+        artifact_id: 'logs_jsonl',
+        relative_path: 'logs.jsonl',
+        url: '/api/v1/runs/artifact-run/artifacts/logs.jsonl',
+        reveal_url: '/api/v1/runs/artifact-run/artifacts/logs.jsonl/reveal',
+      },
+      {
+        artifact_id: 'job_json',
+        relative_path: 'job.json',
+        url: '/api/v1/runs/artifact-run/artifacts/job.json',
+        reveal_url: '/api/v1/runs/artifact-run/artifacts/job.json/reveal',
+      },
+    ];
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'test-job-1',
+        graph_id: 'graph-1',
+        status: 'failed',
+        artifacts,
+      },
+      failure: {
+        schema_version: 'mn.error.v1',
+        code: 'runtime.failure',
+        desc: 'Runtime failure',
+        severity: 'ERROR',
+        details: {},
+        links: [
+          { artifact_id: 'errors_jsonl' },
+          { artifact_id: 'events_jsonl' },
+          { artifact_id: 'logs_jsonl' },
+        ],
+      },
+      artifacts,
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchWorkflowProgress).mockResolvedValue({
+      schema_version: 1,
+      job_id: 'test-job-1',
+      workflow_id: 'test-workflow',
+      name: 'Test Workflow',
+      description: '',
+      status: 'failed',
+      workflow_kind: 'batch',
+      elapsed_seconds: 12,
+      agent_count: { done: 0, running: 0, idle: 0, ready: 0, failed: 1, total: 1 },
+      current_step_id: 'step-1',
+      current_step: null,
+      steps: [],
+      messages: [],
+      recent_events: [],
+    });
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByRole('button', { name: 'errors.jsonl' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'events.jsonl' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'logs.jsonl' }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'job.json' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'errors.jsonl' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'job.json' }));
+
+    await waitFor(() => {
+      expect(revealArtifact).toHaveBeenCalledWith('/api/v1/runs/artifact-run/artifacts/errors.jsonl/reveal');
+      expect(revealArtifact).toHaveBeenCalledWith('/api/v1/runs/artifact-run/artifacts/job.json/reveal');
+    });
+  });
+
+  it('shows a workflow job failure only once in the details page', async () => {
+    const failure = {
+      schema_version: 'mn.error.v1',
+      code: 'runtime.failure',
+      desc: 'Fewer than 2 healthy connected runtime nodes observed',
+      severity: 'ERROR',
+      links: [],
+      details: {
+        category: 'runtime',
+        retryable: false,
+        message: 'fewer than 2 healthy connected runtime nodes observed',
+      },
+    };
+
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'test-job-1',
+        graph_id: 'graph-1',
+        status: 'failed',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchWorkflowProgress).mockResolvedValue({
+      schema_version: 1,
+      job_id: 'test-job-1',
+      workflow_id: 'test-workflow',
+      name: 'Test Workflow',
+      description: '',
+      status: 'failed',
+      workflow_kind: 'batch',
+      elapsed_seconds: 12,
+      agent_count: { done: 1, running: 0, idle: 0, ready: 1, failed: 0, total: 1 },
+      current_step_id: 'step-1',
+      current_step: {
+        id: 'step-1',
+        label: 'Report Sink',
+        goal: 'result_sink',
+        status: 'done',
+        current: true,
+        done_count: 1,
+        running_count: 0,
+        idle_count: 0,
+        ready_count: 1,
+        failed_count: 0,
+        total_count: 1,
+        live: false,
+        elapsed_seconds: 12,
+        agents: [],
+      },
+      steps: [],
+      messages: ['Completed successfully.'],
+      recent_events: [],
+      failure,
+    });
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/Job Failure/i)).toHaveLength(1);
+    expect(screen.getByText('Fewer than 2 healthy connected runtime nodes observed')).toBeInTheDocument();
   });
 
   it('uses workflow progress status and hides unknown header metadata', async () => {

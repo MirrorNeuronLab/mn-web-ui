@@ -269,5 +269,49 @@ describe('Jobs Component', () => {
       expect(clearJobs).toHaveBeenCalledOnce();
       expect(screen.getByText('No jobs found.')).toBeInTheDocument();
     });
+
+    const clearedToast = await screen.findByText('Cleared 1 job.');
+    const toastElement = clearedToast.closest('[data-sonner-toast]');
+    expect(screen.queryByText('Clearing non-running jobs...')).not.toBeInTheDocument();
+    expect(toastElement).toHaveAttribute('data-type', 'default');
+    expect(toastElement).toHaveAttribute('data-dismissible', 'true');
+    expect(toastElement?.querySelector('.sonner-loading-wrapper')).not.toBeInTheDocument();
+  });
+
+  it('shows backend detail and removes confirm actions when clear fails', async () => {
+    const mockJobs = [
+      {
+        job_id: 'job-1',
+        graph_id: 'graph-1',
+        status: 'completed',
+        submitted_at: '2026-04-16T12:00:00Z',
+        active_executors: 0,
+        executor_count: 0
+      }
+    ];
+
+    vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
+    vi.mocked(clearJobs).mockRejectedValue({
+      response: {
+        data: {
+          error: 'ClearJobs requires MN_MIRROR_NEURON_GRPC_ADMIN_TOKEN',
+        },
+      },
+    });
+
+    renderWithRouter(<Jobs />);
+
+    await waitFor(() => {
+      expect(screen.getByText('job-1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(await screen.findByText('Clear non-running jobs?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear jobs' }));
+
+    expect(await screen.findByText('ClearJobs requires MN_MIRROR_NEURON_GRPC_ADMIN_TOKEN')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear jobs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Keep jobs' })).not.toBeInTheDocument();
   });
 });

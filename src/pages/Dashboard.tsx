@@ -74,11 +74,18 @@ export default function Dashboard() {
       description: `This box will connect to ${host} using the provided exposure token.`,
       confirmLabel: 'Add node',
       cancelLabel: 'Keep form open',
-      loading: `Adding ${host}...`,
-      success: (result: Awaited<ReturnType<typeof addClusterNode>>) => (
-        result.message || `${result.node_name || host} was added to this box.`
-      ),
-      error: (error) => apiErrorMessage(error, `Could not add ${host}.`),
+      loading: {
+        title: 'Adding node',
+        description: host,
+      },
+      success: (result: Awaited<ReturnType<typeof addClusterNode>>) => ({
+        title: 'Node added',
+        description: result.message || `${result.node_name || host} was added to this box.`,
+      }),
+      error: (error) => ({
+        title: 'Add failed',
+        description: apiErrorMessage(error, `Could not add ${host}.`),
+      }),
       onConfirm: async () => {
         setAddingNode(true);
         try {
@@ -107,11 +114,18 @@ export default function Dashboard() {
       description: `${nodeName} will be disconnected from this box and removed from the runtime resource list.`,
       confirmLabel: 'Remove node',
       cancelLabel: 'Keep node',
-      loading: `Removing ${nodeName}...`,
-      success: (result: Awaited<ReturnType<typeof removeClusterNode>>) => (
-        result.message || `${nodeName} was removed from this box.`
-      ),
-      error: (error) => apiErrorMessage(error, `Could not remove ${nodeName}.`),
+      loading: {
+        title: 'Removing node',
+        description: nodeName,
+      },
+      success: (result: Awaited<ReturnType<typeof removeClusterNode>>) => ({
+        title: 'Node removed',
+        description: result.message || `${nodeName} was removed from this box.`,
+      }),
+      error: (error) => ({
+        title: 'Remove failed',
+        description: apiErrorMessage(error, `Could not remove ${nodeName}.`),
+      }),
       onConfirm: async () => {
         setRemovingNodeName(nodeName);
         try {

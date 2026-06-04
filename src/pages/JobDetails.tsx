@@ -2,12 +2,13 @@ import { useEffect, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelJob, pauseJob, resumeJob, isServiceJob } from '../api';
-import type { AgentGraph, JobDetails as JobDetailsType, JobEvent, WebUiHandle, WorkflowProgress } from '../api';
+import type { AgentGraph, ErrorEnvelope, JobDetails as JobDetailsType, JobEvent, WebUiHandle, WorkflowProgress } from '../api';
 import { format } from 'date-fns';
 import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, MessageSquare, ExternalLink, List, Code2, FileText } from 'lucide-react';
 import { WorkflowAgentGraph } from '../components/WorkflowAgentGraph';
 import { WorkflowProgressPanel, buildOutputResources, formatElapsed } from '../components/WorkflowProgressPanel';
 import FailurePanel from '../components/FailurePanel';
+import ObservabilitySummaryPanel, { type ObservabilityArtifactRef } from '../components/ObservabilitySummaryPanel';
 import { confirmActionToast } from '../components/ui/confirm-toast';
 import { Tooltip } from '../components/ui/tooltip';
 import { buildDisplayGraph } from '../utils/agentGraph';
@@ -50,12 +51,47 @@ const SummaryCard = ({ icon, value, label }: { icon: ReactNode; value: string | 
   </div>
 );
 
+const observabilitySummaryFrom = (
+  details: JobDetailsType,
+  progress: WorkflowProgress | null,
+  summaryRecord: Record<string, unknown>,
+): Record<string, unknown> | undefined => {
+  const root = details as Record<string, unknown>;
+  const candidates = [
+    progress?.observability_summary,
+    root.observability_summary,
+    summaryRecord.observability_summary,
+    details.job?.observability_summary,
+  ];
+  return candidates.find(isNonEmptyRecord);
+};
+
+const traceIdFrom = (
+  details: JobDetailsType,
+  progress: WorkflowProgress | null,
+  summaryRecord: Record<string, unknown>,
+  observabilitySummary?: Record<string, unknown>,
+): string | undefined => (
+  knownStringValue(
+    progress?.trace_id,
+    details.trace_id,
+    details.job?.trace_id,
+    summaryRecord.trace_id,
+    observabilitySummary?.trace_id,
+  )
+);
+
+
 const TERMINAL_STATUSES = new Set(['completed', 'done', 'finished', 'succeeded', 'success', 'failed', 'cancelled', 'canceled', 'error']);
 const ACTIVE_EVENT_TYPES = new Set(['agent_message_received', 'executor_lease_acquired', 'route_selected', 'video_frame_tick_generated']);
 const COMPLETE_EVENT_TYPES = new Set(['sandbox_job_completed', 'executor_lease_released']);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null && !Array.isArray(value)
+);
+
+const isNonEmptyRecord = (value: unknown): value is Record<string, unknown> => (
+  isRecord(value) && Object.keys(value).length > 0
 );
 
 const stringValue = (...values: unknown[]): string | undefined => {
@@ -452,9 +488,12 @@ export default function JobDetails() {
   const progressOutputs = displayWorkflowProgress ? buildOutputResources(displayWorkflowProgress, details) : [];
   const detailRoot = details as Record<string, unknown>;
   const summaryRecord = isRecord(details.summary) ? details.summary : {};
-  const failure = displayWorkflowProgress?.failure || details.failure || details.job.failure || (summaryRecord.failure as any);
+  const summaryFailure = isRecord(summaryRecord.failure) ? summaryRecord.failure as ErrorEnvelope : undefined;
+  const failure = displayWorkflowProgress?.failure || details.failure || details.job.failure || summaryFailure;
   const artifactRefs = [detailRoot.artifacts, detailRoot.output_files, details.job.artifacts]
-    .find((candidate) => Array.isArray(candidate)) as { artifact_id?: string; url?: string; size_bytes?: number }[] | undefined;
+    .find((candidate) => Array.isArray(candidate)) as ObservabilityArtifactRef[] | undefined;
+  const observabilitySummary = observabilitySummaryFrom(details, displayWorkflowProgress || null, summaryRecord);
+  const traceId = traceIdFrom(details, displayWorkflowProgress || null, summaryRecord, observabilitySummary);
   const liveAgentCount = displayWorkflowProgress
     ? displayWorkflowProgress.agent_count.running
     : displayGraph.nodes.filter((agent) => agent.status === 'running').length;
@@ -476,9 +515,18 @@ export default function JobDetails() {
       description: 'This action stops the job and interrupts running agents attached to it.',
       confirmLabel: 'Cancel job',
       cancelLabel: 'Keep running',
-      loading: `Cancelling ${jobId}...`,
-      success: `Cancelled ${jobId}.`,
-      error: 'Failed to cancel job.',
+      loading: {
+        title: 'Cancelling job',
+        description: jobId,
+      },
+      success: {
+        title: 'Job cancelled',
+        description: jobId,
+      },
+      error: {
+        title: 'Cancel failed',
+        description: `Failed to cancel ${jobId}.`,
+      },
       onConfirm: async () => {
         setIsCancelling(true);
         try {
@@ -501,9 +549,18 @@ export default function JobDetails() {
       description: 'The job will stop accepting work until it is resumed.',
       confirmLabel: 'Pause job',
       cancelLabel: 'Keep running',
-      loading: `Pausing ${jobId}...`,
-      success: `Paused ${jobId}.`,
-      error: 'Failed to pause job.',
+      loading: {
+        title: 'Pausing job',
+        description: jobId,
+      },
+      success: {
+        title: 'Job paused',
+        description: jobId,
+      },
+      error: {
+        title: 'Pause failed',
+        description: `Failed to pause ${jobId}.`,
+      },
       onConfirm: async () => {
         setIsPausing(true);
         try {
@@ -527,9 +584,18 @@ export default function JobDetails() {
       description: 'The job will continue accepting work and processing queued agents.',
       confirmLabel: 'Resume job',
       cancelLabel: 'Keep paused',
-      loading: `Resuming ${jobId}...`,
-      success: `Resumed ${jobId}.`,
-      error: 'Failed to resume job.',
+      loading: {
+        title: 'Resuming job',
+        description: jobId,
+      },
+      success: {
+        title: 'Job resumed',
+        description: jobId,
+      },
+      error: {
+        title: 'Resume failed',
+        description: `Failed to resume ${jobId}.`,
+      },
       onConfirm: async () => {
         setIsResuming(true);
         try {
@@ -620,7 +686,10 @@ export default function JobDetails() {
           <SummaryCard icon={<MessageSquare className="h-3.5 w-3.5" />} value={eventCount} label="Events" />
           <SummaryCard icon={<Clock className="h-3.5 w-3.5" />} value={runtime} label="Runtime" />
         </div>
-        <FailurePanel failure={failure} title="Job Failure" artifacts={artifactRefs} />
+        <div className="space-y-3 xl:col-span-2">
+          <FailurePanel failure={failure} title="Job Failure" artifacts={artifactRefs} />
+          <ObservabilitySummaryPanel summary={observabilitySummary} traceId={traceId} artifacts={artifactRefs} />
+        </div>
       </div>
 
       <div className="bg-white rounded-lg border border-neutral-200 shadow-sm flex-1 flex flex-col min-h-[560px] overflow-hidden">
@@ -636,6 +705,7 @@ export default function JobDetails() {
               progress={displayWorkflowProgress}
               details={details}
               webUi={webUi}
+              showFailurePanel={!failure}
             />
           )}
 

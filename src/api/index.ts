@@ -19,6 +19,8 @@ export const ErrorEnvelopeSchema = z.object({
   }).passthrough()).optional().default([]),
 }).passthrough();
 
+export const ObservabilitySummarySchema = z.record(z.string(), z.unknown()).optional();
+
 export const AgentSchema = z.object({
   agent_id: z.string().optional().default('unknown'),
   alias: z.string().optional(),
@@ -55,6 +57,7 @@ export const JobSchema = z.object({
   submitted_at: z.string().nullable().optional(),
   updated_at: z.string().nullable().optional(),
   run_id: z.string().nullable().optional(),
+  trace_id: z.string().nullable().optional(),
   executor_count: z.number().optional(),
   active_executors: z.number().optional(),
   type: z.string().optional(),
@@ -76,6 +79,8 @@ export const JobDetailsSchema = z.object({
   web_ui: z.record(z.string(), z.unknown()).optional(),
   web_ui_service: z.record(z.string(), z.unknown()).optional(),
   blueprint_web_ui_service: z.record(z.string(), z.unknown()).optional(),
+  trace_id: z.string().nullable().optional(),
+  observability_summary: ObservabilitySummarySchema,
   failure: ErrorEnvelopeSchema.optional().nullable(),
 }).passthrough();
 
@@ -286,8 +291,10 @@ export const WorkflowProgressSchema = z.object({
   name: z.string().optional().default('Blueprint'),
   description: z.string().optional().default(''),
   status: z.string().optional().default('unknown'),
+  trace_id: z.string().nullable().optional(),
   workflow_kind: z.enum(['batch', 'service']).optional().default('batch'),
   failure: ErrorEnvelopeSchema.nullable().optional(),
+  observability_summary: ObservabilitySummarySchema,
   generated_at: z.string().nullable().optional(),
   submitted_at: z.string().nullable().optional(),
   elapsed_seconds: z.number().optional().default(0),
@@ -315,6 +322,7 @@ export const WorkflowProgressSchema = z.object({
 
 export type Agent = z.infer<typeof AgentSchema>;
 export type ErrorEnvelope = z.infer<typeof ErrorEnvelopeSchema>;
+export type ObservabilitySummary = z.infer<typeof ObservabilitySummarySchema>;
 export type JobEvent = z.infer<typeof JobEventSchema>;
 export type Job = z.infer<typeof JobSchema>;
 export type JobDetails = z.infer<typeof JobDetailsSchema>;
@@ -467,11 +475,22 @@ export const fetchWorkflowProgress = (id: string) => api.get(`/jobs/${encodeURIC
 });
 
 const apiBaseUrl = () => String(api.defaults.baseURL || '/api/v1').replace(/\/$/, '');
+const apiPathFromUrl = (url: string) => {
+  const trimmed = url.trim();
+  const base = apiBaseUrl();
+  if (trimmed.startsWith(`${base}/`)) return trimmed.slice(base.length);
+  if (trimmed === base) return '/';
+  if (trimmed.startsWith('/api/v1/')) return trimmed.slice('/api/v1'.length);
+  if (trimmed === '/api/v1') return '/';
+  return trimmed;
+};
 const authHeader = (): Record<string, string> => {
   const header = api.defaults.headers.common.Authorization;
   return typeof header === 'string' && header ? { Authorization: header } : {};
 };
 const workflowProgressStreamUrl = (id: string) => `${apiBaseUrl()}/jobs/${encodeURIComponent(id)}/workflow-progress/stream`;
+
+export const revealArtifact = (revealUrl: string) => api.post(apiPathFromUrl(revealUrl)).then(r => r.data as { ok?: boolean; path?: string; folder?: string });
 
 export const streamWorkflowProgress = async (
   id: string,

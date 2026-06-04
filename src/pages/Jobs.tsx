@@ -98,9 +98,18 @@ export default function Jobs() {
         : 'Selected jobs will be stopped. Running agents attached to those jobs will be interrupted.',
       confirmLabel: actionLabel,
       cancelLabel: 'Keep jobs',
-      loading: `${loadingLabel} ${jobIds.length} job${jobIds.length === 1 ? '' : 's'}...`,
-      success: `${completedLabel} ${jobIds.length} job${jobIds.length === 1 ? '' : 's'}.`,
-      error: `Failed to ${action} selected jobs.`,
+      loading: {
+        title: `${loadingLabel} jobs`,
+        description: `${jobIds.length} selected job${jobIds.length === 1 ? '' : 's'} are being updated.`,
+      },
+      success: {
+        title: `${completedLabel} jobs`,
+        description: `${completedLabel} ${jobIds.length} job${jobIds.length === 1 ? '' : 's'}.`,
+      },
+      error: {
+        title: `${actionLabel} failed`,
+        description: `Failed to ${action} selected jobs.`,
+      },
       onConfirm: async () => {
         try {
           setBulkAction(action);
@@ -124,9 +133,18 @@ export default function Jobs() {
       description: 'Completed, failed, and cancelled jobs will be removed from this list. Running jobs stay visible.',
       confirmLabel: 'Clear jobs',
       cancelLabel: 'Keep jobs',
-      loading: 'Clearing non-running jobs...',
-      success: (result: { cleared_count: number }) => `Cleared ${result.cleared_count} job${result.cleared_count === 1 ? '' : 's'}.`,
-      error: 'Failed to clear non-running jobs.',
+      loading: {
+        title: 'Clearing jobs',
+        description: 'Removing completed, failed, and cancelled jobs.',
+      },
+      success: (result: { cleared_count: number }) => ({
+        title: 'Jobs cleared',
+        description: `Cleared ${result.cleared_count} job${result.cleared_count === 1 ? '' : 's'}.`,
+      }),
+      error: (error) => ({
+        title: 'Clear failed',
+        description: apiErrorMessage(error, 'Failed to clear non-running jobs.'),
+      }),
       onConfirm: async () => {
         try {
           setIsClearing(true);
@@ -322,4 +340,22 @@ export default function Jobs() {
       </div>
     </div>
   );
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  const responseData = error && typeof error === 'object' && 'response' in error
+    ? (error as { response?: { data?: unknown } }).response?.data
+    : null;
+
+  if (responseData && typeof responseData === 'object' && !Array.isArray(responseData)) {
+    const record = responseData as Record<string, unknown>;
+    const detail = stringValue(record.detail) || stringValue(record.message) || stringValue(record.error);
+    if (detail) return detail;
+  }
+
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' ? value : '';
 }
