@@ -141,6 +141,52 @@ export const SystemSummarySchema = z.object({
   }).passthrough()).optional().default([]),
 }).passthrough();
 
+export const RuntimeModelCompatibilitySchema = z.object({
+  status: z.string().optional().default('unknown'),
+  ok: z.boolean().optional().default(false),
+  message: z.string().optional().default(''),
+  warnings: z.array(z.string()).optional().default([]),
+}).passthrough().nullable();
+
+export const RuntimeModelSchema = z.object({
+  id: z.string().optional().default('unknown'),
+  name: z.string().optional().default('Runtime model'),
+  provider: z.string().optional().default('docker_model_runner'),
+  model: z.string().optional().default('unknown'),
+  docker_model: z.string().optional().default('unknown'),
+  api_model: z.string().optional(),
+  backend: z.string().optional().default('unknown'),
+  installed: z.boolean().optional().default(true),
+  node: z.string().optional().default('local'),
+  nodes: z.array(z.string()).optional().default([]),
+  used_by: z.array(z.string()).optional().default([]),
+  owner_count: z.number().optional().default(0),
+  orphaned: z.boolean().optional().default(false),
+  manual: z.boolean().optional().default(false),
+  compatibility: RuntimeModelCompatibilitySchema.optional().default(null),
+}).passthrough();
+
+export const RuntimeModelListResponseSchema = z.object({
+  models: z.array(RuntimeModelSchema).optional().default([]),
+  node: z.string().optional().default('local'),
+  runner_available: z.boolean().optional().default(false),
+  warnings: z.array(z.string()).optional().default([]),
+}).passthrough();
+
+export const RuntimeModelBenchmarkSchema = z.object({
+  model: z.string().optional().default('unknown'),
+  name: z.string().optional().default('Runtime model'),
+  docker_model: z.string().optional().default('unknown'),
+  api_model: z.string().optional(),
+  node: z.string().optional().default('local'),
+  elapsed_ms: z.number().optional().default(0),
+  first_token_ms: z.number().nullable().optional(),
+  generated_tokens: z.number().optional().default(0),
+  tokens_per_second: z.number().optional().default(0),
+  sample: z.string().optional().default(''),
+  estimated: z.boolean().optional().default(true),
+}).passthrough();
+
 export const ClusterNodeAddResponseSchema = z.object({
   ok: z.boolean().optional().default(true),
   host: z.string().optional().default(''),
@@ -222,7 +268,24 @@ export const BlueprintLaunchResponseSchema = z.object({
   source: z.string().optional(),
   blueprint: BlueprintSchema.optional(),
   validation: z.record(z.string(), z.unknown()).optional(),
+  model_install: z.record(z.string(), z.unknown()).optional(),
+  progress_id: z.string().optional().nullable(),
   command: z.string().optional(),
+}).passthrough();
+
+export const LaunchProgressEventSchema = z.object({
+  ts: z.string().optional(),
+  phase: z.string().optional().default('launch'),
+  status: z.string().optional().default('pending'),
+  message: z.string().optional().default(''),
+  details: z.record(z.string(), z.unknown()).optional(),
+}).passthrough();
+
+export const LaunchProgressResponseSchema = z.object({
+  progress_id: z.string(),
+  events: z.array(LaunchProgressEventSchema).optional().default([]),
+  latest: LaunchProgressEventSchema.nullable().optional(),
+  completed: z.boolean().optional().default(false),
 }).passthrough();
 
 export const WorkflowProgressAgentSchema = z.object({
@@ -328,6 +391,9 @@ export type Job = z.infer<typeof JobSchema>;
 export type JobDetails = z.infer<typeof JobDetailsSchema>;
 export type AgentGraph = z.infer<typeof AgentGraphSchema>;
 export type SystemSummary = z.infer<typeof SystemSummarySchema>;
+export type RuntimeModel = z.infer<typeof RuntimeModelSchema>;
+export type RuntimeModelListResponse = z.infer<typeof RuntimeModelListResponseSchema>;
+export type RuntimeModelBenchmark = z.infer<typeof RuntimeModelBenchmarkSchema>;
 export type ClusterNodeAddResponse = z.infer<typeof ClusterNodeAddResponseSchema>;
 export type ClusterNodeRemoveResponse = z.infer<typeof ClusterNodeRemoveResponseSchema>;
 export type RunUiComponent = z.infer<typeof RunUiComponentSchema>;
@@ -337,6 +403,8 @@ export type RunUiResponse = z.infer<typeof RunUiResponseSchema>;
 export type Blueprint = z.infer<typeof BlueprintSchema>;
 export type BlueprintListResponse = z.infer<typeof BlueprintListResponseSchema>;
 export type BlueprintLaunchResponse = z.infer<typeof BlueprintLaunchResponseSchema>;
+export type LaunchProgressEvent = z.infer<typeof LaunchProgressEventSchema>;
+export type LaunchProgressResponse = z.infer<typeof LaunchProgressResponseSchema>;
 export type WorkflowProgressAgent = z.infer<typeof WorkflowProgressAgentSchema>;
 export type WorkflowProgressStep = z.infer<typeof WorkflowProgressStepSchema>;
 export type WorkflowProgress = z.infer<typeof WorkflowProgressSchema>;
@@ -385,6 +453,26 @@ export const fetchSystemSummary = () => api.get('/system/summary').then(r => {
   }
   return result.data;
 });
+
+export const fetchRuntimeModels = () => api.get('/models').then(r => {
+  const result = RuntimeModelListResponseSchema.safeParse(r.data);
+  if (!result.success) {
+    console.error('fetchRuntimeModels validation failed:', result.error);
+    return RuntimeModelListResponseSchema.parse({});
+  }
+  return result.data;
+});
+
+export const benchmarkRuntimeModel = (model: string, payload: { prompt?: string; max_tokens?: number } = {}) => (
+  api.post(`/models/${encodeURIComponent(model)}/benchmark`, payload).then(r => {
+    const result = RuntimeModelBenchmarkSchema.safeParse(r.data);
+    if (!result.success) {
+      console.error(`benchmarkRuntimeModel(${model}) validation failed:`, result.error);
+      return RuntimeModelBenchmarkSchema.parse({ model });
+    }
+    return result.data;
+  })
+);
 
 export const addClusterNode = (payload: { host: string; token: string }) => api.post('/system/cluster/nodes:add', payload).then(r => {
   const result = ClusterNodeAddResponseSchema.safeParse(r.data);
@@ -549,6 +637,15 @@ export const launchBlueprintJob = (payload: unknown) => api.post('/blueprints/la
   if (!result.success) {
     console.error('launchBlueprintJob validation failed:', result.error);
     return BlueprintLaunchResponseSchema.parse(r.data || {});
+  }
+  return result.data;
+});
+
+export const fetchLaunchProgress = (progressId: string) => api.get(`/blueprints/launch/progress/${encodeURIComponent(progressId)}`).then(r => {
+  const result = LaunchProgressResponseSchema.safeParse(r.data);
+  if (!result.success) {
+    console.error(`fetchLaunchProgress(${progressId}) validation failed:`, result.error);
+    return LaunchProgressResponseSchema.parse({ progress_id: progressId, events: [] });
   }
   return result.data;
 });

@@ -1,11 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, List, Play, Plus } from 'lucide-react';
+import { Boxes, LayoutDashboard, List, Play, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import mnLogo from '../assets/mn-logo.svg';
 
 const navItems = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
   { name: 'Jobs', path: '/jobs', icon: List },
+  { name: 'Models', path: '/models', icon: Boxes },
   { name: 'Run a job', path: '/run', icon: Play },
 ];
 

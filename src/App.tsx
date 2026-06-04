@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Jobs from './pages/Jobs';
 import JobDetails from './pages/JobDetails';
+import Models from './pages/Models';
 import RunJob from './pages/RunJob';
 import RunUi from './pages/RunUi';
 import { Toaster } from './components/ui/sonner';
@@ -16,6 +17,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="jobs" element={<Jobs />} />
           <Route path="jobs/:id" element={<JobDetails />} />
+          <Route path="models" element={<Models />} />
           <Route path="runs/:runId/ui" element={<RunUi />} />
           <Route path="run" element={<RunJob />} />
         </Route>

@@ -9,6 +9,8 @@ import {
   clearJobs,
   isServiceJob,
   addClusterNode,
+  benchmarkRuntimeModel,
+  fetchRuntimeModels,
   removeClusterNode,
 } from '../api';
 
@@ -241,6 +243,62 @@ describe('api parsing helpers', () => {
       }),
     );
     expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:remove', { node_name: 'mirror_neuron@10.0.0.42' });
+  });
+
+  it('fetches installed runtime models', async () => {
+    mockApi.get.mockResolvedValue({
+      data: {
+        node: 'mn1@local',
+        runner_available: true,
+        models: [
+          {
+            id: 'gemma4:e2b',
+            name: 'Gemma 4 E2B',
+            docker_model: 'ai/gemma4:E2B',
+            model: 'ai/gemma4:E2B',
+            backend: 'llama.cpp',
+            installed: true,
+            node: 'mn1@local',
+          },
+        ],
+      },
+    });
+
+    await expect(fetchRuntimeModels()).resolves.toEqual(
+      expect.objectContaining({
+        node: 'mn1@local',
+        models: [
+          expect.objectContaining({
+            id: 'gemma4:e2b',
+            docker_model: 'ai/gemma4:E2B',
+          }),
+        ],
+      }),
+    );
+    expect(mockApi.get).toHaveBeenCalledWith('/models');
+  });
+
+  it('benchmarks runtime models through the encoded model route', async () => {
+    mockApi.post.mockResolvedValue({
+      data: {
+        model: 'gemma4:e2b',
+        docker_model: 'ai/gemma4:E2B',
+        node: 'mn1@local',
+        elapsed_ms: 1200,
+        first_token_ms: 340,
+        generated_tokens: 15,
+        tokens_per_second: 12.5,
+        sample: 'Ready now.',
+      },
+    });
+
+    await expect(benchmarkRuntimeModel('gemma4:e2b', { max_tokens: 32 })).resolves.toEqual(
+      expect.objectContaining({
+        model: 'gemma4:e2b',
+        tokens_per_second: 12.5,
+      }),
+    );
+    expect(mockApi.post).toHaveBeenCalledWith('/models/gemma4%3Ae2b/benchmark', { max_tokens: 32 });
   });
 
   it('keeps job detail screens renderable when the detail payload is malformed', async () => {

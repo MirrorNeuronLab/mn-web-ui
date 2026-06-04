@@ -3,12 +3,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { toast } from 'sonner';
 import RunJob from '../pages/RunJob';
-import { fetchBlueprints, launchBlueprintJob, uploadBundle } from '../api';
+import { fetchBlueprints, fetchLaunchProgress, launchBlueprintJob, uploadBundle } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
 
 vi.mock('../api', () => ({
   fetchBlueprints: vi.fn(),
+  fetchLaunchProgress: vi.fn(),
   launchBlueprintJob: vi.fn(),
   uploadBundle: vi.fn(),
 }));
@@ -33,6 +34,12 @@ describe('RunJob Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     toast.dismiss();
+    vi.mocked(fetchLaunchProgress).mockResolvedValue({
+      progress_id: 'launch-test',
+      events: [],
+      latest: null,
+      completed: false,
+    });
     vi.mocked(fetchBlueprints).mockResolvedValue({
       repo_dir: '/repo',
       blueprints: [
@@ -71,7 +78,9 @@ describe('RunJob Component', () => {
     fireEvent.click(launchButtons[launchButtons.length - 1]);
 
     await waitFor(() => {
-      expect(launchBlueprintJob).toHaveBeenCalledWith({ source: 'catalog', blueprint_id: 'worker_one' });
+      expect(launchBlueprintJob).toHaveBeenCalledWith(expect.objectContaining({ source: 'catalog', blueprint_id: 'worker_one' }));
+      const payload = vi.mocked(launchBlueprintJob).mock.calls[0][0] as Record<string, unknown>;
+      expect(String(payload.progress_id)).toMatch(/^launch-/);
       expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-blueprint-123');
     });
   });
@@ -92,10 +101,12 @@ describe('RunJob Component', () => {
     fireEvent.click(launchButtons[launchButtons.length - 1]);
 
     await waitFor(() => {
-      expect(launchBlueprintJob).toHaveBeenCalledWith({
+      expect(launchBlueprintJob).toHaveBeenCalledWith(expect.objectContaining({
         source: 'path',
         path: '/Users/homer/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant',
-      });
+      }));
+      const payload = vi.mocked(launchBlueprintJob).mock.calls[0][0] as Record<string, unknown>;
+      expect(String(payload.progress_id)).toMatch(/^launch-/);
       expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-path-123');
     });
   });
@@ -132,8 +143,47 @@ describe('RunJob Component', () => {
     fireEvent.click(launchButtons[launchButtons.length - 1]);
 
     await waitFor(() => {
-      expect(launchBlueprintJob).toHaveBeenCalledWith({ source: 'bundle', _bundle_path: '/tmp/test_bundle' });
+      expect(launchBlueprintJob).toHaveBeenCalledWith(expect.objectContaining({ source: 'bundle', _bundle_path: '/tmp/test_bundle' }));
+      const payload = vi.mocked(launchBlueprintJob).mock.calls[0][0] as Record<string, unknown>;
+      expect(String(payload.progress_id)).toMatch(/^launch-/);
       expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-zip-123');
+    });
+  });
+
+  it('shows launch progress while a blueprint launch is running', async () => {
+    let resolveLaunch: (value: { job_id: string; id: string; status: string }) => void = () => {};
+    vi.mocked(launchBlueprintJob).mockImplementation(() => new Promise((resolve) => {
+      resolveLaunch = resolve;
+    }));
+    vi.mocked(fetchLaunchProgress).mockResolvedValue({
+      progress_id: 'launch-test',
+      events: [
+        { phase: 'resolve_source', status: 'completed', message: 'Blueprint source resolved.' },
+        { phase: 'model_install', status: 'running', message: 'Ensuring required runtime models are installed.' },
+      ],
+      latest: { phase: 'model_install', status: 'running', message: 'Ensuring required runtime models are installed.' },
+      completed: false,
+    });
+
+    renderRunJob();
+    await waitFor(() => {
+      expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    expect(await screen.findByText('Launch this job?')).toBeInTheDocument();
+
+    const launchButtons = screen.getAllByRole('button', { name: 'Launch' });
+    fireEvent.click(launchButtons[launchButtons.length - 1]);
+
+    expect(await screen.findByText('Launch progress')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Models')).toBeInTheDocument();
+      expect(screen.getAllByText('Working').length).toBeGreaterThan(0);
+    });
+
+    resolveLaunch({ job_id: 'job-progress-123', id: 'job-progress-123', status: 'pending' });
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-progress-123');
     });
   });
 
