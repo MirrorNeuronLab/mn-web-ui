@@ -7,6 +7,7 @@ import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
 import type { Agent, AgentGraph, WorkflowProgress } from '../api';
 import { buildDisplayGraph } from '../utils/agentGraph';
+import { Tooltip } from './ui/tooltip';
 
 type AgentNodeData = {
   label: ReactNode;
@@ -154,24 +155,26 @@ export function WorkflowAgentGraph({
           fitViewOptions={{ padding: 0.2 }}
         >
           <Panel position="top-left" className="flex overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
-            <button
-              type="button"
-              aria-label="Use left to right graph layout"
-              title="Left to right layout"
-              onClick={() => setLayoutDirection('LR')}
-              className={`flex h-9 w-9 items-center justify-center border-r border-neutral-200 ${layoutDirection === 'LR' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
-            >
-              <Columns3 className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              aria-label="Use top to bottom graph layout"
-              title="Top to bottom layout"
-              onClick={() => setLayoutDirection('TB')}
-              className={`flex h-9 w-9 items-center justify-center ${layoutDirection === 'TB' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
-            >
-              <Rows3 className="h-4 w-4" />
-            </button>
+            <Tooltip content="Arrange agents from left to right.">
+              <button
+                type="button"
+                aria-label="Use left to right graph layout"
+                onClick={() => setLayoutDirection('LR')}
+                className={`flex h-9 w-9 items-center justify-center border-r border-neutral-200 ${layoutDirection === 'LR' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+              >
+                <Columns3 className="h-4 w-4" />
+              </button>
+            </Tooltip>
+            <Tooltip content="Arrange agents from top to bottom.">
+              <button
+                type="button"
+                aria-label="Use top to bottom graph layout"
+                onClick={() => setLayoutDirection('TB')}
+                className={`flex h-9 w-9 items-center justify-center ${layoutDirection === 'TB' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+              >
+                <Rows3 className="h-4 w-4" />
+              </button>
+            </Tooltip>
           </Panel>
           <Background color="#ccc" gap={16} />
           <MiniMap />

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
-import { AlertCircle, Ban, CheckCircle, Clock, Eye, PauseCircle, PlayCircle, Trash2, XCircle } from 'lucide-react';
+import { AlertCircle, Ban, CheckCircle, Clock, Eye, Loader2, PauseCircle, PlayCircle, Trash2, XCircle } from 'lucide-react';
 import { cancelJob, clearJobs, fetchJobs, isServiceJob, pauseJob } from '../api';
 import type { Job } from '../api';
+import { confirmActionToast } from '../components/ui/confirm-toast';
+import { Tooltip } from '../components/ui/tooltip';
 
 const StatusIcon = ({ status }: { status: string }) => {
   switch (status) {
@@ -38,10 +40,17 @@ export default function Jobs() {
         setLoading(false);
       }
     };
-    setLoading(true);
-    load();
-    const timer = setInterval(load, 5000);
-    return () => clearInterval(timer);
+    const initialTimer = window.setTimeout(() => {
+      setLoading(true);
+      void load();
+    }, 0);
+    const timer = window.setInterval(() => {
+      void load();
+    }, 5000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
   }, [showTerminalJobs]);
 
   const refreshJobs = async () => {
@@ -72,34 +81,67 @@ export default function Jobs() {
     });
   };
 
-  const runBulkAction = async (action: 'pause' | 'cancel') => {
+  const confirmBulkAction = (action: 'pause' | 'cancel') => {
     const jobIds = [...selectedJobIds];
     if (jobIds.length === 0) return;
 
-    try {
-      setBulkAction(action);
-      const runner = action === 'pause' ? pauseJob : cancelJob;
-      await Promise.all(jobIds.map((jobId) => runner(jobId)));
-      setSelectedJobIds(new Set());
-      await refreshJobs();
-    } catch (e) {
-      console.error(`Failed to ${action} selected jobs`, e);
-    } finally {
-      setBulkAction(null);
-    }
+    const actionLabel = action === 'pause' ? 'Pause' : 'Cancel';
+    const completedLabel = action === 'pause' ? 'Paused' : 'Cancelled';
+    const loadingLabel = action === 'pause' ? 'Pausing' : 'Cancelling';
+    const runner = action === 'pause' ? pauseJob : cancelJob;
+
+    confirmActionToast({
+      id: `jobs-bulk-${action}`,
+      title: `${actionLabel} ${jobIds.length} selected job${jobIds.length === 1 ? '' : 's'}?`,
+      description: action === 'pause'
+        ? 'Selected running jobs will stop accepting work until they are resumed.'
+        : 'Selected jobs will be stopped. Running agents attached to those jobs will be interrupted.',
+      confirmLabel: actionLabel,
+      cancelLabel: 'Keep jobs',
+      loading: `${loadingLabel} ${jobIds.length} job${jobIds.length === 1 ? '' : 's'}...`,
+      success: `${completedLabel} ${jobIds.length} job${jobIds.length === 1 ? '' : 's'}.`,
+      error: `Failed to ${action} selected jobs.`,
+      onConfirm: async () => {
+        try {
+          setBulkAction(action);
+          await Promise.all(jobIds.map((jobId) => runner(jobId)));
+          setSelectedJobIds(new Set());
+          await refreshJobs();
+        } catch (e) {
+          console.error(`Failed to ${action} selected jobs`, e);
+          throw e;
+        } finally {
+          setBulkAction(null);
+        }
+      },
+    });
   };
 
-  const handleClearJobs = async () => {
-    try {
-      setIsClearing(true);
-      await clearJobs();
-      setSelectedJobIds(new Set());
-      await refreshJobs();
-    } catch (e) {
-      console.error('Failed to clear non-running jobs', e);
-    } finally {
-      setIsClearing(false);
-    }
+  const confirmClearJobs = () => {
+    confirmActionToast({
+      id: 'jobs-clear',
+      title: 'Clear non-running jobs?',
+      description: 'Completed, failed, and cancelled jobs will be removed from this list. Running jobs stay visible.',
+      confirmLabel: 'Clear jobs',
+      cancelLabel: 'Keep jobs',
+      loading: 'Clearing non-running jobs...',
+      success: (result: { cleared_count: number }) => `Cleared ${result.cleared_count} job${result.cleared_count === 1 ? '' : 's'}.`,
+      error: 'Failed to clear non-running jobs.',
+      onConfirm: async () => {
+        try {
+          setIsClearing(true);
+          const result = await clearJobs();
+          setSelectedJobIds(new Set());
+          await refreshJobs();
+          return result;
+        } catch (e) {
+          console.error('Failed to clear non-running jobs', e);
+          throw e;
+        } finally {
+          setIsClearing(false);
+        }
+      },
+    });
   };
 
   const selectedCount = selectedJobIds.size;
@@ -136,33 +178,45 @@ export default function Jobs() {
             </span>
             Past jobs
           </button>
-          <button
-            type="button"
-            disabled={!hasSelection || bulkAction !== null}
-            onClick={() => runBulkAction('pause')}
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <PauseCircle className="h-3.5 w-3.5" />
-            {bulkAction === 'pause' ? 'Pausing...' : `Pause${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
-          </button>
-          <button
-            type="button"
-            disabled={!hasSelection || bulkAction !== null}
-            onClick={() => runBulkAction('cancel')}
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Ban className="h-3.5 w-3.5" />
-            {bulkAction === 'cancel' ? 'Cancelling...' : `Cancel${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
-          </button>
-          <button
-            type="button"
-            disabled={isClearing || bulkAction !== null}
-            onClick={handleClearJobs}
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            {isClearing ? 'Clearing...' : 'Clear'}
-          </button>
+          <Tooltip content="Pause all selected live jobs after confirmation.">
+            <span className="inline-flex">
+              <button
+                type="button"
+                disabled={!hasSelection || bulkAction !== null}
+                onClick={() => confirmBulkAction('pause')}
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {bulkAction === 'pause' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PauseCircle className="h-3.5 w-3.5" />}
+                {bulkAction === 'pause' ? 'Pausing...' : `Pause${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
+              </button>
+            </span>
+          </Tooltip>
+          <Tooltip content="Cancel all selected jobs after confirmation. Running agents will stop.">
+            <span className="inline-flex">
+              <button
+                type="button"
+                disabled={!hasSelection || bulkAction !== null}
+                onClick={() => confirmBulkAction('cancel')}
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {bulkAction === 'cancel' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                {bulkAction === 'cancel' ? 'Cancelling...' : `Cancel${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
+              </button>
+            </span>
+          </Tooltip>
+          <Tooltip content="Clear completed, failed, and cancelled jobs after confirmation.">
+            <span className="inline-flex">
+              <button
+                type="button"
+                disabled={isClearing || bulkAction !== null}
+                onClick={confirmClearJobs}
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {isClearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                {isClearing ? 'Clearing...' : 'Clear'}
+              </button>
+            </span>
+          </Tooltip>
           <Link
             to="/run"
             className="inline-flex h-8 items-center justify-center rounded-md bg-neutral-950 px-3 text-xs font-medium text-white hover:bg-neutral-800"
@@ -249,14 +303,15 @@ export default function Jobs() {
                     {isServiceJob(job) ? '∞' : `${job.active_executors ?? 0} / ${job.executor_count ?? 0}`}
                   </td>
                   <td className="px-4 py-2.5">
-                    <Link
-                      to={`/jobs/${job.job_id}`}
-                      aria-label={`View details for ${job.job_id}`}
-                      title="View details"
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-neutral-200 text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </Link>
+                    <Tooltip content="Open job details and live progress.">
+                      <Link
+                        to={`/jobs/${job.job_id}`}
+                        aria-label={`View details for ${job.job_id}`}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-neutral-200 text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </Link>
+                    </Tooltip>
                   </td>
                 </tr>
                 );

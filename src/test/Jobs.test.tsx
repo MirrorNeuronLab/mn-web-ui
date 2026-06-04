@@ -1,8 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
+import { toast } from 'sonner';
 import Jobs from '../pages/Jobs';
 import { cancelJob, clearJobs, fetchJobs, pauseJob } from '../api';
+import { Toaster } from '../components/ui/sonner';
+import { TooltipProvider } from '../components/ui/tooltip';
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>();
@@ -16,12 +19,18 @@ vi.mock('../api', async (importOriginal) => {
 });
 
 const renderWithRouter = (ui: React.ReactElement) => {
-  return render(<BrowserRouter>{ui}</BrowserRouter>);
+  return render(
+    <TooltipProvider>
+      <BrowserRouter>{ui}</BrowserRouter>
+      <Toaster />
+    </TooltipProvider>
+  );
 };
 
 describe('Jobs Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    toast.dismiss();
   });
 
   it('renders skeleton loading state initially', () => {
@@ -140,6 +149,10 @@ describe('Jobs Component', () => {
     expect(screen.getByRole('button', { name: 'Cancel (2)' })).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Pause (2)' }));
+    expect(await screen.findByText('Pause 2 selected jobs?')).toBeInTheDocument();
+    expect(pauseJob).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
 
     await waitFor(() => {
       expect(pauseJob).toHaveBeenCalledWith('job-1');
@@ -179,11 +192,48 @@ describe('Jobs Component', () => {
     fireEvent.click(screen.getByLabelText('Select job job-1'));
     fireEvent.click(screen.getByLabelText('Select job job-2'));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel (2)' }));
+    expect(await screen.findByText('Cancel 2 selected jobs?')).toBeInTheDocument();
+    expect(cancelJob).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() => {
       expect(cancelJob).toHaveBeenCalledWith('job-1');
       expect(cancelJob).toHaveBeenCalledWith('job-2');
     });
+  });
+
+  it('does not cancel selected jobs when the confirmation is dismissed', async () => {
+    const mockJobs = [
+      {
+        job_id: 'job-1',
+        graph_id: 'graph-1',
+        status: 'running',
+        submitted_at: '2026-04-16T12:00:00Z',
+        active_executors: 1,
+        executor_count: 2
+      }
+    ];
+
+    vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
+    vi.mocked(cancelJob).mockResolvedValue({ status: 'cancelled' });
+
+    renderWithRouter(<Jobs />);
+
+    await waitFor(() => {
+      expect(screen.getByText('job-1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText('Select job job-1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel (1)' }));
+    expect(await screen.findByText('Cancel 1 selected job?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep jobs' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Cancel 1 selected job?')).not.toBeInTheDocument();
+    });
+    expect(cancelJob).not.toHaveBeenCalled();
   });
 
   it('clears non-running jobs and refreshes the list', async () => {
@@ -210,6 +260,10 @@ describe('Jobs Component', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(await screen.findByText('Clear non-running jobs?')).toBeInTheDocument();
+    expect(clearJobs).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear jobs' }));
 
     await waitFor(() => {
       expect(clearJobs).toHaveBeenCalledOnce();

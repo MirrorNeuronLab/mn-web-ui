@@ -6,6 +6,7 @@ import {
   fetchJobs,
   fetchWorkflowProgress,
   fetchSystemSummary,
+  clearJobs,
   isServiceJob,
   addClusterNode,
   removeClusterNode,
@@ -64,6 +65,14 @@ describe('api parsing helpers', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/jobs', {
       params: { include_terminal: false },
     });
+  });
+
+  it('clears jobs through the slash cleanup endpoint', async () => {
+    mockApi.post.mockResolvedValue({ data: { cleared_count: 2 } });
+
+    await expect(clearJobs()).resolves.toEqual({ cleared_count: 2 });
+
+    expect(mockApi.post).toHaveBeenCalledWith('/jobs/cleanup');
   });
 
   it('reconciles stale paused service rows with live workflow progress', async () => {

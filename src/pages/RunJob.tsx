@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchBlueprints, launchBlueprintJob, uploadBundle } from '../api';
 import type { Blueprint } from '../api';
 import { CheckCircle, FileArchive, FolderInput, Loader2, Play, UploadCloud, Workflow } from 'lucide-react';
+import { confirmActionToast } from '../components/ui/confirm-toast';
+import { Tooltip } from '../components/ui/tooltip';
 
 type LaunchMode = 'blueprint' | 'path' | 'bundle';
 
@@ -61,25 +63,29 @@ export default function RunJob() {
   const [loadingBlueprints, setLoadingBlueprints] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [running, setRunning] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
-    setLoadingBlueprints(true);
-    fetchBlueprints()
-      .then((response) => {
-        if (cancelled) return;
-        setBlueprints(response.blueprints || []);
-        setSelectedBlueprintId((current) => current || response.blueprints?.[0]?.id || '');
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(errorMessage(err, 'Failed to load blueprints'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingBlueprints(false);
-      });
+    const timer = window.setTimeout(() => {
+      setLoadingBlueprints(true);
+      fetchBlueprints()
+        .then((response) => {
+          if (cancelled) return;
+          setBlueprints(response.blueprints || []);
+          setSelectedBlueprintId((current) => current || response.blueprints?.[0]?.id || '');
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) setError(errorMessage(err, 'Failed to load blueprints'));
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingBlueprints(false);
+        });
+    }, 0);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, []);
 
@@ -94,20 +100,45 @@ export default function RunJob() {
       (mode === 'path' && Boolean(pathValue.trim())) ||
       (mode === 'bundle' && Boolean(bundleData?.bundle_path)));
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const resetFileInput = () => {
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0]) return;
     const selectedFile = e.target.files[0];
-    setUploading(true);
-    setError(null);
-    setBundleData(null);
-    try {
-      const res = await uploadBundle(selectedFile);
-      setBundleData(res);
-    } catch (err: unknown) {
-      setError(errorMessage(err, 'Failed to upload bundle'));
-    } finally {
-      setUploading(false);
-    }
+
+    confirmActionToast({
+      id: `bundle-upload-${selectedFile.name}`,
+      title: 'Upload this ZIP bundle?',
+      description: `${selectedFile.name} will be uploaded and validated as a MirrorNeuron bundle source.`,
+      confirmLabel: 'Upload ZIP',
+      cancelLabel: 'Choose later',
+      loading: `Uploading ${selectedFile.name}...`,
+      success: (result: UploadedBundle) => (
+        `Uploaded ${String(result.manifest.graph_id || result.manifest.job_name || selectedFile.name)}.`
+      ),
+      error: (err) => errorMessage(err, 'Failed to upload bundle'),
+      onCancel: resetFileInput,
+      onConfirm: async () => {
+        setUploading(true);
+        setError(null);
+        setBundleData(null);
+        try {
+          const res = await uploadBundle(selectedFile);
+          setBundleData(res);
+          resetFileInput();
+          return res;
+        } catch (err: unknown) {
+          const message = errorMessage(err, 'Failed to upload bundle');
+          setError(message);
+          resetFileInput();
+          throw new Error(message);
+        } finally {
+          setUploading(false);
+        }
+      },
+    });
   };
 
   const launchPayload = () => {
@@ -116,19 +147,43 @@ export default function RunJob() {
     return { source: 'bundle', _bundle_path: bundleData?.bundle_path };
   };
 
-  const handleLaunch = async () => {
+  const launchSummary = () => {
+    if (mode === 'blueprint') return selectedBlueprint?.name || selectedBlueprintId;
+    if (mode === 'path') return pathValue.trim();
+    return String(bundleData?.manifest.graph_id || bundleData?.manifest.job_name || bundleData?.bundle_path || 'uploaded bundle');
+  };
+
+  const confirmLaunch = () => {
     if (!canLaunch) return;
-    try {
-      setRunning(true);
-      setError(null);
-      const res = await launchBlueprintJob(launchPayload());
-      const jobId = res.job_id || res.id;
-      if (!jobId) throw new Error('Launch succeeded but no job id was returned.');
-      navigate(`/jobs/${jobId}`);
-    } catch (err: unknown) {
-      setError(errorMessage(err, 'Failed to validate and launch job'));
-      setRunning(false);
-    }
+
+    const summary = launchSummary();
+    confirmActionToast({
+      id: `launch-${mode}-${summary}`,
+      title: 'Launch this job?',
+      description: `Source: ${summary}`,
+      confirmLabel: 'Launch',
+      cancelLabel: 'Review',
+      loading: 'Validating and launching job...',
+      success: (jobId: string) => `Launched job ${jobId}.`,
+      error: (err) => errorMessage(err, 'Failed to validate and launch job'),
+      onConfirm: async () => {
+        setRunning(true);
+        setError(null);
+        try {
+          const res = await launchBlueprintJob(launchPayload());
+          const jobId = res.job_id || res.id;
+          if (!jobId) throw new Error('Launch succeeded but no job id was returned.');
+          setRunning(false);
+          navigate(`/jobs/${jobId}`);
+          return jobId;
+        } catch (err: unknown) {
+          const message = errorMessage(err, 'Failed to validate and launch job');
+          setError(message);
+          setRunning(false);
+          throw new Error(message);
+        }
+      },
+    });
   };
 
   return (
@@ -213,27 +268,30 @@ export default function RunJob() {
           {mode === 'bundle' ? (
             <div className="space-y-4">
               {!bundleData ? (
-                <div className="relative rounded-lg border-2 border-dashed border-neutral-300 p-6 text-center transition-colors hover:bg-neutral-50">
-                  <input
-                    type="file"
-                    accept=".zip"
-                    onChange={handleFileChange}
-                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                    disabled={uploading || running}
-                  />
-                  <UploadCloud className={`mx-auto mb-3 h-10 w-10 ${uploading ? 'animate-bounce text-neutral-500' : 'text-neutral-400'}`} />
-                  {uploading ? (
-                    <div className="flex items-center justify-center text-neutral-950">
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      <p className="text-xs font-medium">Uploading bundle...</p>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-xs font-medium text-neutral-700">Click to upload or drag and drop</p>
-                      <p className="mt-1 text-xs text-neutral-500">.zip files only</p>
-                    </>
-                  )}
-                </div>
+                <Tooltip content="Choose a ZIP bundle, then confirm before it uploads.">
+                  <div className="relative rounded-lg border-2 border-dashed border-neutral-300 p-6 text-center transition-colors hover:bg-neutral-50">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".zip"
+                      onChange={handleFileChange}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      disabled={uploading || running}
+                    />
+                    <UploadCloud className={`mx-auto mb-3 h-10 w-10 ${uploading ? 'animate-bounce text-neutral-500' : 'text-neutral-400'}`} />
+                    {uploading ? (
+                      <div className="flex items-center justify-center text-neutral-950">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <p className="text-xs font-medium">Uploading bundle...</p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs font-medium text-neutral-700">Click to upload or drag and drop</p>
+                        <p className="mt-1 text-xs text-neutral-500">.zip files only</p>
+                      </>
+                    )}
+                  </div>
+                </Tooltip>
               ) : (
                 <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
                   <div className="flex items-start gap-2.5">
@@ -271,15 +329,19 @@ export default function RunJob() {
                 Choose another ZIP
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={handleLaunch}
-              disabled={!canLaunch}
-              className="flex items-center rounded-md bg-neutral-950 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-neutral-800 disabled:opacity-50"
-            >
-              {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : mode === 'bundle' ? <FileArchive className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-              {running ? 'Validating...' : 'Launch'}
-            </button>
+            <Tooltip content="Confirm the selected source before validation and launch.">
+              <span className="inline-flex">
+                <button
+                  type="button"
+                  onClick={confirmLaunch}
+                  disabled={!canLaunch}
+                  className="flex items-center rounded-md bg-neutral-950 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : mode === 'bundle' ? <FileArchive className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+                  {running ? 'Validating...' : 'Launch'}
+                </button>
+              </span>
+            </Tooltip>
           </div>
         </div>
       </div>

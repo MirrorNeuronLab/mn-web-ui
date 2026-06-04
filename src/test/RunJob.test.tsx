@@ -1,8 +1,11 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
+import { toast } from 'sonner';
 import RunJob from '../pages/RunJob';
 import { fetchBlueprints, launchBlueprintJob, uploadBundle } from '../api';
+import { Toaster } from '../components/ui/sonner';
+import { TooltipProvider } from '../components/ui/tooltip';
 
 vi.mock('../api', () => ({
   fetchBlueprints: vi.fn(),
@@ -19,11 +22,17 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-const renderRunJob = () => render(<BrowserRouter><RunJob /></BrowserRouter>);
+const renderRunJob = () => render(
+  <TooltipProvider>
+    <BrowserRouter><RunJob /></BrowserRouter>
+    <Toaster />
+  </TooltipProvider>
+);
 
 describe('RunJob Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    toast.dismiss();
     vi.mocked(fetchBlueprints).mockResolvedValue({
       repo_dir: '/repo',
       blueprints: [
@@ -55,6 +64,11 @@ describe('RunJob Component', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    expect(await screen.findByText('Launch this job?')).toBeInTheDocument();
+    expect(launchBlueprintJob).not.toHaveBeenCalled();
+
+    const launchButtons = screen.getAllByRole('button', { name: 'Launch' });
+    fireEvent.click(launchButtons[launchButtons.length - 1]);
 
     await waitFor(() => {
       expect(launchBlueprintJob).toHaveBeenCalledWith({ source: 'catalog', blueprint_id: 'worker_one' });
@@ -71,6 +85,11 @@ describe('RunJob Component', () => {
       target: { value: '/Users/homer/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    expect(await screen.findByText('Launch this job?')).toBeInTheDocument();
+    expect(launchBlueprintJob).not.toHaveBeenCalled();
+
+    const launchButtons = screen.getAllByRole('button', { name: 'Launch' });
+    fireEvent.click(launchButtons[launchButtons.length - 1]);
 
     await waitFor(() => {
       expect(launchBlueprintJob).toHaveBeenCalledWith({
@@ -94,6 +113,10 @@ describe('RunJob Component', () => {
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['dummy content'], 'bundle.zip', { type: 'application/zip' });
     fireEvent.change(fileInput, { target: { files: [file] } });
+    expect(await screen.findByText('Upload this ZIP bundle?')).toBeInTheDocument();
+    expect(uploadBundle).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upload ZIP' }));
 
     await waitFor(() => {
       expect(uploadBundle).toHaveBeenCalled();
@@ -102,6 +125,11 @@ describe('RunJob Component', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    expect(await screen.findByText('Launch this job?')).toBeInTheDocument();
+    expect(launchBlueprintJob).not.toHaveBeenCalled();
+
+    const launchButtons = screen.getAllByRole('button', { name: 'Launch' });
+    fireEvent.click(launchButtons[launchButtons.length - 1]);
 
     await waitFor(() => {
       expect(launchBlueprintJob).toHaveBeenCalledWith({ source: 'bundle', _bundle_path: '/tmp/test_bundle' });
@@ -127,6 +155,10 @@ describe('RunJob Component', () => {
       expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
     });
     fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    expect(await screen.findByText('Launch this job?')).toBeInTheDocument();
+
+    const launchButtons = screen.getAllByRole('button', { name: 'Launch' });
+    fireEvent.click(launchButtons[launchButtons.length - 1]);
 
     await waitFor(() => {
       expect(screen.getByText('video_source.uri must use http:// or https://')).toBeInTheDocument();

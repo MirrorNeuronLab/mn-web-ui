@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { toast } from 'sonner';
 import Dashboard from '../pages/Dashboard';
 import { addClusterNode, fetchJobs, fetchSystemSummary, removeClusterNode } from '../api';
+import { Toaster } from '../components/ui/sonner';
+import { TooltipProvider } from '../components/ui/tooltip';
 
 vi.mock('../api', () => ({
   fetchSystemSummary: vi.fn(),
@@ -10,9 +13,17 @@ vi.mock('../api', () => ({
   removeClusterNode: vi.fn(),
 }));
 
+const renderDashboard = () => render(
+  <TooltipProvider>
+    <Dashboard />
+    <Toaster />
+  </TooltipProvider>
+);
+
 describe('Dashboard Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    toast.dismiss();
   });
 
   it('renders skeleton loading state initially', () => {
@@ -20,7 +31,7 @@ describe('Dashboard Component', () => {
     vi.mocked(fetchSystemSummary).mockReturnValue(new Promise(() => {}));
     vi.mocked(fetchJobs).mockReturnValue(new Promise(() => {}));
     
-    const { container } = render(<Dashboard />);
+    const { container } = renderDashboard();
     
     // Check if the skeleton pulse animation is present
     expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
@@ -50,7 +61,7 @@ describe('Dashboard Component', () => {
       { job_id: 'job2', graph_id: 'graph-2', status: 'pending', active_executors: 0, executor_count: 1 },
     ]);
 
-    render(<Dashboard />);
+    renderDashboard();
 
     // Wait for the data to load and skeleton to disappear
     await waitFor(() => {
@@ -84,7 +95,7 @@ describe('Dashboard Component', () => {
     });
     vi.mocked(fetchJobs).mockResolvedValue([]);
 
-    render(<Dashboard />);
+    renderDashboard();
 
     await waitFor(() => expect(screen.getByText('Total Jobs')).toBeInTheDocument());
 
@@ -121,7 +132,7 @@ describe('Dashboard Component', () => {
       message: 'mirror_neuron@10.0.0.42 was added to this box.',
     });
 
-    render(<Dashboard />);
+    renderDashboard();
 
     await waitFor(() => expect(screen.getByText('Runtime Resources')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /add node/i }));
@@ -134,6 +145,11 @@ describe('Dashboard Component', () => {
       target: { value: 'join-token-1' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: /^add node$/i }));
+    expect(await screen.findByText('Add this peer node?')).toBeInTheDocument();
+    expect(addClusterNode).not.toHaveBeenCalled();
+
+    const addNodeButtons = screen.getAllByRole('button', { name: /^add node$/i });
+    fireEvent.click(addNodeButtons[addNodeButtons.length - 1]);
 
     await waitFor(() => expect(addClusterNode).toHaveBeenCalledWith({ host: '10.0.0.42', token: 'join-token-1' }));
     await waitFor(() => expect(screen.getByText('mirror_neuron@10.0.0.42')).toBeInTheDocument());
@@ -143,7 +159,7 @@ describe('Dashboard Component', () => {
     vi.mocked(fetchSystemSummary).mockResolvedValue({ nodes: [], jobs: [] });
     vi.mocked(fetchJobs).mockResolvedValue([]);
 
-    render(<Dashboard />);
+    renderDashboard();
 
     await waitFor(() => expect(screen.getByText('Runtime Resources')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /add node/i }));
@@ -193,10 +209,14 @@ describe('Dashboard Component', () => {
       message: 'mirror_neuron@10.0.0.42 was removed from this box.',
     });
 
-    render(<Dashboard />);
+    renderDashboard();
 
     await waitFor(() => expect(screen.getByText('mirror_neuron@10.0.0.42')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /remove/i }));
+    expect(await screen.findByText('Remove this peer node?')).toBeInTheDocument();
+    expect(removeClusterNode).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /remove node/i }));
 
     await waitFor(() => expect(removeClusterNode).toHaveBeenCalledWith('mirror_neuron@10.0.0.42'));
     await waitFor(() => expect(screen.queryByText('mirror_neuron@10.0.0.42')).not.toBeInTheDocument());

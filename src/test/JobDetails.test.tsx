@@ -1,8 +1,11 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { toast } from 'sonner';
 import JobDetails from '../pages/JobDetails';
 import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelJob, pauseJob, resumeJob } from '../api';
+import { Toaster } from '../components/ui/sonner';
+import { TooltipProvider } from '../components/ui/tooltip';
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>();
@@ -34,17 +37,21 @@ vi.mock('@xyflow/react', () => ({
 
 const renderWithRouter = (ui: React.ReactElement) => {
   return render(
-    <BrowserRouter>
-      <Routes>
-        <Route path="/jobs/:id" element={ui} />
-      </Routes>
-    </BrowserRouter>
+    <TooltipProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/jobs/:id" element={ui} />
+        </Routes>
+      </BrowserRouter>
+      <Toaster />
+    </TooltipProvider>
   );
 };
 
 describe('JobDetails Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    toast.dismiss();
     vi.mocked(fetchJobAgentGraph).mockResolvedValue({
       job_id: 'test-job-1',
       status: 'unknown',
@@ -805,8 +812,12 @@ describe('JobDetails Component', () => {
 
     const pauseButton = screen.getByText('Pause');
     fireEvent.click(pauseButton);
+    expect(await screen.findByText('Pause this job?')).toBeInTheDocument();
+    expect(pauseJob).not.toHaveBeenCalled();
 
-    expect(pauseJob).toHaveBeenCalledWith('test-job-1');
+    fireEvent.click(screen.getByRole('button', { name: 'Pause job' }));
+
+    await waitFor(() => expect(pauseJob).toHaveBeenCalledWith('test-job-1'));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
     });
@@ -839,8 +850,12 @@ describe('JobDetails Component', () => {
 
     const resumeButton = screen.getByText('Resume');
     fireEvent.click(resumeButton);
+    expect(await screen.findByText('Resume this job?')).toBeInTheDocument();
+    expect(resumeJob).not.toHaveBeenCalled();
 
-    expect(resumeJob).toHaveBeenCalledWith('test-job-1');
+    fireEvent.click(screen.getByRole('button', { name: 'Resume job' }));
+
+    await waitFor(() => expect(resumeJob).toHaveBeenCalledWith('test-job-1'));
     await waitFor(() => {
       expect(fetchJobDetails).toHaveBeenCalled(); // Ensure it was called
     });
@@ -872,15 +887,11 @@ describe('JobDetails Component', () => {
     const cancelButton = screen.getByText('Cancel');
     fireEvent.click(cancelButton);
 
-    // Should open confirm modal
-    expect(screen.getByText('Are you sure you want to cancel this job? This action cannot be undone and will stop all running agents.')).toBeInTheDocument();
+    expect(await screen.findByText('Cancel this job?')).toBeInTheDocument();
+    expect(cancelJob).not.toHaveBeenCalled();
 
-    const confirmButton = screen.getAllByText('Cancel Job')[1];
-    fireEvent.click(confirmButton);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel job' }));
 
-    expect(cancelJob).toHaveBeenCalledWith('test-job-1');
-    await waitFor(() => {
-      expect(fetchJobDetails).toHaveBeenCalled(); // Ensure it was called
-    });
+    await waitFor(() => expect(cancelJob).toHaveBeenCalledWith('test-job-1'));
   });
 });

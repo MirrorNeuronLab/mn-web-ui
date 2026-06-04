@@ -1,6 +1,8 @@
+/* eslint-disable react-refresh/only-export-components */
 import { Check, Circle, Clock3, ExternalLink, FileText, Loader2, MousePointer2, X } from 'lucide-react';
 import type { JobDetails, WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
 import { displayAgentName } from '../utils/agentGraph';
+import FailurePanel, { ErrorSummary } from './FailurePanel';
 
 type WorkflowProgressPanelProps = {
   progress: WorkflowProgress | null;
@@ -145,6 +147,12 @@ const uniqueResources = (resources: ProgressResource[]) => {
   });
 };
 
+const artifactsFromDetails = (details?: JobDetails | null) => {
+  const root = details as Record<string, unknown> | null | undefined;
+  const artifacts = root?.artifacts || root?.output_files || details?.job?.artifacts;
+  return Array.isArray(artifacts) ? artifacts.filter(isRecord) as any[] : [];
+};
+
 export const buildOutputResources = (progress: WorkflowProgress, details?: JobDetails | null): ProgressResource[] => {
   const detailRoot = details as Record<string, unknown> | null | undefined;
   const job = isRecord(details?.job) ? details.job : {};
@@ -281,9 +289,13 @@ const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
         <span className={`capitalize ${statusTone(agent.status)}`}>{agent.status || 'unknown'}</span>
       </td>
       <td className="max-w-[340px] px-3 py-2 text-xs text-neutral-700">
-        <div className="truncate" title={agent.status_reason || undefined}>
-          {agent.status_reason || agent.working_on || agent.role || 'worker'}
-        </div>
+        {agent.failure ? (
+          <ErrorSummary failure={agent.failure} />
+        ) : (
+          <div className="truncate" title={agent.status_reason || undefined}>
+            {agent.status_reason || agent.working_on || agent.role || 'worker'}
+          </div>
+        )}
       </td>
       <td className="max-w-[220px] px-3 py-2 text-xs text-neutral-600">
         <div className="truncate">{agent.model || 'runtime'}</div>
@@ -319,6 +331,8 @@ export function WorkflowProgressPanel({ progress, details, webUi }: WorkflowProg
   const agents = activeSteps.flatMap((step) => step.agents || []);
   const workflowKind = progress.workflow_kind || 'batch';
   const showLayer = (progress.layers || []).length > 1 || progress.steps.some((step) => step.parents?.length || step.children?.length);
+  const visibleFailure = progress.failure || currentStep?.failure || agents.find((agent) => agent.failure)?.failure;
+  const failureArtifacts = artifactsFromDetails(details);
 
   return (
     <div className="absolute inset-0 overflow-auto bg-white font-sans lg:overflow-hidden">
@@ -334,6 +348,9 @@ export function WorkflowProgressPanel({ progress, details, webUi }: WorkflowProg
         </aside>
 
         <section className="min-w-0 p-3 lg:min-h-0 lg:overflow-auto">
+          <div className="mb-3">
+            <FailurePanel failure={visibleFailure} title={progress.failure ? 'Job Failure' : 'Step Failure'} artifacts={failureArtifacts} />
+          </div>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="truncate text-xs font-semibold text-neutral-950">

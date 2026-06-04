@@ -5,9 +5,11 @@ import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchW
 import type { AgentGraph, JobDetails as JobDetailsType, JobEvent, WebUiHandle, WorkflowProgress } from '../api';
 import { format } from 'date-fns';
 import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, MessageSquare, ExternalLink, List, Code2, FileText } from 'lucide-react';
-import { ConfirmModal } from '../components/ConfirmModal';
 import { WorkflowAgentGraph } from '../components/WorkflowAgentGraph';
 import { WorkflowProgressPanel, buildOutputResources, formatElapsed } from '../components/WorkflowProgressPanel';
+import FailurePanel from '../components/FailurePanel';
+import { confirmActionToast } from '../components/ui/confirm-toast';
+import { Tooltip } from '../components/ui/tooltip';
 import { buildDisplayGraph } from '../utils/agentGraph';
 
 const StatusIcon = ({ status }: { status: string }) => {
@@ -355,10 +357,8 @@ export default function JobDetails() {
   const [agentView, setAgentView] = useState<'list' | 'graph' | 'code'>('list');
   
   const [isCancelling, setIsCancelling] = useState(false);
-  const [cancelError, setCancelError] = useState<string | null>(null);
   const [isPausing, setIsPausing] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -416,7 +416,10 @@ export default function JobDetails() {
   }, [load]);
 
   useEffect(() => {
-    setActionStatus(null);
+    const timer = window.setTimeout(() => {
+      setActionStatus(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [id]);
 
   useEffect(() => {
@@ -447,6 +450,11 @@ export default function JobDetails() {
   const displayAgents = displayGraph.nodes;
   const graphCode = JSON.stringify(displayGraph, null, 2);
   const progressOutputs = displayWorkflowProgress ? buildOutputResources(displayWorkflowProgress, details) : [];
+  const detailRoot = details as Record<string, unknown>;
+  const summaryRecord = isRecord(details.summary) ? details.summary : {};
+  const failure = displayWorkflowProgress?.failure || details.failure || details.job.failure || (summaryRecord.failure as any);
+  const artifactRefs = [detailRoot.artifacts, detailRoot.output_files, details.job.artifacts]
+    .find((candidate) => Array.isArray(candidate)) as { artifact_id?: string; url?: string; size_bytes?: number }[] | undefined;
   const liveAgentCount = displayWorkflowProgress
     ? displayWorkflowProgress.agent_count.running
     : displayGraph.nodes.filter((agent) => agent.status === 'running').length;
@@ -461,44 +469,81 @@ export default function JobDetails() {
   );
   const runtime = formatElapsed(displayWorkflowProgress?.elapsed_seconds || 0);
 
-  const handleCancel = async () => {
-    try {
-      setCancelError(null);
-      setIsCancelling(true);
-      await cancelJob(id!);
-      navigate('/jobs');
-    } catch (err: unknown) {
-      console.error('Failed to cancel job', err);
-      const message = err instanceof Error ? err.message : 'Failed to cancel job';
-      setCancelError(message);
-      setIsCancelling(false);
-    }
+  const confirmCancel = () => {
+    confirmActionToast({
+      id: `job-cancel-${jobId}`,
+      title: 'Cancel this job?',
+      description: 'This action stops the job and interrupts running agents attached to it.',
+      confirmLabel: 'Cancel job',
+      cancelLabel: 'Keep running',
+      loading: `Cancelling ${jobId}...`,
+      success: `Cancelled ${jobId}.`,
+      error: 'Failed to cancel job.',
+      onConfirm: async () => {
+        setIsCancelling(true);
+        try {
+          await cancelJob(jobId);
+          setIsCancelling(false);
+          navigate('/jobs');
+        } catch (err: unknown) {
+          console.error('Failed to cancel job', err);
+          setIsCancelling(false);
+          throw err;
+        }
+      },
+    });
   };
 
-  const handlePause = async () => {
-    try {
-      setIsPausing(true);
-      const response = await pauseJob(jobId);
-      setActionStatus(canonicalActionStatus(response, 'paused'));
-      await load();
-    } catch (err) {
-      console.error('Failed to pause job', err);
-    } finally {
-      setIsPausing(false);
-    }
+  const confirmPause = () => {
+    confirmActionToast({
+      id: `job-pause-${jobId}`,
+      title: 'Pause this job?',
+      description: 'The job will stop accepting work until it is resumed.',
+      confirmLabel: 'Pause job',
+      cancelLabel: 'Keep running',
+      loading: `Pausing ${jobId}...`,
+      success: `Paused ${jobId}.`,
+      error: 'Failed to pause job.',
+      onConfirm: async () => {
+        setIsPausing(true);
+        try {
+          const response = await pauseJob(jobId);
+          setActionStatus(canonicalActionStatus(response, 'paused'));
+          await load();
+        } catch (err) {
+          console.error('Failed to pause job', err);
+          throw err;
+        } finally {
+          setIsPausing(false);
+        }
+      },
+    });
   };
 
-  const handleResume = async () => {
-    try {
-      setIsResuming(true);
-      const response = await resumeJob(jobId);
-      setActionStatus(canonicalActionStatus(response, 'running'));
-      await load();
-    } catch (err) {
-      console.error('Failed to resume job', err);
-    } finally {
-      setIsResuming(false);
-    }
+  const confirmResume = () => {
+    confirmActionToast({
+      id: `job-resume-${jobId}`,
+      title: 'Resume this job?',
+      description: 'The job will continue accepting work and processing queued agents.',
+      confirmLabel: 'Resume job',
+      cancelLabel: 'Keep paused',
+      loading: `Resuming ${jobId}...`,
+      success: `Resumed ${jobId}.`,
+      error: 'Failed to resume job.',
+      onConfirm: async () => {
+        setIsResuming(true);
+        try {
+          const response = await resumeJob(jobId);
+          setActionStatus(canonicalActionStatus(response, 'running'));
+          await load();
+        } catch (err) {
+          console.error('Failed to resume job', err);
+          throw err;
+        } finally {
+          setIsResuming(false);
+        }
+      },
+    });
   };
 
   return (
@@ -530,29 +575,42 @@ export default function JobDetails() {
         </div>
         <div className="flex gap-2">
           {webUi ? (
-            <a
-              href={webUi.url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center rounded-md border border-neutral-950 bg-neutral-950 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-neutral-800"
-              title={webUi.status ? `${webUi.title} (${webUi.status})` : webUi.title}
-            >
-              <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Web UI
-            </a>
+            <Tooltip content={webUi.status ? `${webUi.title} (${webUi.status})` : webUi.title}>
+              <a
+                href={webUi.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center rounded-md border border-neutral-950 bg-neutral-950 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-neutral-800"
+              >
+                <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Web UI
+              </a>
+            </Tooltip>
           ) : null}
           {displayStatus === 'running' ? (
-            <button disabled={isPausing} onClick={handlePause} className="flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50">
-              {isPausing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <PauseCircle className="mr-1.5 h-3.5 w-3.5" />} Pause
-            </button>
+            <Tooltip content="Pause this job after confirmation.">
+              <span className="inline-flex">
+                <button type="button" disabled={isPausing} onClick={confirmPause} className="flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50">
+                  {isPausing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <PauseCircle className="mr-1.5 h-3.5 w-3.5" />} Pause
+                </button>
+              </span>
+            </Tooltip>
           ) : displayStatus === 'paused' ? (
-            <button disabled={isResuming} onClick={handleResume} className="flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50">
-              {isResuming ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-1.5 h-3.5 w-3.5" />} Resume
-            </button>
+            <Tooltip content="Resume this paused job after confirmation.">
+              <span className="inline-flex">
+                <button type="button" disabled={isResuming} onClick={confirmResume} className="flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50">
+                  {isResuming ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-1.5 h-3.5 w-3.5" />} Resume
+                </button>
+              </span>
+            </Tooltip>
           ) : null}
           {(displayStatus === 'running' || displayStatus === 'pending' || displayStatus === 'paused') ? (
-            <button disabled={isCancelling} onClick={() => setShowCancelConfirm(true)} className="flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50">
-              {isCancelling ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Ban className="mr-1.5 h-3.5 w-3.5" />} Cancel
-            </button>
+            <Tooltip content="Cancel this job after confirmation. Running agents will stop.">
+              <span className="inline-flex">
+                <button type="button" disabled={isCancelling} onClick={confirmCancel} className="flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50">
+                  {isCancelling ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Ban className="mr-1.5 h-3.5 w-3.5" />} Cancel
+                </button>
+              </span>
+            </Tooltip>
           ) : null}
         </div>
       </div>
@@ -562,6 +620,7 @@ export default function JobDetails() {
           <SummaryCard icon={<MessageSquare className="h-3.5 w-3.5" />} value={eventCount} label="Events" />
           <SummaryCard icon={<Clock className="h-3.5 w-3.5" />} value={runtime} label="Runtime" />
         </div>
+        <FailurePanel failure={failure} title="Job Failure" artifacts={artifactRefs} />
       </div>
 
       <div className="bg-white rounded-lg border border-neutral-200 shadow-sm flex-1 flex flex-col min-h-[560px] overflow-hidden">
@@ -584,39 +643,42 @@ export default function JobDetails() {
             <div className="absolute inset-0 flex flex-col bg-white">
               <div className="flex items-center justify-end border-b border-neutral-200 bg-white px-3 py-2">
                 <div className="flex overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
-                  <button
-                    type="button"
-                    aria-label="Show agents as list"
-                    aria-pressed={agentView === 'list'}
-                    title="List view"
-                    onClick={() => setAgentView('list')}
-                    className={`flex h-8 items-center gap-1.5 border-r border-neutral-200 px-2.5 text-[11px] font-medium ${agentView === 'list' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
-                  >
-                    <List className="h-3.5 w-3.5" />
-                    List
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Show agents as graph"
-                    aria-pressed={agentView === 'graph'}
-                    title="Graph view"
-                    onClick={() => setAgentView('graph')}
-                    className={`flex h-8 items-center gap-1.5 border-r border-neutral-200 px-2.5 text-[11px] font-medium ${agentView === 'graph' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
-                  >
-                    <Network className="h-3.5 w-3.5" />
-                    Graph
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Show agents as code"
-                    aria-pressed={agentView === 'code'}
-                    title="Code view"
-                    onClick={() => setAgentView('code')}
-                    className={`flex h-8 items-center gap-1.5 px-2.5 text-[11px] font-medium ${agentView === 'code' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
-                  >
-                    <Code2 className="h-3.5 w-3.5" />
-                    Code
-                  </button>
+                  <Tooltip content="Show agents in a scan-friendly table.">
+                    <button
+                      type="button"
+                      aria-label="Show agents as list"
+                      aria-pressed={agentView === 'list'}
+                      onClick={() => setAgentView('list')}
+                      className={`flex h-8 items-center gap-1.5 border-r border-neutral-200 px-2.5 text-[11px] font-medium ${agentView === 'list' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                    >
+                      <List className="h-3.5 w-3.5" />
+                      List
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Show agents as a workflow graph.">
+                    <button
+                      type="button"
+                      aria-label="Show agents as graph"
+                      aria-pressed={agentView === 'graph'}
+                      onClick={() => setAgentView('graph')}
+                      className={`flex h-8 items-center gap-1.5 border-r border-neutral-200 px-2.5 text-[11px] font-medium ${agentView === 'graph' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                    >
+                      <Network className="h-3.5 w-3.5" />
+                      Graph
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Show the raw graph model as JSON.">
+                    <button
+                      type="button"
+                      aria-label="Show agents as code"
+                      aria-pressed={agentView === 'code'}
+                      onClick={() => setAgentView('code')}
+                      className={`flex h-8 items-center gap-1.5 px-2.5 text-[11px] font-medium ${agentView === 'code' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                    >
+                      <Code2 className="h-3.5 w-3.5" />
+                      Code
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
               <div className="relative flex-1">
@@ -686,19 +748,6 @@ export default function JobDetails() {
           )}
         </div>
       </div>
-      <ConfirmModal
-        isOpen={showCancelConfirm}
-        title="Cancel Job"
-        message="Are you sure you want to cancel this job? This action cannot be undone and will stop all running agents."
-        confirmLabel="Cancel Job"
-        onConfirm={handleCancel}
-        onCancel={() => {
-          setShowCancelConfirm(false);
-          setCancelError(null);
-        }}
-        isProcessing={isCancelling}
-        error={cancelError}
-      />
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addClusterNode, fetchJobs, fetchSystemSummary, removeClusterNode } from '../api';
 import type { Job, SystemSummary } from '../api';
 import { Activity, BriefcaseBusiness, Cpu, Eye, EyeOff, Loader2, Plus, Server, Trash2, X } from 'lucide-react';
+import { confirmActionToast } from '../components/ui/confirm-toast';
+import { Tooltip } from '../components/ui/tooltip';
 
 type PoolStats = {
   capacity?: number;
@@ -13,11 +15,6 @@ type PoolStats = {
 
 const activeStatuses = new Set(['running', 'pending', 'paused']);
 
-type ClusterActionMessage = {
-  tone: 'success' | 'error';
-  text: string;
-};
-
 export default function Dashboard() {
   const [summary, setSummary] = useState<SystemSummary | null>(null);
   const [jobs, setJobs] = useState<Job[] | null>(null);
@@ -27,7 +24,6 @@ export default function Dashboard() {
   const [remoteNodeToken, setRemoteNodeToken] = useState('');
   const [addingNode, setAddingNode] = useState(false);
   const [removingNodeName, setRemovingNodeName] = useState<string | null>(null);
-  const [clusterActionMessage, setClusterActionMessage] = useState<ClusterActionMessage | null>(null);
 
   const loadDashboard = useCallback(async () => {
     const [summaryResult, jobsResult] = await Promise.allSettled([
@@ -70,52 +66,66 @@ export default function Dashboard() {
     const token = remoteNodeToken.trim();
     if (!host || !token || addingNode) return;
 
-    if (!isValidRemoteNodeHost(host)) {
-      setClusterActionMessage({ tone: 'error', text: 'Use a host name or IP address without spaces.' });
-      return;
-    }
+    if (!isValidRemoteNodeHost(host) || !isValidRemoteNodeToken(token)) return;
 
-    if (!isValidRemoteNodeToken(token)) {
-      setClusterActionMessage({ tone: 'error', text: 'Paste the token from the remote node.' });
-      return;
-    }
-
-    setAddingNode(true);
-    setClusterActionMessage(null);
-    try {
-      const result = await addClusterNode({ host, token });
-      await loadDashboard();
-      setRemoteNodeHost('');
-      setRemoteNodeToken('');
-      setAddNodeDialogOpen(false);
-      setClusterActionMessage({
-        tone: 'success',
-        text: result.message || `${result.node_name || host} was added to this box.`,
-      });
-    } catch (error) {
-      setClusterActionMessage({ tone: 'error', text: apiErrorMessage(error, `Could not add ${host}.`) });
-    } finally {
-      setAddingNode(false);
-    }
+    confirmActionToast({
+      id: `cluster-add-${host}`,
+      title: 'Add this peer node?',
+      description: `This box will connect to ${host} using the provided exposure token.`,
+      confirmLabel: 'Add node',
+      cancelLabel: 'Keep form open',
+      loading: `Adding ${host}...`,
+      success: (result: Awaited<ReturnType<typeof addClusterNode>>) => (
+        result.message || `${result.node_name || host} was added to this box.`
+      ),
+      error: (error) => apiErrorMessage(error, `Could not add ${host}.`),
+      onConfirm: async () => {
+        setAddingNode(true);
+        try {
+          const result = await addClusterNode({ host, token });
+          await loadDashboard();
+          setRemoteNodeHost('');
+          setRemoteNodeToken('');
+          setAddNodeDialogOpen(false);
+          return result;
+        } catch (error) {
+          console.error('Failed to add cluster node', error);
+          throw error;
+        } finally {
+          setAddingNode(false);
+        }
+      },
+    });
   };
 
   const handleRemoveClusterNode = async (nodeName: string) => {
     if (!nodeName || nodeName === 'unknown' || removingNodeName) return;
 
-    setRemovingNodeName(nodeName);
-    setClusterActionMessage(null);
-    try {
-      const result = await removeClusterNode(nodeName);
-      await loadDashboard();
-      setClusterActionMessage({
-        tone: 'success',
-        text: result.message || `${nodeName} was removed from this box.`,
-      });
-    } catch (error) {
-      setClusterActionMessage({ tone: 'error', text: apiErrorMessage(error, `Could not remove ${nodeName}.`) });
-    } finally {
-      setRemovingNodeName(null);
-    }
+    confirmActionToast({
+      id: `cluster-remove-${nodeName}`,
+      title: 'Remove this peer node?',
+      description: `${nodeName} will be disconnected from this box and removed from the runtime resource list.`,
+      confirmLabel: 'Remove node',
+      cancelLabel: 'Keep node',
+      loading: `Removing ${nodeName}...`,
+      success: (result: Awaited<ReturnType<typeof removeClusterNode>>) => (
+        result.message || `${nodeName} was removed from this box.`
+      ),
+      error: (error) => apiErrorMessage(error, `Could not remove ${nodeName}.`),
+      onConfirm: async () => {
+        setRemovingNodeName(nodeName);
+        try {
+          const result = await removeClusterNode(nodeName);
+          await loadDashboard();
+          return result;
+        } catch (error) {
+          console.error('Failed to remove cluster node', error);
+          throw error;
+        } finally {
+          setRemovingNodeName(null);
+        }
+      },
+    });
   };
 
   const metricJobs = useMemo<Partial<Job>[]>(() => jobs ?? summary?.jobs ?? [], [jobs, summary]);
@@ -190,24 +200,17 @@ export default function Dashboard() {
             <h2 className="font-semibold tracking-tight text-neutral-950">Runtime Resources</h2>
             <p className="mt-1 text-xs text-neutral-500">Add exposed peer nodes to this box, or remove them from this box.</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setAddNodeDialogOpen(true)}
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-neutral-950 px-3 text-xs font-medium text-white transition-colors hover:bg-neutral-800"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add node
-          </button>
+          <Tooltip content="Add a remote node exposed with mn node expose.">
+            <button
+              type="button"
+              onClick={() => setAddNodeDialogOpen(true)}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-neutral-950 px-3 text-xs font-medium text-white transition-colors hover:bg-neutral-800"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add node
+            </button>
+          </Tooltip>
         </div>
-        {clusterActionMessage ? (
-          <div className={`border-b px-5 py-2.5 text-xs ${
-            clusterActionMessage.tone === 'success'
-              ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
-              : 'border-red-100 bg-red-50 text-red-800'
-          }`}>
-            {clusterActionMessage.text}
-          </div>
-        ) : null}
         <div className="divide-y divide-neutral-100">
           {(summary?.nodes || []).length === 0 ? (
             <div className="px-5 py-8 text-xs text-neutral-500">No cluster nodes reported yet.</div>
@@ -223,19 +226,23 @@ export default function Dashboard() {
                     </div>
                   </div>
                   {!node.self ? (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveClusterNode(node.name)}
-                      disabled={removingNodeName === node.name}
-                      className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {removingNodeName === node.name ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                      Remove
-                    </button>
+                    <Tooltip content="Disconnect this peer node after confirmation.">
+                      <span className="inline-flex">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveClusterNode(node.name)}
+                          disabled={removingNodeName === node.name}
+                          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {removingNodeName === node.name ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          Remove
+                        </button>
+                      </span>
+                    </Tooltip>
                   ) : null}
                 </div>
                 <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -417,14 +424,16 @@ function AddClusterNodeDialog({
                     tokenError ? 'border-red-400' : 'border-neutral-200'
                   }`}
                 />
-                <button
-                  type="button"
-                  onClick={() => setTokenVisible((current) => !current)}
-                  className="absolute right-1.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-800"
-                  aria-label={tokenVisible ? 'Hide token' : 'Show token'}
-                >
-                  {tokenVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                <Tooltip content={tokenVisible ? 'Hide the token value.' : 'Show the token value before adding.'}>
+                  <button
+                    type="button"
+                    onClick={() => setTokenVisible((current) => !current)}
+                    className="absolute right-1.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-800"
+                    aria-label={tokenVisible ? 'Hide token' : 'Show token'}
+                  >
+                    {tokenVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </Tooltip>
               </div>
               {tokenError ? (
                 <span id="remote-node-token-error" className="text-xs text-red-600">{tokenError}</span>
@@ -443,14 +452,18 @@ function AddClusterNodeDialog({
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="inline-flex items-center gap-1.5 rounded-md bg-neutral-950 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              {adding ? 'Adding...' : 'Add node'}
-            </button>
+            <Tooltip content="Review this node connection before adding it.">
+              <span className="inline-flex">
+                <button
+                  type="submit"
+                  disabled={!canSubmit}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-neutral-950 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  {adding ? 'Adding...' : 'Add node'}
+                </button>
+              </span>
+            </Tooltip>
           </div>
         </form>
       </div>

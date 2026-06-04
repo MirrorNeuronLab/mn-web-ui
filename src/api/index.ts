@@ -1,6 +1,24 @@
 import api from './client';
 import { z } from 'zod';
 
+export const ErrorEnvelopeSchema = z.object({
+  schema_version: z.string().optional().default('mn.error.v1'),
+  code: z.string().optional().default('runtime.failure'),
+  desc: z.string().optional().default('Runtime failure'),
+  details: z.record(z.string(), z.unknown()).optional().default({}),
+  severity: z.string().optional().default('ERROR'),
+  occurred_at: z.string().optional(),
+  event_id: z.string().optional(),
+  trace_id: z.string().nullable().optional(),
+  span_id: z.string().nullable().optional(),
+  remediation: z.string().optional(),
+  links: z.array(z.object({
+    rel: z.string().optional(),
+    artifact_id: z.string().optional(),
+    url: z.string().optional(),
+  }).passthrough()).optional().default([]),
+}).passthrough();
+
 export const AgentSchema = z.object({
   agent_id: z.string().optional().default('unknown'),
   alias: z.string().optional(),
@@ -15,6 +33,7 @@ export const AgentSchema = z.object({
   processed_messages: z.number().optional().default(0),
   mailbox_depth: z.number().optional().default(0),
   paused: z.boolean().optional(),
+  failure: ErrorEnvelopeSchema.optional().nullable(),
   metadata: z.object({
     outbound_edges: z.array(z.string()).optional(),
   }).optional(),
@@ -25,6 +44,8 @@ export const JobEventSchema = z.object({
   type: z.string().optional().default('unknown'),
   agent_id: z.string().optional(),
   payload: z.any().optional(),
+  error: ErrorEnvelopeSchema.optional(),
+  failure: ErrorEnvelopeSchema.optional(),
 }).passthrough();
 
 export const JobSchema = z.object({
@@ -43,6 +64,7 @@ export const JobSchema = z.object({
   recovery_status: z.string().nullable().optional(),
   recovery_requires_review: z.boolean().optional(),
   recovery: z.record(z.string(), z.unknown()).optional(),
+  failure: ErrorEnvelopeSchema.optional(),
 }).passthrough();
 
 export const JobDetailsSchema = z.object({
@@ -54,6 +76,7 @@ export const JobDetailsSchema = z.object({
   web_ui: z.record(z.string(), z.unknown()).optional(),
   web_ui_service: z.record(z.string(), z.unknown()).optional(),
   blueprint_web_ui_service: z.record(z.string(), z.unknown()).optional(),
+  failure: ErrorEnvelopeSchema.optional().nullable(),
 }).passthrough();
 
 export const AgentGraphNodeSchema = z.object({
@@ -221,6 +244,7 @@ export const WorkflowProgressAgentSchema = z.object({
   attempt: z.number().nullable().optional(),
   attempt_id: z.string().nullable().optional(),
   status_reason: z.string().nullable().optional(),
+  failure: ErrorEnvelopeSchema.nullable().optional(),
 }).passthrough();
 
 export const WorkflowProgressStepSchema = z.object({
@@ -251,6 +275,7 @@ export const WorkflowProgressStepSchema = z.object({
   attempt: z.number().nullable().optional(),
   attempt_id: z.string().nullable().optional(),
   status_reason: z.string().nullable().optional(),
+  failure: ErrorEnvelopeSchema.nullable().optional(),
   agents: z.array(WorkflowProgressAgentSchema).optional().default([]),
 }).passthrough();
 
@@ -262,6 +287,7 @@ export const WorkflowProgressSchema = z.object({
   description: z.string().optional().default(''),
   status: z.string().optional().default('unknown'),
   workflow_kind: z.enum(['batch', 'service']).optional().default('batch'),
+  failure: ErrorEnvelopeSchema.nullable().optional(),
   generated_at: z.string().nullable().optional(),
   submitted_at: z.string().nullable().optional(),
   elapsed_seconds: z.number().optional().default(0),
@@ -288,6 +314,7 @@ export const WorkflowProgressSchema = z.object({
 }).passthrough();
 
 export type Agent = z.infer<typeof AgentSchema>;
+export type ErrorEnvelope = z.infer<typeof ErrorEnvelopeSchema>;
 export type JobEvent = z.infer<typeof JobEventSchema>;
 export type Job = z.infer<typeof JobSchema>;
 export type JobDetails = z.infer<typeof JobDetailsSchema>;
@@ -484,7 +511,7 @@ export const streamWorkflowProgress = async (
     }
   }
 };
-export const clearJobs = () => api.post('/jobs:cleanup').then(r => r.data as { cleared_count: number });
+export const clearJobs = () => api.post('/jobs/cleanup').then(r => r.data as { cleared_count: number });
 export const cancelJob = (id: string) => api.post(`/jobs/${id}/cancel`).then(r => r.data);
 export const reloadBundle = (bundle_id: string) => api.post(`/bundles/${bundle_id}/reload`).then(r => r.data);
 

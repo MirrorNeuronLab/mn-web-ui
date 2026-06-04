@@ -5,18 +5,23 @@ import Jobs from './pages/Jobs';
 import JobDetails from './pages/JobDetails';
 import RunJob from './pages/RunJob';
 import RunUi from './pages/RunUi';
+import { Toaster } from './components/ui/sonner';
+import { TooltipProvider } from './components/ui/tooltip';
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Layout />}>
-        <Route index element={<Dashboard />} />
-        <Route path="jobs" element={<Jobs />} />
-        <Route path="jobs/:id" element={<JobDetails />} />
-        <Route path="runs/:runId/ui" element={<RunUi />} />
-        <Route path="run" element={<RunJob />} />
-      </Route>
-    </Routes>
+    <TooltipProvider delayDuration={250}>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="jobs" element={<Jobs />} />
+          <Route path="jobs/:id" element={<JobDetails />} />
+          <Route path="runs/:runId/ui" element={<RunUi />} />
+          <Route path="run" element={<RunJob />} />
+        </Route>
+      </Routes>
+      <Toaster />
+    </TooltipProvider>
   );
 }
 
