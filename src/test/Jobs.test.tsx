@@ -294,7 +294,7 @@ describe('Jobs Component', () => {
     vi.mocked(clearJobs).mockRejectedValue({
       response: {
         data: {
-          error: 'ClearJobs requires MN_MIRROR_NEURON_GRPC_ADMIN_TOKEN',
+          error: 'ClearJobs requires MN_GRPC_ADMIN_TOKEN',
         },
       },
     });
@@ -310,7 +310,7 @@ describe('Jobs Component', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear jobs' }));
 
-    expect(await screen.findByText('ClearJobs requires MN_MIRROR_NEURON_GRPC_ADMIN_TOKEN')).toBeInTheDocument();
+    expect(await screen.findByText('ClearJobs requires MN_GRPC_ADMIN_TOKEN')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Clear jobs' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Keep jobs' })).not.toBeInTheDocument();
   });
