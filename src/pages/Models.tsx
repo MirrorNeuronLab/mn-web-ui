@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, AlertCircle, Boxes, Gauge, Loader2, RefreshCw, Server, X } from 'lucide-react';
+import { Boxes, Gauge, Loader2, RefreshCw, Server, X } from 'lucide-react';
 import { benchmarkRuntimeModel, fetchRuntimeModels } from '../api';
 import type { RuntimeModel, RuntimeModelBenchmark, RuntimeModelListResponse } from '../api';
 import { Tooltip } from '../components/ui/tooltip';
@@ -41,8 +41,6 @@ export default function Models() {
   }, [loadModels]);
 
   const models = useMemo(() => modelState?.models || [], [modelState]);
-  const ownedCount = models.filter((model) => (model.owner_count || 0) > 0).length;
-  const orphanedCount = models.filter((model) => model.orphaned).length;
 
   const runBenchmark = useCallback(async (model: RuntimeModel) => {
     setSelectedModel(model);
@@ -68,15 +66,6 @@ export default function Models() {
   if (loading) {
     return (
       <div className="space-y-4 animate-pulse">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {[1, 2, 3].map((item) => (
-            <div key={item} className="h-28 rounded-lg border border-neutral-200 bg-white p-5">
-              <div className="h-4 w-28 rounded bg-neutral-100" />
-              <div className="mt-5 h-7 w-16 rounded bg-neutral-100" />
-              <div className="mt-5 h-4 w-40 rounded bg-neutral-100" />
-            </div>
-          ))}
-        </div>
         <div className="h-80 rounded-lg border border-neutral-200 bg-white" />
       </div>
     );
@@ -84,27 +73,6 @@ export default function Models() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <MetricCard
-          icon={Boxes}
-          label="Installed Models"
-          value={models.length.toLocaleString()}
-          detail={`${modelState?.node || 'local'} runtime node`}
-        />
-        <MetricCard
-          icon={Activity}
-          label="Blueprint-Owned"
-          value={ownedCount.toLocaleString()}
-          detail="Installed by blueprint requirements"
-        />
-        <MetricCard
-          icon={AlertCircle}
-          label="Orphaned"
-          value={orphanedCount.toLocaleString()}
-          detail="Available for later cleanup"
-        />
-      </div>
-
       <div className="rounded-lg border border-neutral-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-neutral-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
           <div>
@@ -218,29 +186,6 @@ export default function Models() {
           if (selectedModel) void runBenchmark(selectedModel);
         }}
       />
-    </div>
-  );
-}
-
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: typeof Boxes;
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-3 text-xs font-medium text-neutral-500">
-        <span>{label}</span>
-        <Icon className="h-4 w-4 text-neutral-500" />
-      </div>
-      <div className="mt-4 text-3xl font-semibold tracking-tight text-neutral-950">{value}</div>
-      <div className="mt-5 text-xs text-neutral-500">{detail}</div>
     </div>
   );
 }

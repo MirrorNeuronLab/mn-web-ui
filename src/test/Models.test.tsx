@@ -67,6 +67,9 @@ describe('Models Component', () => {
     renderModels();
 
     expect(await screen.findByText('Gemma 4 E2B')).toBeInTheDocument();
+    expect(screen.queryByText('Installed Models')).not.toBeInTheDocument();
+    expect(screen.queryByText('Blueprint-Owned')).not.toBeInTheDocument();
+    expect(screen.queryByText('Orphaned')).not.toBeInTheDocument();
     expect(screen.getByText('ai/gemma4:E2B')).toBeInTheDocument();
     expect(screen.getByText('personal_income_tax_expert')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /install/i })).not.toBeInTheDocument();

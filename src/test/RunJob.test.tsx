@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -175,10 +175,10 @@ describe('RunJob Component', () => {
     const launchButtons = screen.getAllByRole('button', { name: 'Launch' });
     fireEvent.click(launchButtons[launchButtons.length - 1]);
 
-    expect(await screen.findByText('Launch progress')).toBeInTheDocument();
+    const progressDialog = await screen.findByRole('dialog', { name: 'Progress' });
     await waitFor(() => {
-      expect(screen.getByText('Models')).toBeInTheDocument();
-      expect(screen.getAllByText('Working').length).toBeGreaterThan(0);
+      expect(within(progressDialog).getByText('Install required runtime models')).toBeInTheDocument();
+      expect(within(progressDialog).getByText('Ensuring required runtime models are installed.')).toBeInTheDocument();
     });
 
     resolveLaunch({ job_id: 'job-progress-123', id: 'job-progress-123', status: 'pending' });
