@@ -132,10 +132,9 @@ export default function Models() {
             <Table className="min-w-full table-fixed text-xs">
               <TableHeader className="bg-neutral-50 text-neutral-500">
                 <TableRow>
-                  <TableHead className="w-[32%] px-5 py-3">Model</TableHead>
-                  <TableHead className="w-[20%] px-4 py-3">Node</TableHead>
-                  <TableHead className="w-[12%] px-4 py-3">Backend</TableHead>
-                  <TableHead className="w-[18%] px-4 py-3">Used By</TableHead>
+                  <TableHead className="w-[38%] px-5 py-3">Model</TableHead>
+                  <TableHead className="w-[22%] px-4 py-3">Node</TableHead>
+                  <TableHead className="w-[22%] px-4 py-3">Used By</TableHead>
                   <TableHead className="w-[10%] px-4 py-3">Status</TableHead>
                   <TableHead className="w-[8%] px-5 py-3 text-right">Action</TableHead>
                 </TableRow>
@@ -161,7 +160,6 @@ export default function Models() {
                           <span className="truncate" title={nodeLabel(model)}>{nodeLabel(model)}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="px-4 py-4 text-neutral-700">{model.backend || 'unknown'}</TableCell>
                       <TableCell className="px-4 py-4 text-neutral-700">
                         <span className="line-clamp-2" title={ownerLabel(model)}>{ownerLabel(model)}</span>
                       </TableCell>
