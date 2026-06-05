@@ -1,7 +1,8 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { Boxes, LayoutDashboard, List, Play, Plus } from 'lucide-react';
-import clsx from 'clsx';
 import mnLogo from '../assets/mn-logo.svg';
+import { Button } from './ui/button';
+import { cn } from '../lib/utils';
 
 const navItems = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -19,13 +20,12 @@ export default function Layout() {
           <span className="font-semibold tracking-tight">MirrorNeuron</span>
         </div>
         <div className="px-5 py-3">
-          <NavLink
-            to="/run"
-            className="flex h-10 items-center gap-2.5 rounded-md bg-neutral-950 px-3.5 text-sm font-medium text-white hover:bg-neutral-800"
-          >
-            <Plus className="h-4 w-4" />
-            Run a job
-          </NavLink>
+          <Button asChild className="w-full justify-start">
+            <NavLink to="/run">
+              <Plus className="h-4 w-4" />
+              Run a job
+            </NavLink>
+          </Button>
         </div>
         <nav className="flex-1 px-3 py-2">
           <ul className="space-y-1">
@@ -34,7 +34,7 @@ export default function Layout() {
                 <NavLink
                   to={item.path}
                   className={({ isActive }) =>
-                    clsx(
+                    cn(
                       'flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors',
                       isActive
                         ? 'bg-neutral-100 text-neutral-950'

@@ -2,9 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchBlueprints, fetchLaunchProgress, launchBlueprintJob, uploadBundle } from '../api';
 import type { Blueprint, LaunchProgressEvent } from '../api';
-import { CheckCircle, FileArchive, FolderInput, Loader2, Play, UploadCloud, Workflow, X, XCircle } from 'lucide-react';
+import { CheckCircle, FileArchive, FolderInput, Loader2, Play, UploadCloud, Workflow, XCircle } from 'lucide-react';
 import { confirmActionToast } from '../components/ui/confirm-toast';
 import { Tooltip } from '../components/ui/tooltip';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
+import { Progress } from '../components/ui/progress';
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { cn } from '../lib/utils';
 
 type LaunchMode = 'blueprint' | 'path' | 'bundle';
 
@@ -62,34 +69,33 @@ function LaunchProgressModal({
   running: boolean;
   onClose: () => void;
 }) {
-  if (!open) return null;
-
   const byPhase = latestEventsByPhase(events);
+  const completedCount = launchPhases.filter((phase) => {
+    const status = normalizedStatus(byPhase[phase.id]?.status);
+    return status === 'completed' || status === 'skipped';
+  }).length;
+  const hasActivePhase = launchPhases.some((phase) => normalizedStatus(byPhase[phase.id]?.status) === 'running');
+  const progressValue = Math.min(
+    100,
+    Math.round(((completedCount + (hasActivePhase ? 0.45 : 0)) / launchPhases.length) * 100),
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="launch-progress-title"
-        className="w-full max-w-lg rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h3 id="launch-progress-title" className="text-xl font-medium text-neutral-500">Progress</h3>
-          </div>
-          {!running ? (
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
-              aria-label="Close progress"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          ) : null}
-        </div>
-        <ol className="mt-7 space-y-4">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !running) onClose();
+      }}
+    >
+      <DialogContent className="max-w-md gap-4 p-5" showClose={!running}>
+        <DialogHeader>
+          <DialogTitle>Progress</DialogTitle>
+          <DialogDescription className="sr-only">
+            Track blueprint source resolution, model installation, validation, submission, and job handoff.
+          </DialogDescription>
+        </DialogHeader>
+        <Progress value={progressValue} aria-label="Launch progress" />
+        <ol className="space-y-3">
           {launchPhases.map((phase) => {
             const event = byPhase[phase.id];
             const status = normalizedStatus(event?.status);
@@ -101,33 +107,33 @@ function LaunchProgressModal({
             const labelTone = failed
               ? 'text-red-700'
               : completed || skipped || active
-                ? 'text-neutral-700'
+                ? 'text-neutral-800'
                 : 'text-neutral-400';
             return (
-              <li key={phase.id} className="flex gap-4">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center">
+              <li key={phase.id} className="flex gap-3">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
                   {failed ? (
-                    <XCircle className="h-5 w-5 text-red-600" />
+                    <XCircle className="h-4 w-4 text-red-600" />
                   ) : completed || skipped ? (
-                    <CheckCircle className="h-5 w-5 text-neutral-600" />
+                    <CheckCircle className="h-4 w-4 text-neutral-700" />
                   ) : active ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-neutral-600" />
+                    <Loader2 className="h-4 w-4 animate-spin text-neutral-700" />
                   ) : (
-                    <span className="h-5 w-5 rounded-full border-2 border-neutral-400" />
+                    <span className="h-4 w-4 rounded-full border-2 border-neutral-300" />
                   )}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className={`text-lg leading-7 ${labelTone}`}>{phase.label}</div>
+                  <div className={cn('text-sm font-medium leading-5', labelTone)}>{phase.label}</div>
                   {showMessage && event?.message ? (
-                    <div className="mt-1 text-sm leading-5 text-neutral-500">{event.message}</div>
+                    <div className="mt-0.5 text-xs leading-5 text-neutral-500">{event.message}</div>
                   ) : null}
                 </div>
               </li>
             );
           })}
         </ol>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -343,168 +349,169 @@ export default function RunJob() {
     });
   };
 
+  const selectMode = (nextMode: LaunchMode) => {
+    if (nextMode === mode) return;
+    setMode(nextMode);
+    setError(null);
+    setProgressId(null);
+    setProgressEvents([]);
+    setProgressModalOpen(false);
+  };
+
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-        <div className="border-b border-neutral-200 bg-neutral-50/50 px-5 py-3">
-          <h2 className="font-semibold text-neutral-950">Run a job</h2>
-          <p className="mt-1 text-xs text-neutral-600">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b border-neutral-200 bg-neutral-50/50 px-5 py-3">
+          <CardTitle>Run a job</CardTitle>
+          <CardDescription>
             Pick one source. The API validates with <span className="font-mono">mn blueprint validate</span>, then launches with <span className="font-mono">mn blueprint run --detached</span>.
-          </p>
-        </div>
+          </CardDescription>
+        </CardHeader>
 
-        <div className="border-b border-neutral-200 px-5 pt-3">
-          <div className="flex flex-wrap gap-2">
-            {modeTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => {
-                  setMode(tab.id);
-                  setError(null);
-                  setProgressId(null);
-                  setProgressEvents([]);
-                  setProgressModalOpen(false);
-                }}
-                className={`rounded-md border px-3 py-1.5 text-xs font-medium ${mode === tab.id ? 'border-neutral-950 bg-neutral-950 text-white' : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <p className="py-2.5 text-xs text-neutral-500">{modeTabs.find((tab) => tab.id === mode)?.description}</p>
-        </div>
+        <CardContent className="p-0">
+          <Tabs
+            value={mode}
+            onValueChange={(value) => selectMode(value as LaunchMode)}
+          >
+            <div className="border-b border-neutral-200 px-5 pt-3">
+              <TabsList className="flex w-fit flex-wrap">
+                {modeTabs.map((tab) => (
+                  <TabsTrigger key={tab.id} value={tab.id} onClick={() => selectMode(tab.id)}>
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              <p className="py-2.5 text-xs text-neutral-500">{modeTabs.find((tab) => tab.id === mode)?.description}</p>
+            </div>
 
-        <div className="space-y-4 p-5">
-          {mode === 'blueprint' ? (
-            <div className="space-y-3">
-              <label className="block text-xs font-medium text-neutral-700" htmlFor="blueprint-select">Blueprint</label>
-              <div className="flex items-center gap-2.5">
-                <Workflow className="h-4 w-4 text-neutral-400" />
-                <select
-                  id="blueprint-select"
-                  value={selectedBlueprintId}
-                  onChange={(event) => setSelectedBlueprintId(event.target.value)}
-                  className="h-9 min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-3 text-xs text-neutral-950 focus:border-neutral-950 focus:outline-none"
-                  disabled={loadingBlueprints || running}
-                >
-                  {blueprints.map((blueprint) => (
-                    <option key={blueprint.id} value={blueprint.id}>
-                      {blueprint.name || blueprint.id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {loadingBlueprints ? <div className="text-xs text-neutral-500">Loading blueprints...</div> : null}
-              {!loadingBlueprints && blueprints.length === 0 ? <div className="text-xs text-neutral-500">No blueprints available.</div> : null}
-              {selectedBlueprint ? (
-                <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
-                  <div className="font-medium text-neutral-950">{selectedBlueprint.name || selectedBlueprint.id}</div>
-                  {selectedBlueprint.description ? <div className="mt-1">{selectedBlueprint.description}</div> : null}
-                  <div className="mt-2 font-mono text-xs text-neutral-500">{selectedBlueprint.id}</div>
+            <div className="space-y-4 p-5">
+              {mode === 'blueprint' ? (
+                <div className="space-y-3">
+                  <label className="block text-xs font-medium text-neutral-700" htmlFor="blueprint-select">Blueprint</label>
+                  <div className="flex items-center gap-2.5">
+                    <Workflow className="h-4 w-4 text-neutral-400" />
+                    <select
+                      id="blueprint-select"
+                      value={selectedBlueprintId}
+                      onChange={(event) => setSelectedBlueprintId(event.target.value)}
+                      className="h-9 min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-3 text-xs text-neutral-950 shadow-sm focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={loadingBlueprints || running}
+                    >
+                      {blueprints.map((blueprint) => (
+                        <option key={blueprint.id} value={blueprint.id}>
+                          {blueprint.name || blueprint.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {loadingBlueprints ? <div className="text-xs text-neutral-500">Loading blueprints...</div> : null}
+                  {!loadingBlueprints && blueprints.length === 0 ? <div className="text-xs text-neutral-500">No blueprints available.</div> : null}
+                  {selectedBlueprint ? (
+                    <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
+                      <div className="font-medium text-neutral-950">{selectedBlueprint.name || selectedBlueprint.id}</div>
+                      {selectedBlueprint.description ? <div className="mt-1">{selectedBlueprint.description}</div> : null}
+                      <div className="mt-2 font-mono text-xs text-neutral-500">{selectedBlueprint.id}</div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
-            </div>
-          ) : null}
 
-          {mode === 'path' ? (
-            <div className="space-y-3">
-              <label className="block text-xs font-medium text-neutral-700" htmlFor="path-input">Blueprint folder path</label>
-              <div className="flex items-center gap-2.5">
-                <FolderInput className="h-4 w-4 text-neutral-400" />
-                <input
-                  id="path-input"
-                  type="text"
-                  value={pathValue}
-                  onChange={(event) => setPathValue(event.target.value)}
-                  placeholder="/Users/homer/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant"
-                  className="h-9 min-w-0 flex-1 rounded-md border border-neutral-300 px-3 font-mono text-xs text-neutral-950 focus:border-neutral-950 focus:outline-none"
-                  disabled={running}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          {mode === 'bundle' ? (
-            <div className="space-y-4">
-              {!bundleData ? (
-                <Tooltip content="Choose a ZIP bundle, then confirm before it uploads.">
-                  <div className="relative rounded-lg border-2 border-dashed border-neutral-300 p-6 text-center transition-colors hover:bg-neutral-50">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".zip"
-                      onChange={handleFileChange}
-                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                      disabled={uploading || running}
+              {mode === 'path' ? (
+                <div className="space-y-3">
+                  <label className="block text-xs font-medium text-neutral-700" htmlFor="path-input">Blueprint folder path</label>
+                  <div className="flex items-center gap-2.5">
+                    <FolderInput className="h-4 w-4 text-neutral-400" />
+                    <Input
+                      id="path-input"
+                      type="text"
+                      value={pathValue}
+                      onChange={(event) => setPathValue(event.target.value)}
+                      placeholder="/Users/homer/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant"
+                      className="min-w-0 flex-1 font-mono text-xs"
+                      disabled={running}
                     />
-                    <UploadCloud className={`mx-auto mb-3 h-10 w-10 ${uploading ? 'animate-bounce text-neutral-500' : 'text-neutral-400'}`} />
-                    {uploading ? (
-                      <div className="flex items-center justify-center text-neutral-950">
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        <p className="text-xs font-medium">Uploading bundle...</p>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-xs font-medium text-neutral-700">Click to upload or drag and drop</p>
-                        <p className="mt-1 text-xs text-neutral-500">.zip files only</p>
-                      </>
-                    )}
-                  </div>
-                </Tooltip>
-              ) : (
-                <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-neutral-700" />
-                    <div>
-                      <h3 className="text-xs font-medium text-neutral-950">Bundle uploaded</h3>
-                      <p className="mt-1 text-xs text-neutral-700">
-                        Graph ID: <strong className="font-mono">{bundleData.manifest.graph_id || bundleData.manifest.job_name || 'bundle'}</strong>
-                      </p>
-                      <p className="mt-1 font-mono text-xs text-neutral-500">{bundleData.bundle_path}</p>
-                    </div>
                   </div>
                 </div>
-              )}
-            </div>
-          ) : null}
+              ) : null}
 
-          {error ? (
-            <div className="whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-800">
-              {error}
-            </div>
-          ) : null}
+              {mode === 'bundle' ? (
+                <div className="space-y-4">
+                  {!bundleData ? (
+                    <Tooltip content="Choose a ZIP bundle, then confirm before it uploads.">
+                      <div className="relative rounded-lg border-2 border-dashed border-neutral-300 p-6 text-center transition-colors hover:bg-neutral-50">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".zip"
+                          onChange={handleFileChange}
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                          disabled={uploading || running}
+                        />
+                        <UploadCloud className={cn('mx-auto mb-3 h-10 w-10', uploading ? 'animate-bounce text-neutral-500' : 'text-neutral-400')} />
+                        {uploading ? (
+                          <div className="flex items-center justify-center text-neutral-950">
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <p className="text-xs font-medium">Uploading bundle...</p>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-xs font-medium text-neutral-700">Click to upload or drag and drop</p>
+                            <p className="mt-1 text-xs text-neutral-500">.zip files only</p>
+                          </>
+                        )}
+                      </div>
+                    </Tooltip>
+                  ) : (
+                    <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                      <div className="flex items-start gap-2.5">
+                        <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-neutral-700" />
+                        <div>
+                          <h3 className="text-xs font-medium text-neutral-950">Bundle uploaded</h3>
+                          <p className="mt-1 text-xs text-neutral-700">
+                            Graph ID: <strong className="font-mono">{bundleData.manifest.graph_id || bundleData.manifest.job_name || 'bundle'}</strong>
+                          </p>
+                          <p className="mt-1 font-mono text-xs text-neutral-500">{bundleData.bundle_path}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
-          <div className="flex justify-end gap-2 border-t border-neutral-200 pt-4">
-            {mode === 'bundle' && bundleData ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setBundleData(null);
-                  setError(null);
-                }}
-                className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
-                disabled={running}
-              >
-                Choose another ZIP
-              </button>
-            ) : null}
-            <Tooltip content="Confirm the selected source before validation and launch.">
-              <span className="inline-flex">
-                <button
-                  type="button"
-                  onClick={confirmLaunch}
-                  disabled={!canLaunch}
-                  className="flex items-center rounded-md bg-neutral-950 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-neutral-800 disabled:opacity-50"
-                >
-                  {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : mode === 'bundle' ? <FileArchive className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-                  {running ? 'Launching...' : 'Launch'}
-                </button>
-              </span>
-            </Tooltip>
-          </div>
-        </div>
-      </div>
+              {error ? (
+                <div className="whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-800">
+                  {error}
+                </div>
+              ) : null}
+
+              <div className="flex justify-end gap-2 border-t border-neutral-200 pt-4">
+                {mode === 'bundle' && bundleData ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setBundleData(null);
+                      setError(null);
+                    }}
+                    disabled={running}
+                  >
+                    Choose another ZIP
+                  </Button>
+                ) : null}
+                <Tooltip content="Confirm the selected source before validation and launch.">
+                  <span className="inline-flex">
+                    <Button type="button" onClick={confirmLaunch} disabled={!canLaunch}>
+                      {running ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === 'bundle' ? <FileArchive className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                      {running ? 'Launching...' : 'Launch'}
+                    </Button>
+                  </span>
+                </Tooltip>
+              </div>
+            </div>
+          </Tabs>
+        </CardContent>
+      </Card>
       <LaunchProgressModal
         events={progressEvents}
         open={progressModalOpen && (running || progressEvents.length > 0)}

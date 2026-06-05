@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addClusterNode, fetchJobs, fetchSystemSummary, removeClusterNode } from '../api';
 import type { Job, SystemSummary } from '../api';
-import { Activity, BriefcaseBusiness, Cpu, Eye, EyeOff, Loader2, Plus, Server, Trash2, X } from 'lucide-react';
+import { Activity, BriefcaseBusiness, Cpu, Eye, EyeOff, Loader2, Plus, Server, Trash2 } from 'lucide-react';
 import { confirmActionToast } from '../components/ui/confirm-toast';
 import { Tooltip } from '../components/ui/tooltip';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader } from '../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
+import { Skeleton } from '../components/ui/skeleton';
+import { cn } from '../lib/utils';
 
 type PoolStats = {
   capacity?: number;
@@ -68,12 +81,14 @@ export default function Dashboard() {
 
     if (!isValidRemoteNodeHost(host) || !isValidRemoteNodeToken(token)) return;
 
+    setAddNodeDialogOpen(false);
     confirmActionToast({
       id: `cluster-add-${host}`,
       title: 'Add this peer node?',
       description: `This box will connect to ${host} using the provided exposure token.`,
       confirmLabel: 'Add node',
       cancelLabel: 'Keep form open',
+      onCancel: () => setAddNodeDialogOpen(true),
       loading: {
         title: 'Adding node',
         description: host,
@@ -167,17 +182,21 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="space-y-4 animate-pulse">
+      <div className="space-y-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 rounded-lg border border-neutral-200 bg-white p-5">
-              <div className="h-4 w-28 rounded bg-neutral-100" />
-              <div className="mt-6 h-7 w-20 rounded bg-neutral-100" />
-              <div className="mt-6 h-4 w-44 rounded bg-neutral-100" />
-            </div>
+            <Card key={i} className="p-5">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="mt-6 h-7 w-20" />
+              <Skeleton className="mt-6 h-4 w-44" />
+            </Card>
           ))}
         </div>
-        <div className="h-56 rounded-lg border border-neutral-200 bg-white" />
+        <Card>
+          <CardContent className="p-5">
+            <Skeleton className="h-48 w-full" />
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -208,24 +227,24 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="rounded-lg border border-neutral-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-neutral-200 px-5 py-4 md:flex-row md:items-start md:justify-between">
+      <Card>
+        <CardHeader className="flex flex-col gap-3 space-y-0 border-b border-neutral-200 px-5 py-4 md:flex-row md:items-start md:justify-between">
           <div>
             <h2 className="font-semibold tracking-tight text-neutral-950">Runtime Resources</h2>
             <p className="mt-1 text-xs text-neutral-500">Add exposed peer nodes to this box, or remove them from this box.</p>
           </div>
           <Tooltip content="Add a remote node exposed with mn node expose.">
-            <button
+            <Button
               type="button"
+              size="sm"
               onClick={() => setAddNodeDialogOpen(true)}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-neutral-950 px-3 text-xs font-medium text-white transition-colors hover:bg-neutral-800"
             >
               <Plus className="h-3.5 w-3.5" />
               Add node
-            </button>
+            </Button>
           </Tooltip>
-        </div>
-        <div className="divide-y divide-neutral-100">
+        </CardHeader>
+        <CardContent className="divide-y divide-neutral-100 p-0">
           {(summary?.nodes || []).length === 0 ? (
             <div className="px-5 py-8 text-xs text-neutral-500">No cluster nodes reported yet.</div>
           ) : (
@@ -242,11 +261,12 @@ export default function Dashboard() {
                   {!node.self ? (
                     <Tooltip content="Disconnect this peer node after confirmation.">
                       <span className="inline-flex">
-                        <button
+                        <Button
                           type="button"
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleRemoveClusterNode(node.name)}
                           disabled={removingNodeName === node.name}
-                          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {removingNodeName === node.name ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -254,7 +274,7 @@ export default function Dashboard() {
                             <Trash2 className="h-3.5 w-3.5" />
                           )}
                           Remove
-                        </button>
+                        </Button>
                       </span>
                     </Tooltip>
                   ) : null}
@@ -281,8 +301,8 @@ export default function Dashboard() {
               </div>
             ))
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       <AddClusterNodeDialog
         host={remoteNodeHost}
@@ -317,7 +337,7 @@ function MetricCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
+    <Card className="p-5">
       <div className="flex items-center justify-between gap-3 text-xs font-medium text-neutral-500">
         <span>{label}</span>
         <Icon className="h-4 w-4 text-neutral-500" />
@@ -325,7 +345,7 @@ function MetricCard({
       <div className="mt-4 text-3xl font-semibold tracking-tight text-neutral-950">{value}</div>
       <div className="mt-5 text-xs font-medium text-neutral-950">{headline}</div>
       <div className="mt-1 text-xs text-neutral-500">{detail}</div>
-    </div>
+    </Card>
   );
 }
 
@@ -371,28 +391,21 @@ function AddClusterNodeDialog({
   const canSubmit = Boolean(trimmedHost && trimmedToken && !hostError && !tokenError && !adding);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="add-cluster-node-title"
-        className="w-full max-w-md overflow-hidden rounded-lg bg-white shadow-xl"
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-neutral-100 p-4">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !adding) onClose();
+      }}
+    >
+      <DialogContent className="max-w-md gap-0 overflow-hidden p-0" showClose={!adding}>
+        <DialogHeader className="border-b border-neutral-100 p-4 pr-12">
           <div>
-            <h3 id="add-cluster-node-title" className="font-semibold text-neutral-950">Add Node to This Box</h3>
-            <p className="mt-1 text-xs text-neutral-500">Add a remote node exposed with mn node expose.</p>
+            <DialogTitle>Add Node to This Box</DialogTitle>
+            <DialogDescription className="mt-1 text-xs">
+              Add a remote node exposed with mn node expose.
+            </DialogDescription>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={adding}
-            className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-50"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+        </DialogHeader>
 
         <form
           onSubmit={(event) => {
@@ -403,7 +416,7 @@ function AddClusterNodeDialog({
           <div className="space-y-3 p-4">
             <label className="block space-y-1.5">
               <span className="text-xs font-medium text-neutral-800">Remote host or IP</span>
-              <input
+              <Input
                 value={host}
                 onChange={(event) => onHostChange(event.target.value)}
                 placeholder="192.168.1.42"
@@ -411,9 +424,7 @@ function AddClusterNodeDialog({
                 autoFocus
                 aria-invalid={Boolean(hostError)}
                 aria-describedby={hostError ? 'remote-node-host-error' : undefined}
-                className={`h-9 w-full rounded-md border bg-white px-3 text-xs text-neutral-950 outline-none transition-colors placeholder:text-neutral-400 focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10 ${
-                  hostError ? 'border-red-400' : 'border-neutral-200'
-                }`}
+                className={cn(hostError ? 'border-red-400 focus-visible:ring-red-100' : '')}
               />
               {hostError ? (
                 <span id="remote-node-host-error" className="text-xs text-red-600">{hostError}</span>
@@ -425,7 +436,7 @@ function AddClusterNodeDialog({
             <label className="block space-y-1.5">
               <span className="text-xs font-medium text-neutral-800">Token</span>
               <div className="relative">
-                <input
+                <Input
                   value={token}
                   onChange={(event) => onTokenChange(event.target.value)}
                   placeholder="Token from mn node expose"
@@ -434,19 +445,19 @@ function AddClusterNodeDialog({
                   aria-invalid={Boolean(tokenError)}
                   aria-describedby={tokenError ? 'remote-node-token-error' : undefined}
                   type={tokenVisible ? 'text' : 'password'}
-                  className={`h-9 w-full rounded-md border bg-white px-3 pr-10 text-xs text-neutral-950 outline-none transition-colors placeholder:text-neutral-400 focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10 ${
-                    tokenError ? 'border-red-400' : 'border-neutral-200'
-                  }`}
+                  className={cn('pr-10', tokenError ? 'border-red-400 focus-visible:ring-red-100' : '')}
                 />
                 <Tooltip content={tokenVisible ? 'Hide the token value.' : 'Show the token value before adding.'}>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => setTokenVisible((current) => !current)}
-                    className="absolute right-1.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-800"
+                    className="absolute right-1.5 top-1/2 h-7 w-7 -translate-y-1/2 text-neutral-500"
                     aria-label={tokenVisible ? 'Hide token' : 'Show token'}
                   >
                     {tokenVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+                  </Button>
                 </Tooltip>
               </div>
               {tokenError ? (
@@ -457,31 +468,32 @@ function AddClusterNodeDialog({
             </label>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-neutral-100 bg-neutral-50 p-3">
-            <button
+          <DialogFooter className="border-t border-neutral-100 bg-neutral-50 p-3">
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={onClose}
               disabled={adding}
-              className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50"
             >
               Cancel
-            </button>
+            </Button>
             <Tooltip content="Review this node connection before adding it.">
               <span className="inline-flex">
-                <button
+                <Button
                   type="submit"
+                  size="sm"
                   disabled={!canSubmit}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-neutral-950 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   {adding ? 'Adding...' : 'Add node'}
-                </button>
+                </Button>
               </span>
             </Tooltip>
-          </div>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

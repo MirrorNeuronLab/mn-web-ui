@@ -1,8 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Boxes, Gauge, Loader2, RefreshCw, Server, X } from 'lucide-react';
+import { Boxes, Gauge, Loader2, RefreshCw, Server } from 'lucide-react';
 import { benchmarkRuntimeModel, fetchRuntimeModels } from '../api';
 import type { RuntimeModel, RuntimeModelBenchmark, RuntimeModelListResponse } from '../api';
 import { Tooltip } from '../components/ui/tooltip';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader } from '../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Skeleton } from '../components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table';
 
 export default function Models() {
   const [modelState, setModelState] = useState<RuntimeModelListResponse | null>(null);
@@ -65,31 +85,34 @@ export default function Models() {
 
   if (loading) {
     return (
-      <div className="space-y-4 animate-pulse">
-        <div className="h-80 rounded-lg border border-neutral-200 bg-white" />
-      </div>
+      <Card>
+        <CardContent className="p-5">
+          <Skeleton className="h-72 w-full" />
+        </CardContent>
+      </Card>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-neutral-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-neutral-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
+      <Card>
+        <CardHeader className="flex flex-col gap-3 space-y-0 border-b border-neutral-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="font-semibold tracking-tight text-neutral-950">Models</h2>
             <p className="mt-1 text-xs text-neutral-500">Installed Docker Model Runner models available to blueprints.</p>
           </div>
           <Tooltip content="Refresh installed model status.">
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={() => void loadModels()}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Refresh
-            </button>
+            </Button>
           </Tooltip>
-        </div>
+        </CardHeader>
 
         {error ? (
           <div className="border-b border-red-100 bg-red-50 px-5 py-3 text-xs text-red-700">{error}</div>
@@ -105,25 +128,25 @@ export default function Models() {
             No installed models yet. Models appear here after a blueprint installs one.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full table-fixed divide-y divide-neutral-100 text-left text-xs">
-              <thead className="bg-neutral-50 text-neutral-500">
-                <tr>
-                  <th scope="col" className="w-[32%] px-5 py-3 font-medium">Model</th>
-                  <th scope="col" className="w-[20%] px-4 py-3 font-medium">Node</th>
-                  <th scope="col" className="w-[12%] px-4 py-3 font-medium">Backend</th>
-                  <th scope="col" className="w-[18%] px-4 py-3 font-medium">Used By</th>
-                  <th scope="col" className="w-[10%] px-4 py-3 font-medium">Status</th>
-                  <th scope="col" className="w-[8%] px-5 py-3 text-right font-medium">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
+          <CardContent className="overflow-x-auto p-0">
+            <Table className="min-w-full table-fixed text-xs">
+              <TableHeader className="bg-neutral-50 text-neutral-500">
+                <TableRow>
+                  <TableHead className="w-[32%] px-5 py-3">Model</TableHead>
+                  <TableHead className="w-[20%] px-4 py-3">Node</TableHead>
+                  <TableHead className="w-[12%] px-4 py-3">Backend</TableHead>
+                  <TableHead className="w-[18%] px-4 py-3">Used By</TableHead>
+                  <TableHead className="w-[10%] px-4 py-3">Status</TableHead>
+                  <TableHead className="w-[8%] px-5 py-3 text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {models.map((model) => {
                   const status = modelStatus(model);
                   const canBenchmark = model.provider === 'docker_model_runner';
                   return (
-                    <tr key={`${model.id}-${model.docker_model}`} className="align-top">
-                      <td className="px-5 py-4">
+                    <TableRow key={`${model.id}-${model.docker_model}`} className="align-top">
+                      <TableCell className="px-5 py-4">
                         <div className="flex min-w-0 gap-3">
                           <Boxes className="mt-0.5 h-4 w-4 shrink-0 text-neutral-500" />
                           <div className="min-w-0">
@@ -131,45 +154,46 @@ export default function Models() {
                             <div className="mt-1 break-all font-mono text-[11px] leading-5 text-neutral-500">{model.docker_model || model.model}</div>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-4 py-4">
+                      </TableCell>
+                      <TableCell className="px-4 py-4">
                         <div className="flex min-w-0 items-center gap-2 text-neutral-700">
                           <Server className="h-3.5 w-3.5 shrink-0 text-neutral-500" />
                           <span className="truncate" title={nodeLabel(model)}>{nodeLabel(model)}</span>
                         </div>
-                      </td>
-                      <td className="px-4 py-4 text-neutral-700">{model.backend || 'unknown'}</td>
-                      <td className="px-4 py-4 text-neutral-700">
+                      </TableCell>
+                      <TableCell className="px-4 py-4 text-neutral-700">{model.backend || 'unknown'}</TableCell>
+                      <TableCell className="px-4 py-4 text-neutral-700">
                         <span className="line-clamp-2" title={ownerLabel(model)}>{ownerLabel(model)}</span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className={`inline-flex h-6 items-center rounded-full px-2 text-[11px] font-medium ${status.className}`}>
+                      </TableCell>
+                      <TableCell className="px-4 py-4">
+                        <Badge variant="outline" className={status.className}>
                           {status.label}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-right">
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-right">
                         <Tooltip content={canBenchmark ? 'Benchmark this model from the runtime node.' : 'Benchmark is only available for Docker Model Runner chat models.'}>
                           <span className="inline-flex">
-                            <button
+                            <Button
                               type="button"
+                              variant="outline"
+                              size="sm"
                               onClick={() => openBenchmark(model)}
                               disabled={!canBenchmark}
-                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Gauge className="h-3.5 w-3.5" />
                               Benchmark
-                            </button>
+                            </Button>
                           </span>
                         </Tooltip>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </CardContent>
         )}
-      </div>
+      </Card>
 
       <BenchmarkDialog
         benchmark={benchmark}
@@ -208,28 +232,21 @@ function BenchmarkDialog({
   if (!model) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="model-benchmark-title"
-        className="w-full max-w-xl overflow-hidden rounded-lg bg-white shadow-xl"
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-neutral-100 p-4">
+    <Dialog
+      open={Boolean(model)}
+      onOpenChange={(open) => {
+        if (!open && !loading) onClose();
+      }}
+    >
+      <DialogContent className="max-w-xl gap-0 overflow-hidden p-0" showClose={!loading}>
+        <DialogHeader className="border-b border-neutral-100 p-4 pr-12">
           <div className="min-w-0">
-            <h3 id="model-benchmark-title" className="font-semibold text-neutral-950">Benchmark Model</h3>
-            <p className="mt-1 break-all font-mono text-[11px] text-neutral-500">{model.docker_model || model.model}</p>
+            <DialogTitle>Benchmark Model</DialogTitle>
+            <DialogDescription className="mt-1 break-all font-mono text-[11px]">
+              {model.docker_model || model.model}
+            </DialogDescription>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-            className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-50"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+        </DialogHeader>
 
         <div className="space-y-4 p-4">
           {loading ? (
@@ -270,31 +287,32 @@ function BenchmarkDialog({
           ) : null}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-neutral-100 bg-neutral-50 p-3">
-          <button
+        <DialogFooter className="border-t border-neutral-100 bg-neutral-50 p-3">
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={onClose}
             disabled={loading}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50"
           >
             Close
-          </button>
+          </Button>
           <Tooltip content="Run the benchmark again on the runtime node.">
             <span className="inline-flex">
-              <button
+              <Button
                 type="button"
+                size="sm"
                 onClick={onRun}
                 disabled={loading}
-                className="inline-flex items-center gap-1.5 rounded-md bg-neutral-950 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gauge className="h-4 w-4" />}
                 {loading ? 'Running...' : 'Run again'}
-              </button>
+              </Button>
             </span>
           </Tooltip>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

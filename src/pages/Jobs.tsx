@@ -6,6 +6,19 @@ import { cancelJob, clearJobs, fetchJobs, isServiceJob, pauseJob } from '../api'
 import type { Job } from '../api';
 import { confirmActionToast } from '../components/ui/confirm-toast';
 import { Tooltip } from '../components/ui/tooltip';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader } from '../components/ui/card';
+import { Skeleton } from '../components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table';
+import { cn } from '../lib/utils';
 
 const StatusIcon = ({ status }: { status: string }) => {
   switch (status) {
@@ -167,8 +180,8 @@ export default function Jobs() {
   const allSelected = jobs.length > 0 && selectedCount === jobs.length;
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-5 py-4">
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b border-neutral-200 px-5 py-4">
         <div>
           <h2 className="font-semibold tracking-tight text-neutral-950">Jobs</h2>
           <p className="mt-1 text-xs text-neutral-500">
@@ -198,57 +211,57 @@ export default function Jobs() {
           </button>
           <Tooltip content="Pause all selected live jobs after confirmation.">
             <span className="inline-flex">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 disabled={!hasSelection || bulkAction !== null}
                 onClick={() => confirmBulkAction('pause')}
-                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {bulkAction === 'pause' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PauseCircle className="h-3.5 w-3.5" />}
                 {bulkAction === 'pause' ? 'Pausing...' : `Pause${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
-              </button>
+              </Button>
             </span>
           </Tooltip>
           <Tooltip content="Cancel all selected jobs after confirmation. Running agents will stop.">
             <span className="inline-flex">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 disabled={!hasSelection || bulkAction !== null}
                 onClick={() => confirmBulkAction('cancel')}
-                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {bulkAction === 'cancel' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
                 {bulkAction === 'cancel' ? 'Cancelling...' : `Cancel${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
-              </button>
+              </Button>
             </span>
           </Tooltip>
           <Tooltip content="Clear completed, failed, and cancelled jobs after confirmation.">
             <span className="inline-flex">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 disabled={isClearing || bulkAction !== null}
                 onClick={confirmClearJobs}
-                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isClearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                 {isClearing ? 'Clearing...' : 'Clear'}
-              </button>
+              </Button>
             </span>
           </Tooltip>
-          <Link
-            to="/run"
-            className="inline-flex h-8 items-center justify-center rounded-md bg-neutral-950 px-3 text-xs font-medium text-white hover:bg-neutral-800"
-          >
-            New job
-          </Link>
+          <Button asChild size="sm">
+            <Link to="/run">New job</Link>
+          </Button>
         </div>
-      </div>
+      </CardHeader>
 
-      <div className="overflow-auto">
-        <table className="w-full min-w-[860px] text-left">
-          <thead>
-            <tr className="border-b border-neutral-100 bg-neutral-50 text-[11px] uppercase tracking-wide text-neutral-500">
-              <th className="w-10 px-4 py-2 font-medium">
+      <CardContent className="overflow-auto p-0">
+        <Table className="min-w-[860px]">
+          <TableHeader>
+            <TableRow className="bg-neutral-50 text-[11px] uppercase tracking-wide text-neutral-500">
+              <TableHead className="w-10 px-4 py-2">
                 <input
                   type="checkbox"
                   aria-label="Select all jobs"
@@ -257,43 +270,43 @@ export default function Jobs() {
                   disabled={loading || jobs.length === 0}
                   className="h-4 w-4 rounded border-neutral-300 text-neutral-950 focus:ring-neutral-950 disabled:opacity-40"
                 />
-              </th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 font-medium">Job ID</th>
-              <th className="px-4 py-2 font-medium">Graph ID</th>
-              <th className="px-4 py-2 font-medium">Submitted</th>
-              <th className="px-4 py-2 font-medium">Executors</th>
-              <th className="px-4 py-2 font-medium">Details</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100">
+              </TableHead>
+              <TableHead className="px-4 py-2">Status</TableHead>
+              <TableHead className="px-4 py-2">Job ID</TableHead>
+              <TableHead className="px-4 py-2">Graph ID</TableHead>
+              <TableHead className="px-4 py-2">Submitted</TableHead>
+              <TableHead className="px-4 py-2">Executors</TableHead>
+              <TableHead className="px-4 py-2">Details</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {loading ? (
               [1, 2, 3, 4, 5].map((i) => (
-                <tr key={i} className="animate-pulse">
-                  <td className="px-4 py-2.5"><div className="h-4 w-4 rounded bg-neutral-100" /></td>
-                  <td className="px-4 py-2.5"><div className="h-5 w-24 rounded bg-neutral-100" /></td>
-                  <td className="px-4 py-2.5"><div className="h-5 w-36 rounded bg-neutral-100" /></td>
-                  <td className="px-4 py-2.5"><div className="h-5 w-28 rounded bg-neutral-100" /></td>
-                  <td className="px-4 py-2.5"><div className="h-5 w-32 rounded bg-neutral-100" /></td>
-                  <td className="px-4 py-2.5"><div className="h-5 w-16 rounded bg-neutral-100" /></td>
-                  <td className="px-4 py-2.5"><div className="h-7 w-7 rounded bg-neutral-100" /></td>
-                </tr>
+                <TableRow key={i}>
+                  <TableCell className="px-4 py-2.5"><Skeleton className="h-4 w-4" /></TableCell>
+                  <TableCell className="px-4 py-2.5"><Skeleton className="h-5 w-24" /></TableCell>
+                  <TableCell className="px-4 py-2.5"><Skeleton className="h-5 w-36" /></TableCell>
+                  <TableCell className="px-4 py-2.5"><Skeleton className="h-5 w-28" /></TableCell>
+                  <TableCell className="px-4 py-2.5"><Skeleton className="h-5 w-32" /></TableCell>
+                  <TableCell className="px-4 py-2.5"><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell className="px-4 py-2.5"><Skeleton className="h-7 w-7" /></TableCell>
+                </TableRow>
               ))
             ) : jobs.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-xs text-neutral-500">
+              <TableRow>
+                <TableCell colSpan={7} className="px-4 py-8 text-center text-xs text-neutral-500">
                   No jobs found.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               jobs.map((job) => {
                 const selected = selectedJobIds.has(job.job_id);
                 return (
-                <tr
+                <TableRow
                   key={job.job_id}
-                  className={selected ? 'bg-neutral-50' : 'hover:bg-neutral-50'}
+                  className={cn(selected ? 'bg-neutral-50' : 'hover:bg-neutral-50')}
                 >
-                  <td className="px-4 py-2.5">
+                  <TableCell className="px-4 py-2.5">
                     <input
                       type="checkbox"
                       aria-label={`Select job ${job.job_id}`}
@@ -301,44 +314,45 @@ export default function Jobs() {
                       onChange={() => toggleJobSelection(job.job_id)}
                       className="h-4 w-4 rounded border-neutral-300 text-neutral-950 focus:ring-neutral-950"
                     />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 px-2 py-0.5 text-[11px] font-medium capitalize text-neutral-700">
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5">
+                    <Badge variant="outline" className="gap-1.5 capitalize">
                       <StatusIcon status={job.status} />
                       {job.status}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5">
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5">
                     <span className="font-mono text-xs font-medium text-neutral-950">
                       {job.job_id}
                     </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-neutral-600">{job.graph_id}</td>
-                  <td className="px-4 py-2.5 text-xs text-neutral-500">
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5 text-xs text-neutral-600">{job.graph_id}</TableCell>
+                  <TableCell className="px-4 py-2.5 text-xs text-neutral-500">
                     {job.submitted_at ? format(new Date(job.submitted_at), 'MMM d, HH:mm:ss') : 'Unknown'}
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-neutral-600">
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5 text-xs text-neutral-600">
                     {isServiceJob(job) ? '∞' : `${job.active_executors ?? 0} / ${job.executor_count ?? 0}`}
-                  </td>
-                  <td className="px-4 py-2.5">
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5">
                     <Tooltip content="Open job details and live progress.">
-                      <Link
-                        to={`/jobs/${job.job_id}`}
-                        aria-label={`View details for ${job.job_id}`}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-neutral-200 text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                      </Link>
+                      <Button asChild variant="outline" size="icon" className="h-7 w-7 text-neutral-600">
+                        <Link
+                          to={`/jobs/${job.job_id}`}
+                          aria-label={`View details for ${job.job_id}`}
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
                     </Tooltip>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
                 );
               })
             )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -1,7 +1,7 @@
 import type { ComponentPropsWithoutRef, ElementRef, ReactNode } from 'react';
 import { forwardRef } from 'react';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
-import clsx from 'clsx';
+import { cn } from '../../lib/utils';
 
 const TooltipProvider = TooltipPrimitive.Provider;
 const TooltipRoot = TooltipPrimitive.Root;
@@ -15,7 +15,7 @@ const TooltipContent = forwardRef<
     <TooltipPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
-      className={clsx(
+      className={cn(
         'z-50 max-w-xs rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-xs leading-5 text-neutral-700 shadow-md',
         className,
       )}
@@ -42,4 +42,4 @@ export function Tooltip({
   );
 }
 
-export { TooltipProvider };
+export { TooltipProvider, TooltipRoot, TooltipTrigger, TooltipContent };

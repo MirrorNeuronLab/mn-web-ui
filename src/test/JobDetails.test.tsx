@@ -188,7 +188,7 @@ describe('JobDetails Component', () => {
     expect(screen.getByText(/Step One/)).toBeInTheDocument();
 
     // Switch to Agents tab; list view is the default, graph view is available there.
-    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
     expect(screen.getByText('agent-1')).toBeInTheDocument();
     expect(screen.getByText('executor / worker')).toBeInTheDocument();
 
@@ -563,7 +563,7 @@ describe('JobDetails Component', () => {
       expect(screen.getByText('test-job-1')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
     expect(screen.getByText('agent-1')).toBeInTheDocument();
   });
 
@@ -608,7 +608,7 @@ describe('JobDetails Component', () => {
       expect(screen.getByText('test-job-1')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
     expect(screen.getByText('video_monitor')).toBeInTheDocument();
     expect(screen.queryByText('Raw Planner')).not.toBeInTheDocument();
     expect(screen.getByText('executor / worker')).toBeInTheDocument();
@@ -692,7 +692,7 @@ describe('JobDetails Component', () => {
     await waitFor(() => {
       expect(screen.getByText('video-job-1')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
 
     expect(screen.getByText('video_monitor')).toBeInTheDocument();
     expect(screen.queryByText('Workflow Manifest Executor')).not.toBeInTheDocument();
@@ -735,7 +735,7 @@ describe('JobDetails Component', () => {
       expect(screen.getByText('test-job-1')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Progress' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
     expect(screen.queryByText(/Loading workflow progress/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(/Runtime Agents/).length).toBeGreaterThan(0);
     expect(screen.getByText('agent-1')).toBeInTheDocument();
@@ -836,7 +836,7 @@ describe('JobDetails Component', () => {
     await waitFor(() => {
       expect(screen.getByText('test-job-1')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Progress' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
 
     expect(screen.getByText(/0\/2/)).toBeInTheDocument();
     expect(screen.getAllByText('idle').length).toBeGreaterThan(0);
@@ -942,7 +942,7 @@ describe('JobDetails Component', () => {
     await waitFor(() => {
       expect(screen.getByText('test-job-1')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Progress' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
 
     expect(screen.getByText(/2 active steps/)).toBeInTheDocument();
     expect(screen.getByText(/2\. Income/)).toBeInTheDocument();

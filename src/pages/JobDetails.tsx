@@ -12,6 +12,19 @@ import ObservabilitySummaryPanel, { type ObservabilityArtifactRef } from '../com
 import { confirmActionToast } from '../components/ui/confirm-toast';
 import { Tooltip } from '../components/ui/tooltip';
 import { buildDisplayGraph } from '../utils/agentGraph';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Card } from '../components/ui/card';
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table';
+import { cn } from '../lib/utils';
 
 const StatusIcon = ({ status }: { status: string }) => {
   switch (status) {
@@ -44,11 +57,11 @@ type WebUiInfo = {
 };
 
 const SummaryCard = ({ icon, value, label }: { icon: ReactNode; value: string | number; label: string }) => (
-  <div className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm">
+  <Card className="p-3">
     <div className="mb-2 text-neutral-400">{icon}</div>
     <div className="text-xl font-semibold leading-6 text-neutral-950">{value}</div>
     <div className="mt-0.5 text-[11px] font-medium leading-4 text-neutral-500">{label}</div>
-  </div>
+  </Card>
 );
 
 const observabilitySummaryFrom = (
@@ -612,18 +625,22 @@ export default function JobDetails() {
     });
   };
 
+  const selectActiveTab = (value: 'progress' | 'agents' | 'logs') => {
+    setActiveTab(value);
+  };
+
   return (
     <div className="flex h-full flex-col space-y-4 font-sans">
       <div className="grid shrink-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_560px]">
-        <div className="flex items-start justify-between rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+        <Card className="flex items-start justify-between p-4">
         <div>
           <div className="mb-2 flex items-center space-x-3">
             <h2 className="text-lg font-bold leading-6 text-neutral-950">{jobId}</h2>
             {displayStatus ? (
-              <div className={`flex items-center rounded-full border px-2.5 py-0.5 ${statusClass(displayStatus)}`}>
+              <Badge variant="outline" className={cn('gap-1.5 capitalize', statusClass(displayStatus))}>
                 <StatusIcon status={displayStatus} />
-                <span className="ml-1.5 text-xs font-medium capitalize">{displayStatus}</span>
-              </div>
+                {displayStatus}
+              </Badge>
             ) : null}
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs leading-5 text-neutral-500">
@@ -642,44 +659,41 @@ export default function JobDetails() {
         <div className="flex gap-2">
           {webUi ? (
             <Tooltip content={webUi.status ? `${webUi.title} (${webUi.status})` : webUi.title}>
-              <a
-                href={webUi.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center rounded-md border border-neutral-950 bg-neutral-950 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-neutral-800"
-              >
-                <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Web UI
-              </a>
+              <Button asChild size="sm">
+                <a href={webUi.url} target="_blank" rel="noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5" /> Web UI
+                </a>
+              </Button>
             </Tooltip>
           ) : null}
           {displayStatus === 'running' ? (
             <Tooltip content="Pause this job after confirmation.">
               <span className="inline-flex">
-                <button type="button" disabled={isPausing} onClick={confirmPause} className="flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50">
-                  {isPausing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <PauseCircle className="mr-1.5 h-3.5 w-3.5" />} Pause
-                </button>
+                <Button type="button" variant="outline" size="sm" disabled={isPausing} onClick={confirmPause}>
+                  {isPausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PauseCircle className="h-3.5 w-3.5" />} Pause
+                </Button>
               </span>
             </Tooltip>
           ) : displayStatus === 'paused' ? (
             <Tooltip content="Resume this paused job after confirmation.">
               <span className="inline-flex">
-                <button type="button" disabled={isResuming} onClick={confirmResume} className="flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50">
-                  {isResuming ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-1.5 h-3.5 w-3.5" />} Resume
-                </button>
+                <Button type="button" variant="outline" size="sm" disabled={isResuming} onClick={confirmResume}>
+                  {isResuming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Resume
+                </Button>
               </span>
             </Tooltip>
           ) : null}
           {(displayStatus === 'running' || displayStatus === 'pending' || displayStatus === 'paused') ? (
             <Tooltip content="Cancel this job after confirmation. Running agents will stop.">
               <span className="inline-flex">
-                <button type="button" disabled={isCancelling} onClick={confirmCancel} className="flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-50">
-                  {isCancelling ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Ban className="mr-1.5 h-3.5 w-3.5" />} Cancel
-                </button>
+                <Button type="button" variant="outline" size="sm" disabled={isCancelling} onClick={confirmCancel}>
+                  {isCancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />} Cancel
+                </Button>
               </span>
             </Tooltip>
           ) : null}
         </div>
-      </div>
+      </Card>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SummaryCard icon={<Network className="h-3.5 w-3.5" />} value={`${liveAgentCount}/${totalAgentCount}`} label="Live Agents" />
           <SummaryCard icon={<FileText className="h-3.5 w-3.5" />} value={progressOutputs.length} label="Artifacts" />
@@ -692,14 +706,21 @@ export default function JobDetails() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-neutral-200 shadow-sm flex-1 flex flex-col min-h-[560px] overflow-hidden">
-        <div className="flex border-b border-neutral-200 bg-neutral-50 px-3">
-          <button onClick={() => setActiveTab('progress')} className={`border-b-2 px-3 py-2 text-xs font-medium ${activeTab === 'progress' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Progress</button>
-          <button onClick={() => setActiveTab('agents')} className={`border-b-2 px-3 py-2 text-xs font-medium ${activeTab === 'agents' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Agents</button>
-          <button onClick={() => setActiveTab('logs')} className={`border-b-2 px-3 py-2 text-xs font-medium ${activeTab === 'logs' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-600 hover:text-neutral-950'}`}>Communication Logs</button>
-        </div>
+      <Card className="flex min-h-[560px] flex-1 flex-col overflow-hidden">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => selectActiveTab(value as 'progress' | 'agents' | 'logs')}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="border-b border-neutral-200 bg-neutral-50 px-3">
+            <TabsList className="h-auto rounded-none bg-transparent p-0">
+              <TabsTrigger className="h-10 rounded-none border-b-2 border-transparent bg-transparent px-3 data-[state=active]:border-neutral-950 data-[state=active]:bg-transparent data-[state=active]:shadow-none" value="progress" onClick={() => selectActiveTab('progress')}>Progress</TabsTrigger>
+              <TabsTrigger className="h-10 rounded-none border-b-2 border-transparent bg-transparent px-3 data-[state=active]:border-neutral-950 data-[state=active]:bg-transparent data-[state=active]:shadow-none" value="agents" onClick={() => selectActiveTab('agents')}>Agents</TabsTrigger>
+              <TabsTrigger className="h-10 rounded-none border-b-2 border-transparent bg-transparent px-3 data-[state=active]:border-neutral-950 data-[state=active]:bg-transparent data-[state=active]:shadow-none" value="logs" onClick={() => selectActiveTab('logs')}>Communication Logs</TabsTrigger>
+            </TabsList>
+          </div>
 
-        <div className="flex-1 relative">
+        <div className="relative flex-1">
           {activeTab === 'progress' && (
             <WorkflowProgressPanel
               progress={displayWorkflowProgress}
@@ -714,40 +735,46 @@ export default function JobDetails() {
               <div className="flex items-center justify-end border-b border-neutral-200 bg-white px-3 py-2">
                 <div className="flex overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
                   <Tooltip content="Show agents in a scan-friendly table.">
-                    <button
+                    <Button
                       type="button"
+                      variant={agentView === 'list' ? 'default' : 'ghost'}
+                      size="sm"
                       aria-label="Show agents as list"
                       aria-pressed={agentView === 'list'}
                       onClick={() => setAgentView('list')}
-                      className={`flex h-8 items-center gap-1.5 border-r border-neutral-200 px-2.5 text-[11px] font-medium ${agentView === 'list' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                      className="rounded-none border-r border-neutral-200"
                     >
                       <List className="h-3.5 w-3.5" />
                       List
-                    </button>
+                    </Button>
                   </Tooltip>
                   <Tooltip content="Show agents as a workflow graph.">
-                    <button
+                    <Button
                       type="button"
+                      variant={agentView === 'graph' ? 'default' : 'ghost'}
+                      size="sm"
                       aria-label="Show agents as graph"
                       aria-pressed={agentView === 'graph'}
                       onClick={() => setAgentView('graph')}
-                      className={`flex h-8 items-center gap-1.5 border-r border-neutral-200 px-2.5 text-[11px] font-medium ${agentView === 'graph' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                      className="rounded-none border-r border-neutral-200"
                     >
                       <Network className="h-3.5 w-3.5" />
                       Graph
-                    </button>
+                    </Button>
                   </Tooltip>
                   <Tooltip content="Show the raw graph model as JSON.">
-                    <button
+                    <Button
                       type="button"
+                      variant={agentView === 'code' ? 'default' : 'ghost'}
+                      size="sm"
                       aria-label="Show agents as code"
                       aria-pressed={agentView === 'code'}
                       onClick={() => setAgentView('code')}
-                      className={`flex h-8 items-center gap-1.5 px-2.5 text-[11px] font-medium ${agentView === 'code' ? 'bg-neutral-950 text-white' : 'bg-white text-neutral-600 hover:bg-neutral-50'}`}
+                      className="rounded-none"
                     >
                       <Code2 className="h-3.5 w-3.5" />
                       Code
-                    </button>
+                    </Button>
                   </Tooltip>
                 </div>
               </div>
@@ -772,30 +799,30 @@ export default function JobDetails() {
                         No agents reported yet.
                       </div>
                     ) : (
-                      <table className="w-full border-collapse text-left">
-                        <thead className="bg-neutral-50 sticky top-0">
-                          <tr className="text-[11px] text-neutral-500">
-                            <th className="px-4 py-2 font-medium">Agent ID</th>
-                            <th className="px-4 py-2 font-medium">Type</th>
-                            <th className="px-4 py-2 font-medium">Status</th>
-                            <th className="px-4 py-2 font-medium">Messages</th>
-                            <th className="px-4 py-2 font-medium">Node</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-neutral-100">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-neutral-50">
+                          <TableRow className="text-[11px] text-neutral-500">
+                            <TableHead className="px-4 py-2">Agent ID</TableHead>
+                            <TableHead className="px-4 py-2">Type</TableHead>
+                            <TableHead className="px-4 py-2">Status</TableHead>
+                            <TableHead className="px-4 py-2">Messages</TableHead>
+                            <TableHead className="px-4 py-2">Node</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {displayAgents.map((agent, i) => (
-                            <tr key={agent.id || i} className="hover:bg-neutral-50">
-                              <td className="px-4 py-2 font-mono text-xs font-medium text-neutral-950">{agent.label || agent.id || 'unknown'}</td>
-                              <td className="px-4 py-2 text-xs text-neutral-600">{agent.agent_type || 'unknown'} / {agent.type || 'unknown'}</td>
-                              <td className="px-4 py-2 text-xs">
-                                <span className={`inline-flex rounded-full border px-1.5 py-0.5 text-[11px] font-medium capitalize ${statusClass(agent.status)}`}>{agent.status || 'unknown'}</span>
-                              </td>
-                              <td className="px-4 py-2 text-xs text-neutral-600">{agent.processed_messages ?? 0} processed, {agent.mailbox_depth ?? 0} in queue</td>
-                              <td className="px-4 py-2 text-xs text-neutral-500">{agent.assigned_node || 'unassigned'}</td>
-                            </tr>
+                            <TableRow key={agent.id || i} className="hover:bg-neutral-50">
+                              <TableCell className="px-4 py-2 font-mono text-xs font-medium text-neutral-950">{agent.label || agent.id || 'unknown'}</TableCell>
+                              <TableCell className="px-4 py-2 text-xs text-neutral-600">{agent.agent_type || 'unknown'} / {agent.type || 'unknown'}</TableCell>
+                              <TableCell className="px-4 py-2 text-xs">
+                                <Badge variant="outline" className={cn('capitalize', statusClass(agent.status))}>{agent.status || 'unknown'}</Badge>
+                              </TableCell>
+                              <TableCell className="px-4 py-2 text-xs text-neutral-600">{agent.processed_messages ?? 0} processed, {agent.mailbox_depth ?? 0} in queue</TableCell>
+                              <TableCell className="px-4 py-2 text-xs text-neutral-500">{agent.assigned_node || 'unassigned'}</TableCell>
+                            </TableRow>
                           ))}
-                        </tbody>
-                      </table>
+                        </TableBody>
+                      </Table>
                     )}
                   </div>
                 )}
@@ -817,7 +844,8 @@ export default function JobDetails() {
             </div>
           )}
         </div>
-      </div>
+        </Tabs>
+      </Card>
     </div>
   );
 }

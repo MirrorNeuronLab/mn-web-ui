@@ -53,9 +53,9 @@ describe('RunJob Component', () => {
   it('renders run a job with source tabs', async () => {
     renderRunJob();
     expect(screen.getByText('Run a job')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Blueprint' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'File system path' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'ZIP bundle' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Blueprint' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'File system path' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'ZIP bundle' })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
@@ -89,7 +89,7 @@ describe('RunJob Component', () => {
     vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-path-123', id: 'job-path-123', status: 'pending' });
     renderRunJob();
 
-    fireEvent.click(screen.getByRole('button', { name: 'File system path' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'File system path' }));
     fireEvent.change(screen.getByLabelText('Blueprint folder path'), {
       target: { value: '/Users/homer/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant' },
     });
@@ -119,7 +119,7 @@ describe('RunJob Component', () => {
     vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-zip-123', id: 'job-zip-123', status: 'pending' });
 
     renderRunJob();
-    fireEvent.click(screen.getByRole('button', { name: 'ZIP bundle' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'ZIP bundle' }));
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['dummy content'], 'bundle.zip', { type: 'application/zip' });
