@@ -49,7 +49,16 @@ describe('Dashboard Component', () => {
             cpu: { logical_processors: 10, load_ratio: 0.12 },
             memory: { total_bytes: 17179869184, available_bytes: 8589934592 },
             devices: [
-              { kind: 'gpu', type: 'nvidia/gpu', vendor: 'nvidia', driver: 'cuda', memory_total_mb: 12288 }
+              {
+                kind: 'gpu',
+                type: 'nvidia/gpu',
+                vendor: 'nvidia',
+                driver: 'cuda',
+                api: 'cuda',
+                api_version: '12.4',
+                gpu_type: 'nvidia-cuda-12.4',
+                memory_total_mb: 12288,
+              }
             ]
           },
           executor_pools: {
@@ -84,7 +93,7 @@ describe('Dashboard Component', () => {
     expect(screen.getAllByText('GPU').length).toBeGreaterThan(1);
     expect(screen.getAllByText('1 GPU').length).toBeGreaterThan(1);
     expect(screen.getByText('Linux')).toBeInTheDocument();
-    expect(screen.getAllByText('NVIDIA').length).toBeGreaterThan(0);
+    expect(screen.getByTitle('NVIDIA CUDA 12.4')).toBeInTheDocument();
     
     // Check if node details are rendered
     expect(screen.getByText('mn1@127.0.0.1')).toBeInTheDocument();
@@ -110,6 +119,8 @@ describe('Dashboard Component', () => {
                 type: 'apple/gpu',
                 vendor: 'apple',
                 driver: 'metal',
+                api: 'metal',
+                gpu_type: 'mac-metal',
                 memory_total_mb: 32768,
                 capabilities: ['gpu', 'apple', 'metal', 'unified_memory'],
               },
@@ -127,7 +138,7 @@ describe('Dashboard Component', () => {
     await waitFor(() => expect(screen.getByText('Runtime Resources')).toBeInTheDocument());
 
     expect(screen.getByText('macOS')).toBeInTheDocument();
-    expect(screen.getAllByText('Apple Metal').length).toBeGreaterThan(0);
+    expect(screen.getByTitle('Mac Metal')).toBeInTheDocument();
     expect(screen.getAllByText('32 / 32 GB').length).toBeGreaterThan(1);
   });
 

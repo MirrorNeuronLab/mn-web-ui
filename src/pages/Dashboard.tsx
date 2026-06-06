@@ -214,7 +214,7 @@ export default function Dashboard() {
           label="GPU"
           value={`${resources.gpuCount.toLocaleString()} GPU${resources.gpuCount === 1 ? '' : 's'}`}
           headline={resources.gpuCount ? 'Runtime GPU devices' : 'No GPUs reported'}
-          detail={resources.gpuLabels.length ? resources.gpuLabels.join(', ') : 'No GPU type reported'}
+          detail={`${resources.nodeCount} runtime node${resources.nodeCount === 1 ? '' : 's'} reporting`}
         />
       </div>
 
@@ -351,21 +351,45 @@ type IdentityBadge = {
   label: string;
   title: string;
   icon: typeof Server;
+  gpuVendor?: 'nvidia' | 'amd' | 'intel' | 'mac';
 };
 
 function NodeIdentityBadge({ badge }: { badge: IdentityBadge }) {
   const Icon = badge.icon;
+  const isGpuBadge = Boolean(badge.gpuVendor);
   return (
     <Tooltip content={badge.title}>
       <span
-        className="inline-flex h-5 items-center gap-1 rounded border border-neutral-200 bg-neutral-50 px-1.5 text-[11px] font-medium text-neutral-600"
+        className={cn(
+          'inline-flex h-5 items-center justify-center rounded border border-neutral-200 bg-neutral-50 text-[11px] font-medium text-neutral-600',
+          isGpuBadge ? 'w-5' : 'gap-1 px-1.5',
+        )}
+        aria-label={badge.title}
         title={badge.title}
       >
-        <Icon className="h-3 w-3" />
-        {badge.label}
+        {isGpuBadge ? <GpuBadgeIcon badge={badge} /> : (
+          <>
+            <Icon className="h-3 w-3" />
+            {badge.label}
+          </>
+        )}
       </span>
     </Tooltip>
   );
+}
+
+function GpuBadgeIcon({ badge }: { badge: IdentityBadge }) {
+  if (badge.gpuVendor === 'mac') return <Apple className="h-3 w-3" aria-hidden="true" />;
+
+  const mark = badge.gpuVendor === 'nvidia'
+    ? 'N'
+    : badge.gpuVendor === 'amd'
+      ? 'A'
+      : badge.gpuVendor === 'intel'
+        ? 'I'
+        : '';
+
+  return <span aria-hidden="true" className="text-[10px] leading-none">{mark}</span>;
 }
 
 function AddClusterNodeDialog({
@@ -544,7 +568,6 @@ function summarizeRuntimeResources(summary: SystemSummary | null) {
   let memoryAvailableBytes = 0;
   let gpuCount = 0;
   let gpuMemoryTotalMb = 0;
-  const gpuLabels = new Set<string>();
 
   nodes.forEach((node) => {
     const hardware = recordValue(node.hardware);
@@ -567,7 +590,6 @@ function summarizeRuntimeResources(summary: SystemSummary | null) {
     gpuCount += gpuDevices.length;
     gpuDevices.forEach((device) => {
       gpuMemoryTotalMb += numberValue(device.memory_total_mb);
-      gpuLabels.add(gpuTypeLabel(device));
     });
   });
 
@@ -582,7 +604,6 @@ function summarizeRuntimeResources(summary: SystemSummary | null) {
     memoryUsedRatio: memoryTotalBytes > 0 ? memoryUsedBytes / memoryTotalBytes : null,
     gpuCount,
     gpuMemoryTotalMb,
-    gpuLabels: Array.from(gpuLabels).filter((label) => label !== 'GPU'),
   };
 }
 
@@ -602,19 +623,16 @@ function nodeResourceMetrics(node: SystemSummary['nodes'][number]) {
     {
       label: 'GPU',
       value: `${resources.gpuCount.toLocaleString()} GPU${resources.gpuCount === 1 ? '' : 's'}`,
-      detail: resources.gpuLabels.length ? resources.gpuLabels.join(', ') : 'No GPU type reported',
+      detail: resources.gpuCount ? 'Runtime GPU devices' : 'No GPUs reported',
     },
   ];
 }
 
 function nodeIdentityBadges(node: SystemSummary['nodes'][number]): IdentityBadge[] {
   const osBadge = nodeOsBadge(node);
-  const gpuBadges = gpuTypeLabels(gpuDeviceRecords(recordValue(node))).map((label) => ({
-    id: `gpu-${label.toLowerCase().replace(/\s+/g, '-')}`,
-    label,
-    title: `${label} GPU`,
-    icon: label === 'Apple Metal' ? Apple : CircuitBoard,
-  }));
+  const gpuBadges = gpuDeviceRecords(recordValue(node))
+    .map(gpuIdentityBadge)
+    .filter((badge): badge is IdentityBadge => Boolean(badge));
 
   return [osBadge, ...gpuBadges].filter((badge): badge is IdentityBadge => Boolean(badge));
 }
@@ -670,27 +688,56 @@ function arrayRecords(value: unknown) {
   return Array.isArray(value) ? value.map(recordValue) : [];
 }
 
-function gpuTypeLabels(devices: Record<string, unknown>[]) {
-  const labels = new Set<string>();
-  devices.forEach((device) => labels.add(gpuTypeLabel(device)));
-  return Array.from(labels).filter((label) => label !== 'GPU');
+function gpuIdentityBadge(device: Record<string, unknown>): IdentityBadge | null {
+  const vendor = gpuVendorKey(device);
+  if (!vendor) return null;
+  const title = gpuDisplayName(device);
+  return {
+    id: `gpu-${vendor}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    label: title,
+    title,
+    icon: vendor === 'mac' ? Apple : CircuitBoard,
+    gpuVendor: vendor,
+  };
 }
 
-function gpuTypeLabel(device: Record<string, unknown>) {
+function gpuVendorKey(device: Record<string, unknown>): IdentityBadge['gpuVendor'] | null {
+  const text = gpuSearchText(device);
+  if (text.includes('apple') || text.includes('metal') || text.includes('mac-metal')) return 'mac';
+  if (text.includes('nvidia') || text.includes('cuda')) return 'nvidia';
+  if (text.includes('amd') || text.includes('radeon') || text.includes('rocm')) return 'amd';
+  if (text.includes('intel')) return 'intel';
+  return null;
+}
+
+function gpuDisplayName(device: Record<string, unknown>) {
+  const text = gpuSearchText(device);
+  const gpuType = stringValue(device.gpu_type).toLowerCase();
+  const apiVersion = stringValue(device.api_version) || versionFromGpuType(gpuType);
+
+  if (text.includes('apple') || text.includes('metal') || gpuType === 'mac-metal') return 'Mac Metal';
+  if (text.includes('nvidia') || text.includes('cuda')) return `NVIDIA CUDA${apiVersion ? ` ${apiVersion}` : ''}`;
+  if (text.includes('amd') || text.includes('radeon') || text.includes('rocm')) return `AMD ROCm${apiVersion ? ` ${apiVersion}` : ''}`;
+  if (text.includes('intel')) return 'Intel GPU';
+  return 'GPU';
+}
+
+function gpuSearchText(device: Record<string, unknown>) {
   const capabilities = Array.isArray(device.capabilities) ? device.capabilities.map(stringValue).join(' ') : '';
-  const text = [
+  return [
+    stringValue(device.gpu_type),
     stringValue(device.vendor),
     stringValue(device.type),
     stringValue(device.driver),
+    stringValue(device.api),
     stringValue(device.name),
     capabilities,
   ].join(' ').toLowerCase();
+}
 
-  if (text.includes('apple') || text.includes('metal')) return 'Apple Metal';
-  if (text.includes('nvidia') || text.includes('cuda')) return 'NVIDIA';
-  if (text.includes('amd') || text.includes('radeon') || text.includes('rocm')) return 'AMD';
-  if (text.includes('intel')) return 'Intel';
-  return 'GPU';
+function versionFromGpuType(gpuType: string) {
+  const match = gpuType.match(/(?:nvidia-cuda|amd-rocm)-(.+)$/);
+  return match?.[1] || '';
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
