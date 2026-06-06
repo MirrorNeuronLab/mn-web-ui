@@ -644,7 +644,7 @@ export default function JobDetails() {
             ) : null}
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs leading-5 text-neutral-500">
-            {graphId ? <span>Graph: <strong className="text-neutral-700">{graphId}</strong></span> : null}
+            {graphId ? <span>Workflow: <strong className="text-neutral-700">{graphId}</strong></span> : null}
             {submittedAt ? <span>Submitted: <strong className="text-neutral-700">{submittedAt}</strong></span> : null}
             {webUi ? (
               <span>

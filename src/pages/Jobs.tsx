@@ -181,13 +181,7 @@ export default function Jobs() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b border-neutral-200 px-5 py-4">
-        <div>
-          <h2 className="font-semibold tracking-tight text-neutral-950">Jobs</h2>
-          <p className="mt-1 text-xs text-neutral-500">
-            {showTerminalJobs ? 'Live and completed job runs.' : 'Live job runs only.'} Select rows for bulk actions or open details explicitly.
-          </p>
-        </div>
+      <CardHeader className="flex flex-row items-center justify-end gap-3 space-y-0 border-b border-neutral-200 px-5 py-4">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -273,7 +267,7 @@ export default function Jobs() {
               </TableHead>
               <TableHead className="px-4 py-2">Status</TableHead>
               <TableHead className="px-4 py-2">Job ID</TableHead>
-              <TableHead className="px-4 py-2">Graph ID</TableHead>
+              <TableHead className="px-4 py-2">Workflow ID</TableHead>
               <TableHead className="px-4 py-2">Submitted</TableHead>
               <TableHead className="px-4 py-2">Executors</TableHead>
               <TableHead className="px-4 py-2">Details</TableHead>

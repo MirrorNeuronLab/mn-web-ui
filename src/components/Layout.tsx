@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Boxes, LayoutDashboard, List, Play, Plus } from 'lucide-react';
 import mnLogo from '../assets/mn-logo.svg';
 import { Button } from './ui/button';
@@ -12,6 +12,9 @@ const navItems = [
 ];
 
 export default function Layout() {
+  const location = useLocation();
+  const title = pageTitle(location.pathname);
+
   return (
     <div className="flex h-screen bg-white text-neutral-950">
       <aside className="flex w-64 flex-col border-r border-neutral-200 bg-neutral-50">
@@ -52,7 +55,7 @@ export default function Layout() {
       </aside>
       <main className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center border-b border-neutral-200 bg-white px-6">
-          <h1 className="text-lg font-semibold tracking-tight text-neutral-950">Control Panel</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-neutral-950">{title}</h1>
         </header>
         <div className="flex-1 overflow-auto bg-white p-5">
           <Outlet />
@@ -60,4 +63,14 @@ export default function Layout() {
       </main>
     </div>
   );
+}
+
+function pageTitle(pathname: string) {
+  if (pathname === '/') return 'Dashboard';
+  if (pathname === '/jobs') return 'Jobs';
+  if (pathname.startsWith('/jobs/')) return 'Job details';
+  if (pathname === '/models') return 'Models';
+  if (pathname === '/run') return 'Run a job';
+  if (pathname.startsWith('/runs/')) return 'Blueprint UI';
+  return 'MirrorNeuron';
 }

@@ -96,11 +96,7 @@ export default function Models() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex flex-col gap-3 space-y-0 border-b border-neutral-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="font-semibold tracking-tight text-neutral-950">Models</h2>
-            <p className="mt-1 text-xs text-neutral-500">Installed Docker Model Runner models available to blueprints.</p>
-          </div>
+        <CardHeader className="flex flex-row items-center justify-end gap-3 space-y-0 border-b border-neutral-200 px-5 py-4">
           <Tooltip content="Refresh installed model status.">
             <Button
               type="button"

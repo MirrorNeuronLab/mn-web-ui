@@ -6,7 +6,7 @@ import { CheckCircle, FileArchive, FolderInput, Loader2, Play, UploadCloud, Work
 import { confirmActionToast } from '../components/ui/confirm-toast';
 import { Tooltip } from '../components/ui/tooltip';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent } from '../components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Progress } from '../components/ui/progress';
@@ -359,15 +359,8 @@ export default function RunJob() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="space-y-4">
       <Card className="overflow-hidden">
-        <CardHeader className="border-b border-neutral-200 bg-neutral-50/50 px-5 py-3">
-          <CardTitle>Run a job</CardTitle>
-          <CardDescription>
-            Pick one source. The API validates with <span className="font-mono">mn blueprint validate</span>, then launches with <span className="font-mono">mn blueprint run --detached</span>.
-          </CardDescription>
-        </CardHeader>
-
         <CardContent className="p-0">
           <Tabs
             value={mode}
@@ -468,7 +461,7 @@ export default function RunJob() {
                         <div>
                           <h3 className="text-xs font-medium text-neutral-950">Bundle uploaded</h3>
                           <p className="mt-1 text-xs text-neutral-700">
-                            Graph ID: <strong className="font-mono">{bundleData.manifest.graph_id || bundleData.manifest.job_name || 'bundle'}</strong>
+                            Workflow ID: <strong className="font-mono">{bundleData.manifest.graph_id || bundleData.manifest.job_name || 'bundle'}</strong>
                           </p>
                           <p className="mt-1 font-mono text-xs text-neutral-500">{bundleData.bundle_path}</p>
                         </div>

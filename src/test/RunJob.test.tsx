@@ -52,7 +52,6 @@ describe('RunJob Component', () => {
 
   it('renders run a job with source tabs', async () => {
     renderRunJob();
-    expect(screen.getByText('Run a job')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Blueprint' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'File system path' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'ZIP bundle' })).toBeInTheDocument();

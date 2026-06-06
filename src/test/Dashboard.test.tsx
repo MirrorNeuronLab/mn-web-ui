@@ -1,16 +1,14 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 import Dashboard from '../pages/Dashboard';
-import { addClusterNode, fetchJobs, fetchSystemSummary, removeClusterNode } from '../api';
+import { fetchJobs, fetchSystemSummary } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
 
 vi.mock('../api', () => ({
   fetchSystemSummary: vi.fn(),
   fetchJobs: vi.fn(),
-  addClusterNode: vi.fn(),
-  removeClusterNode: vi.fn(),
 }));
 
 const renderDashboard = () => render(
@@ -46,7 +44,7 @@ describe('Dashboard Component', () => {
           self: true,
           hardware: {
             platform: { os: 'linux', family: 'unix' },
-            cpu: { logical_processors: 10, load_ratio: 0.12 },
+            cpu: { logical_processors: 10, load_ratio: 0.12, model: 'AMD Ryzen AI Max+ 395' },
             memory: { total_bytes: 17179869184, available_bytes: 8589934592 },
             devices: [
               {
@@ -57,6 +55,8 @@ describe('Dashboard Component', () => {
                 api: 'cuda',
                 api_version: '12.4',
                 gpu_type: 'nvidia-cuda-12.4',
+                model: 'NVIDIA RTX 4090',
+                name: 'NVIDIA RTX 4090',
                 memory_total_mb: 12288,
               }
             ]
@@ -93,6 +93,8 @@ describe('Dashboard Component', () => {
     expect(screen.getAllByText('GPU').length).toBeGreaterThan(1);
     expect(screen.getAllByText('1 GPU').length).toBeGreaterThan(1);
     expect(screen.getByText('Linux')).toBeInTheDocument();
+    expect(screen.getByText('NVIDIA')).toBeInTheDocument();
+    expect(screen.getByTitle('CPU: AMD Ryzen AI Max+ 395 | GPU: NVIDIA RTX 4090')).toBeInTheDocument();
     expect(screen.getByTitle('NVIDIA CUDA 12.4')).toBeInTheDocument();
     
     // Check if node details are rendered
@@ -111,7 +113,7 @@ describe('Dashboard Component', () => {
           self: true,
           hardware: {
             platform: { os: 'darwin', family: 'unix' },
-            cpu: { logical_processors: 12, load_ratio: 0.05 },
+            cpu: { logical_processors: 12, load_ratio: 0.05, model: 'Apple M4 Max' },
             memory: { total_bytes: 34359738368, available_bytes: 21474836480 },
             devices: [
               {
@@ -121,6 +123,8 @@ describe('Dashboard Component', () => {
                 driver: 'metal',
                 api: 'metal',
                 gpu_type: 'mac-metal',
+                model: 'Apple M4 Max',
+                name: 'Apple M4 Max',
                 memory_total_mb: 32768,
                 capabilities: ['gpu', 'apple', 'metal', 'unified_memory'],
               },
@@ -135,10 +139,12 @@ describe('Dashboard Component', () => {
 
     renderDashboard();
 
-    await waitFor(() => expect(screen.getByText('Runtime Resources')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('mirror_neuron@mac.local')).toBeInTheDocument());
 
     expect(screen.getByText('macOS')).toBeInTheDocument();
-    expect(screen.getByTitle('Mac Metal')).toBeInTheDocument();
+    expect(screen.getByText('Apple Metal')).toBeInTheDocument();
+    expect(screen.getByTitle('CPU: Apple M4 Max | GPU: Apple M4 Max')).toBeInTheDocument();
+    expect(screen.getByTitle('Apple Metal')).toBeInTheDocument();
     expect(screen.getAllByText('32 / 32 GB').length).toBeGreaterThan(1);
   });
 
@@ -171,7 +177,7 @@ describe('Dashboard Component', () => {
     expect(screen.getByText('1 cluster node connected')).toBeInTheDocument();
   });
 
-  it('adds a remote node with host and token', async () => {
+  it('omits cluster add and remove controls from runtime resources', async () => {
     const localNode = {
       name: 'mn1@127.0.0.1',
       connected_nodes: ['mn1@127.0.0.1'],
@@ -185,105 +191,14 @@ describe('Dashboard Component', () => {
       executor_pools: {},
     };
 
-    vi.mocked(fetchSystemSummary)
-      .mockResolvedValueOnce({ nodes: [localNode], jobs: [] })
-      .mockResolvedValue({ nodes: [localNode, remoteNode], jobs: [] });
+    vi.mocked(fetchSystemSummary).mockResolvedValue({ nodes: [localNode, remoteNode], jobs: [] });
     vi.mocked(fetchJobs).mockResolvedValue([]);
-    vi.mocked(addClusterNode).mockResolvedValue({
-      ok: true,
-      host: '10.0.0.42',
-      node_name: 'mirror_neuron@10.0.0.42',
-      status: 'connected',
-      message: 'mirror_neuron@10.0.0.42 was added to this box.',
-    });
 
     renderDashboard();
 
-    await waitFor(() => expect(screen.getByText('Runtime Resources')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /add node/i }));
-
-    const dialog = screen.getByRole('dialog', { name: /add node to this box/i });
-    fireEvent.change(within(dialog).getByRole('textbox', { name: /remote host or ip/i }), {
-      target: { value: '10.0.0.42' },
-    });
-    fireEvent.change(within(dialog).getByLabelText(/token from mn node expose/i), {
-      target: { value: 'join-token-1' },
-    });
-    fireEvent.click(within(dialog).getByRole('button', { name: /^add node$/i }));
-    expect(await screen.findByText('Add this peer node?')).toBeInTheDocument();
-    expect(addClusterNode).not.toHaveBeenCalled();
-
-    const addNodeButtons = screen.getAllByRole('button', { name: /^add node$/i });
-    fireEvent.click(addNodeButtons[addNodeButtons.length - 1]);
-
-    await waitFor(() => expect(addClusterNode).toHaveBeenCalledWith({ host: '10.0.0.42', token: 'join-token-1' }));
+    await waitFor(() => expect(screen.getByText('mn1@127.0.0.1')).toBeInTheDocument());
     await waitFor(() => expect(screen.getByText('mirror_neuron@10.0.0.42')).toBeInTheDocument());
-  });
-
-  it('reveals the token without changing the separate host and token inputs', async () => {
-    vi.mocked(fetchSystemSummary).mockResolvedValue({ nodes: [], jobs: [] });
-    vi.mocked(fetchJobs).mockResolvedValue([]);
-
-    renderDashboard();
-
-    await waitFor(() => expect(screen.getByText('Runtime Resources')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /add node/i }));
-
-    const dialog = screen.getByRole('dialog', { name: /add node to this box/i });
-    const hostInput = within(dialog).getByRole('textbox', { name: /remote host or ip/i });
-    fireEvent.change(hostInput, {
-      target: { value: '192.168.4.173' },
-    });
-
-    const tokenInput = within(dialog).getByLabelText(/token from mn node expose/i);
-    fireEvent.change(tokenInput, {
-      target: { value: 'mn-test-token' },
-    });
-
-    expect(hostInput).toHaveValue('192.168.4.173');
-    expect(tokenInput).toHaveValue('mn-test-token');
-    expect(tokenInput).toHaveAttribute('type', 'password');
-
-    fireEvent.click(within(dialog).getByRole('button', { name: /show token/i }));
-    expect(tokenInput).toHaveAttribute('type', 'text');
-    expect(within(dialog).getByRole('button', { name: /hide token/i })).toBeInTheDocument();
-  });
-
-  it('removes a peer node from the cluster list', async () => {
-    const localNode = {
-      name: 'mn1@127.0.0.1',
-      connected_nodes: ['mn1@127.0.0.1'],
-      self: true,
-      executor_pools: {},
-    };
-    const remoteNode = {
-      name: 'mirror_neuron@10.0.0.42',
-      connected_nodes: ['mn1@127.0.0.1'],
-      self: false,
-      executor_pools: {},
-    };
-
-    vi.mocked(fetchSystemSummary)
-      .mockResolvedValueOnce({ nodes: [localNode, remoteNode], jobs: [] })
-      .mockResolvedValue({ nodes: [localNode], jobs: [] });
-    vi.mocked(fetchJobs).mockResolvedValue([]);
-    vi.mocked(removeClusterNode).mockResolvedValue({
-      ok: true,
-      node_name: 'mirror_neuron@10.0.0.42',
-      status: 'disconnected',
-      message: 'mirror_neuron@10.0.0.42 was removed from this box.',
-    });
-
-    renderDashboard();
-
-    await waitFor(() => expect(screen.getByText('mirror_neuron@10.0.0.42')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /remove/i }));
-    expect(await screen.findByText('Remove this peer node?')).toBeInTheDocument();
-    expect(removeClusterNode).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: /remove node/i }));
-
-    await waitFor(() => expect(removeClusterNode).toHaveBeenCalledWith('mirror_neuron@10.0.0.42'));
-    await waitFor(() => expect(screen.queryByText('mirror_neuron@10.0.0.42')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /add node/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /remove/i })).not.toBeInTheDocument();
   });
 });

@@ -27,10 +27,6 @@ export default function RunUi() {
     <div className="flex min-h-[420px] items-center justify-center">
       <div className="rounded-lg border border-neutral-200 bg-white p-5 text-center shadow-sm">
         <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin text-neutral-500" />
-        <h2 className="font-semibold text-neutral-950">Opening Blueprint UI</h2>
-        <p className="mt-2 max-w-md text-xs text-neutral-600">
-          This route is forwarded from React to the central Gradio dashboard.
-        </p>
         {targetUrl && (
           <a
             className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50"

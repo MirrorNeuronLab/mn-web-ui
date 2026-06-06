@@ -446,7 +446,7 @@ describe('JobDetails Component', () => {
 
     expect(screen.getAllByText('running').length).toBeGreaterThan(0);
     expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Graph:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Workflow:/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Submitted:/i)).not.toBeInTheDocument();
   });
 
