@@ -45,10 +45,11 @@ describe('Dashboard Component', () => {
           connected_nodes: ['mn1@127.0.0.1'],
           self: true,
           hardware: {
+            platform: { os: 'linux', family: 'unix' },
             cpu: { logical_processors: 10, load_ratio: 0.12 },
             memory: { total_bytes: 17179869184, available_bytes: 8589934592 },
             devices: [
-              { kind: 'gpu', type: 'generic/gpu', memory_total_mb: 12288 }
+              { kind: 'gpu', type: 'nvidia/gpu', vendor: 'nvidia', driver: 'cuda', memory_total_mb: 12288 }
             ]
           },
           executor_pools: {
@@ -77,16 +78,57 @@ describe('Dashboard Component', () => {
 
     expect(screen.getByText('Active Jobs')).toBeInTheDocument();
     expect(screen.getAllByText('CPU').length).toBeGreaterThan(1);
-    expect(screen.getByText('10 cores')).toBeInTheDocument();
+    expect(screen.getAllByText('10 cores').length).toBeGreaterThan(1);
     expect(screen.getAllByText('Memory').length).toBeGreaterThan(1);
-    expect(screen.getByText('16 GB')).toBeInTheDocument();
+    expect(screen.getAllByText('12 / 16 GB').length).toBeGreaterThan(1);
     expect(screen.getAllByText('GPU').length).toBeGreaterThan(1);
-    expect(screen.getByText('1 GPU')).toBeInTheDocument();
+    expect(screen.getAllByText('1 GPU').length).toBeGreaterThan(1);
+    expect(screen.getByText('Linux')).toBeInTheDocument();
+    expect(screen.getAllByText('NVIDIA').length).toBeGreaterThan(0);
     
     // Check if node details are rendered
     expect(screen.getByText('mn1@127.0.0.1')).toBeInTheDocument();
     expect(screen.queryByText('Pool: default')).not.toBeInTheDocument();
     expect(screen.queryByText('Capacity')).not.toBeInTheDocument();
+    expect(screen.queryByText('Executor Slots')).not.toBeInTheDocument();
+  });
+
+  it('renders macOS and Apple Metal badges from runtime hardware data', async () => {
+    vi.mocked(fetchSystemSummary).mockResolvedValue({
+      nodes: [
+        {
+          name: 'mirror_neuron@mac.local',
+          connected_nodes: ['mirror_neuron@mac.local'],
+          self: true,
+          hardware: {
+            platform: { os: 'darwin', family: 'unix' },
+            cpu: { logical_processors: 12, load_ratio: 0.05 },
+            memory: { total_bytes: 34359738368, available_bytes: 21474836480 },
+            devices: [
+              {
+                kind: 'gpu',
+                type: 'apple/gpu',
+                vendor: 'apple',
+                driver: 'metal',
+                memory_total_mb: 32768,
+                capabilities: ['gpu', 'apple', 'metal', 'unified_memory'],
+              },
+            ],
+          },
+          executor_pools: {},
+        },
+      ],
+      jobs: [],
+    });
+    vi.mocked(fetchJobs).mockResolvedValue([]);
+
+    renderDashboard();
+
+    await waitFor(() => expect(screen.getByText('Runtime Resources')).toBeInTheDocument());
+
+    expect(screen.getByText('macOS')).toBeInTheDocument();
+    expect(screen.getAllByText('Apple Metal').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('32 / 32 GB').length).toBeGreaterThan(1);
   });
 
   it('uses an empty jobs response instead of stale summary jobs for metrics', async () => {

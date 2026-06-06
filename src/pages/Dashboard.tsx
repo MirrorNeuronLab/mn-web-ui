@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addClusterNode, fetchJobs, fetchSystemSummary, removeClusterNode } from '../api';
 import type { Job, SystemSummary } from '../api';
-import { Activity, BriefcaseBusiness, CircuitBoard, Cpu, Eye, EyeOff, Loader2, MemoryStick, Plus, Server, Trash2 } from 'lucide-react';
+import { Activity, Apple, BriefcaseBusiness, CircuitBoard, Cpu, Eye, EyeOff, Loader2, MemoryStick, Monitor, Plus, Server, Trash2 } from 'lucide-react';
 import { confirmActionToast } from '../components/ui/confirm-toast';
 import { Tooltip } from '../components/ui/tooltip';
 import { Button } from '../components/ui/button';
@@ -205,8 +205,8 @@ export default function Dashboard() {
         <MetricCard
           icon={MemoryStick}
           label="Memory"
-          value={resources.memoryTotalBytes ? formatBytes(resources.memoryTotalBytes) : '0 B'}
-          headline={resources.memoryAvailableBytes ? `${formatBytes(resources.memoryAvailableBytes)} available` : 'No memory available reported'}
+          value={formatMemoryPair(resources.gpuMemoryTotalMb, resources.memoryTotalBytes)}
+          headline="GPU mem / total mem"
           detail={resources.memoryUsedRatio === null ? 'No memory usage reported' : `${formatPercent(resources.memoryUsedRatio)} used`}
         />
         <MetricCard
@@ -214,7 +214,7 @@ export default function Dashboard() {
           label="GPU"
           value={`${resources.gpuCount.toLocaleString()} GPU${resources.gpuCount === 1 ? '' : 's'}`}
           headline={resources.gpuCount ? 'Runtime GPU devices' : 'No GPUs reported'}
-          detail={resources.gpuMemoryTotalMb ? `${formatMegabytes(resources.gpuMemoryTotalMb)} GPU memory` : 'No GPU memory reported'}
+          detail={resources.gpuLabels.length ? resources.gpuLabels.join(', ') : 'No GPU type reported'}
         />
       </div>
 
@@ -245,7 +245,12 @@ export default function Dashboard() {
                   <div className="flex items-center gap-3">
                     <Server className="h-4 w-4 text-neutral-500" />
                     <div>
-                      <div className="text-sm font-medium text-neutral-950">{node.name}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-neutral-950">{node.name}</span>
+                        {nodeIdentityBadges(node).map((badge) => (
+                          <NodeIdentityBadge key={badge.id} badge={badge} />
+                        ))}
+                      </div>
                       <div className="text-xs text-neutral-500">{node.self ? 'Local node' : 'Peer node'}</div>
                     </div>
                   </div>
@@ -338,6 +343,28 @@ function NodeResourceMetric({ label, value, detail }: { label: string; value: st
       <div className="mt-1 text-sm font-medium text-neutral-950">{value}</div>
       <div className="mt-1 text-xs text-neutral-500">{detail}</div>
     </div>
+  );
+}
+
+type IdentityBadge = {
+  id: string;
+  label: string;
+  title: string;
+  icon: typeof Server;
+};
+
+function NodeIdentityBadge({ badge }: { badge: IdentityBadge }) {
+  const Icon = badge.icon;
+  return (
+    <Tooltip content={badge.title}>
+      <span
+        className="inline-flex h-5 items-center gap-1 rounded border border-neutral-200 bg-neutral-50 px-1.5 text-[11px] font-medium text-neutral-600"
+        title={badge.title}
+      >
+        <Icon className="h-3 w-3" />
+        {badge.label}
+      </span>
+    </Tooltip>
   );
 }
 
@@ -517,6 +544,7 @@ function summarizeRuntimeResources(summary: SystemSummary | null) {
   let memoryAvailableBytes = 0;
   let gpuCount = 0;
   let gpuMemoryTotalMb = 0;
+  const gpuLabels = new Set<string>();
 
   nodes.forEach((node) => {
     const hardware = recordValue(node.hardware);
@@ -535,10 +563,11 @@ function summarizeRuntimeResources(summary: SystemSummary | null) {
     memoryTotalBytes += numberValue(memory.total_bytes);
     memoryAvailableBytes += numberValue(memory.available_bytes);
 
-    const gpuDevices = gpuDeviceRecords(hardware);
+    const gpuDevices = gpuDeviceRecords(recordValue(node));
     gpuCount += gpuDevices.length;
     gpuDevices.forEach((device) => {
       gpuMemoryTotalMb += numberValue(device.memory_total_mb);
+      gpuLabels.add(gpuTypeLabel(device));
     });
   });
 
@@ -553,6 +582,7 @@ function summarizeRuntimeResources(summary: SystemSummary | null) {
     memoryUsedRatio: memoryTotalBytes > 0 ? memoryUsedBytes / memoryTotalBytes : null,
     gpuCount,
     gpuMemoryTotalMb,
+    gpuLabels: Array.from(gpuLabels).filter((label) => label !== 'GPU'),
   };
 }
 
@@ -566,28 +596,101 @@ function nodeResourceMetrics(node: SystemSummary['nodes'][number]) {
     },
     {
       label: 'Memory',
-      value: resources.memoryTotalBytes ? formatBytes(resources.memoryTotalBytes) : '0 B',
-      detail: resources.memoryAvailableBytes ? `${formatBytes(resources.memoryAvailableBytes)} available` : 'No available memory reported',
+      value: formatMemoryPair(resources.gpuMemoryTotalMb, resources.memoryTotalBytes),
+      detail: 'GPU mem / total mem',
     },
     {
       label: 'GPU',
       value: `${resources.gpuCount.toLocaleString()} GPU${resources.gpuCount === 1 ? '' : 's'}`,
-      detail: resources.gpuMemoryTotalMb ? `${formatMegabytes(resources.gpuMemoryTotalMb)} memory` : 'No GPU memory reported',
+      detail: resources.gpuLabels.length ? resources.gpuLabels.join(', ') : 'No GPU type reported',
     },
   ];
 }
 
-function gpuDeviceRecords(hardware: Record<string, unknown>) {
-  const devices = Array.isArray(hardware.devices) ? hardware.devices : [];
+function nodeIdentityBadges(node: SystemSummary['nodes'][number]): IdentityBadge[] {
+  const osBadge = nodeOsBadge(node);
+  const gpuBadges = gpuTypeLabels(gpuDeviceRecords(recordValue(node))).map((label) => ({
+    id: `gpu-${label.toLowerCase().replace(/\s+/g, '-')}`,
+    label,
+    title: `${label} GPU`,
+    icon: label === 'Apple Metal' ? Apple : CircuitBoard,
+  }));
+
+  return [osBadge, ...gpuBadges].filter((badge): badge is IdentityBadge => Boolean(badge));
+}
+
+function nodeOsBadge(node: SystemSummary['nodes'][number]): IdentityBadge | null {
+  const nodeRecord = recordValue(node);
+  const hardware = recordValue(nodeRecord.hardware);
+  const platform = { ...recordValue(hardware.platform), ...recordValue(nodeRecord.platform) };
+  const os = [
+    stringValue(platform.os),
+    stringValue(platform.family),
+    stringValue(platform.display_name),
+  ].join(' ').toLowerCase();
+
+  if (os.includes('darwin') || os.includes('mac')) {
+    return { id: 'os-macos', label: 'macOS', title: 'macOS node', icon: Apple };
+  }
+  if (os.includes('win')) {
+    return { id: 'os-windows', label: 'Windows', title: 'Windows node', icon: Monitor };
+  }
+  if (os.includes('linux')) {
+    return { id: 'os-linux', label: 'Linux', title: 'Linux node', icon: Server };
+  }
+
+  return null;
+}
+
+function gpuDeviceRecords(source: Record<string, unknown>) {
+  const hardware = recordValue(source.hardware);
+  const devices = [...arrayRecords(source.devices), ...arrayRecords(hardware.devices)];
   const gpuDevices = devices
     .map(recordValue)
     .filter((device) => stringValue(device.kind).toLowerCase() === 'gpu' || stringValue(device.type).toLowerCase().includes('gpu'));
-  if (gpuDevices.length > 0) return gpuDevices;
+  if (gpuDevices.length > 0) return uniqueDeviceRecords(gpuDevices);
 
-  const gpu = hardware.gpu;
+  const gpu = Object.keys(hardware).length > 0 ? hardware.gpu : source.gpu;
   if (Array.isArray(gpu)) return gpu.map(recordValue);
   if (gpu && typeof gpu === 'object' && !Array.isArray(gpu)) return [recordValue(gpu)];
   return [];
+}
+
+function uniqueDeviceRecords(devices: Record<string, unknown>[]) {
+  const seen = new Set<string>();
+  return devices.filter((device, index) => {
+    const key = stringValue(device.id) || stringValue(device.uuid) || stringValue(device.name) || `gpu-${index}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function arrayRecords(value: unknown) {
+  return Array.isArray(value) ? value.map(recordValue) : [];
+}
+
+function gpuTypeLabels(devices: Record<string, unknown>[]) {
+  const labels = new Set<string>();
+  devices.forEach((device) => labels.add(gpuTypeLabel(device)));
+  return Array.from(labels).filter((label) => label !== 'GPU');
+}
+
+function gpuTypeLabel(device: Record<string, unknown>) {
+  const capabilities = Array.isArray(device.capabilities) ? device.capabilities.map(stringValue).join(' ') : '';
+  const text = [
+    stringValue(device.vendor),
+    stringValue(device.type),
+    stringValue(device.driver),
+    stringValue(device.name),
+    capabilities,
+  ].join(' ').toLowerCase();
+
+  if (text.includes('apple') || text.includes('metal')) return 'Apple Metal';
+  if (text.includes('nvidia') || text.includes('cuda')) return 'NVIDIA';
+  if (text.includes('amd') || text.includes('radeon') || text.includes('rocm')) return 'AMD';
+  if (text.includes('intel')) return 'Intel';
+  return 'GPU';
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -606,21 +709,16 @@ function numberValueOrNull(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function formatBytes(value: number) {
-  if (!Number.isFinite(value) || value <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let amount = value;
-  let unitIndex = 0;
-  while (amount >= 1024 && unitIndex < units.length - 1) {
-    amount /= 1024;
-    unitIndex += 1;
-  }
-  const precision = amount >= 10 || unitIndex === 0 ? 0 : 1;
-  return `${amount.toFixed(precision)} ${units[unitIndex]}`;
+function formatMemoryPair(gpuMemoryTotalMb: number, memoryTotalBytes: number) {
+  const gpuGb = gpuMemoryTotalMb / 1024;
+  const totalGb = memoryTotalBytes / (1024 * 1024 * 1024);
+  return `${formatGbAmount(gpuGb)} / ${formatGbAmount(totalGb)} GB`;
 }
 
-function formatMegabytes(value: number) {
-  return formatBytes(value * 1024 * 1024);
+function formatGbAmount(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0';
+  const precision = value >= 10 ? 0 : 1;
+  return value.toFixed(precision);
 }
 
 function formatPercent(value: number) {
