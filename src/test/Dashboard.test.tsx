@@ -44,6 +44,13 @@ describe('Dashboard Component', () => {
           name: 'mn1@127.0.0.1',
           connected_nodes: ['mn1@127.0.0.1'],
           self: true,
+          hardware: {
+            cpu: { logical_processors: 10, load_ratio: 0.12 },
+            memory: { total_bytes: 17179869184, available_bytes: 8589934592 },
+            devices: [
+              { kind: 'gpu', type: 'generic/gpu', memory_total_mb: 12288 }
+            ]
+          },
           executor_pools: {
             default: { capacity: 2, available: 1, in_use: 1, queued: 0, active: 1 }
           }
@@ -69,12 +76,17 @@ describe('Dashboard Component', () => {
     });
 
     expect(screen.getByText('Active Jobs')).toBeInTheDocument();
-    expect(screen.getByText('Executor Slots')).toBeInTheDocument();
+    expect(screen.getAllByText('CPU').length).toBeGreaterThan(1);
+    expect(screen.getByText('10 cores')).toBeInTheDocument();
+    expect(screen.getAllByText('Memory').length).toBeGreaterThan(1);
+    expect(screen.getByText('16 GB')).toBeInTheDocument();
+    expect(screen.getAllByText('GPU').length).toBeGreaterThan(1);
+    expect(screen.getByText('1 GPU')).toBeInTheDocument();
     
     // Check if node details are rendered
     expect(screen.getByText('mn1@127.0.0.1')).toBeInTheDocument();
-    expect(screen.getByText('Pool: default')).toBeInTheDocument();
-    expect(screen.getByText('Capacity')).toBeInTheDocument();
+    expect(screen.queryByText('Pool: default')).not.toBeInTheDocument();
+    expect(screen.queryByText('Capacity')).not.toBeInTheDocument();
   });
 
   it('uses an empty jobs response instead of stale summary jobs for metrics', async () => {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addClusterNode, fetchJobs, fetchSystemSummary, removeClusterNode } from '../api';
 import type { Job, SystemSummary } from '../api';
-import { Activity, BriefcaseBusiness, Cpu, Eye, EyeOff, Loader2, Plus, Server, Trash2 } from 'lucide-react';
+import { Activity, BriefcaseBusiness, CircuitBoard, Cpu, Eye, EyeOff, Loader2, MemoryStick, Plus, Server, Trash2 } from 'lucide-react';
 import { confirmActionToast } from '../components/ui/confirm-toast';
 import { Tooltip } from '../components/ui/tooltip';
 import { Button } from '../components/ui/button';
@@ -17,14 +17,6 @@ import {
 import { Input } from '../components/ui/input';
 import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../lib/utils';
-
-type PoolStats = {
-  capacity?: number;
-  available?: number;
-  in_use?: number;
-  queued?: number;
-  active?: number;
-};
 
 const activeStatuses = new Set(['running', 'pending', 'paused']);
 
@@ -159,22 +151,7 @@ export default function Dashboard() {
 
   const metricJobs = useMemo<Partial<Job>[]>(() => jobs ?? summary?.jobs ?? [], [jobs, summary]);
 
-  const executorSlots = useMemo(() => {
-    const pools = summary?.nodes.flatMap((node) => Object.values(node.executor_pools || {}) as PoolStats[]) || [];
-    const reportedCapacity = pools.reduce((total, pool) => total + (pool.capacity ?? 0), 0);
-    const reportedActive = pools.reduce((total, pool) => total + (pool.active ?? pool.in_use ?? 0), 0);
-    const activeFromJobs = metricJobs.reduce((total, job) => total + numberValue(job.active_executors), 0);
-    const requestedFromJobs = metricJobs.reduce((total, job) => total + numberValue(job.executor_count), 0);
-    const active = Math.max(reportedActive, activeFromJobs);
-    const capacity = reportedCapacity || Math.max(8, requestedFromJobs + 4, active + 4);
-
-    return {
-      active,
-      capacity,
-      available: Math.max(capacity - active, 0),
-      queued: pools.reduce((total, pool) => total + (pool.queued ?? 0), 0),
-    };
-  }, [metricJobs, summary]);
+  const resources = useMemo(() => summarizeRuntimeResources(summary), [summary]);
 
   const totalJobs = metricJobs.length;
   const activeJobs = metricJobs.filter((job) => activeStatuses.has(job.status ?? '')).length;
@@ -203,7 +180,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
         <MetricCard
           icon={BriefcaseBusiness}
           label="Total Jobs"
@@ -220,10 +197,24 @@ export default function Dashboard() {
         />
         <MetricCard
           icon={Cpu}
-          label="Executor Slots"
-          value={`${executorSlots.available}/${executorSlots.capacity}`}
-          headline={`${executorSlots.active} in use right now`}
-          detail={`Mock capacity from current usage${executorSlots.queued ? `, ${executorSlots.queued} queued` : ''}`}
+          label="CPU"
+          value={resources.cpuCores ? `${resources.cpuCores.toLocaleString()} cores` : '0 cores'}
+          headline={resources.cpuLoadRatio === null ? 'No CPU load reported' : `${formatPercent(resources.cpuLoadRatio)} load`}
+          detail={`${resources.nodeCount} runtime node${resources.nodeCount === 1 ? '' : 's'} reporting`}
+        />
+        <MetricCard
+          icon={MemoryStick}
+          label="Memory"
+          value={resources.memoryTotalBytes ? formatBytes(resources.memoryTotalBytes) : '0 B'}
+          headline={resources.memoryAvailableBytes ? `${formatBytes(resources.memoryAvailableBytes)} available` : 'No memory available reported'}
+          detail={resources.memoryUsedRatio === null ? 'No memory usage reported' : `${formatPercent(resources.memoryUsedRatio)} used`}
+        />
+        <MetricCard
+          icon={CircuitBoard}
+          label="GPU"
+          value={`${resources.gpuCount.toLocaleString()} GPU${resources.gpuCount === 1 ? '' : 's'}`}
+          headline={resources.gpuCount ? 'Runtime GPU devices' : 'No GPUs reported'}
+          detail={resources.gpuMemoryTotalMb ? `${formatMegabytes(resources.gpuMemoryTotalMb)} GPU memory` : 'No GPU memory reported'}
         />
       </div>
 
@@ -279,24 +270,15 @@ export default function Dashboard() {
                     </Tooltip>
                   ) : null}
                 </div>
-                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-                  {Object.entries(node.executor_pools || {}).length === 0 ? (
-                    <div className="rounded-md border border-neutral-200 p-3 text-xs text-neutral-500">
-                      No executor pools reported.
-                    </div>
-                  ) : (
-                    Object.entries(node.executor_pools || {}).map(([poolName, stats]) => (
-                      <div key={poolName} className="rounded-md border border-neutral-200 p-3">
-                        <div className="text-xs font-medium text-neutral-950">Pool: {poolName}</div>
-                        <div className="mt-2 grid grid-cols-4 gap-2 text-xs">
-                          <PoolMetric label="Capacity" value={stats.capacity} />
-                          <PoolMetric label="Avail" value={stats.available} />
-                          <PoolMetric label="Active" value={stats.active} />
-                          <PoolMetric label="Queued" value={stats.queued} />
-                        </div>
-                      </div>
-                    ))
-                  )}
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  {nodeResourceMetrics(node).map((metric) => (
+                    <NodeResourceMetric
+                      key={metric.label}
+                      detail={metric.detail}
+                      label={metric.label}
+                      value={metric.value}
+                    />
+                  ))}
                 </div>
               </div>
             ))
@@ -349,11 +331,12 @@ function MetricCard({
   );
 }
 
-function PoolMetric({ label, value }: { label: string; value?: number }) {
+function NodeResourceMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
-    <div>
+    <div className="rounded-md border border-neutral-200 p-3">
       <div className="text-xs text-neutral-500">{label}</div>
-      <div className="mt-0.5 font-medium text-neutral-950">{value ?? 0}</div>
+      <div className="mt-1 text-sm font-medium text-neutral-950">{value}</div>
+      <div className="mt-1 text-xs text-neutral-500">{detail}</div>
     </div>
   );
 }
@@ -525,10 +508,121 @@ function apiErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+function summarizeRuntimeResources(summary: SystemSummary | null) {
+  const nodes = summary?.nodes || [];
+  let cpuCores = 0;
+  let weightedLoad = 0;
+  let loadWeight = 0;
+  let memoryTotalBytes = 0;
+  let memoryAvailableBytes = 0;
+  let gpuCount = 0;
+  let gpuMemoryTotalMb = 0;
+
+  nodes.forEach((node) => {
+    const hardware = recordValue(node.hardware);
+    const cpu = recordValue(hardware.cpu);
+    const memory = recordValue(hardware.memory);
+
+    const logicalProcessors = numberValue(cpu.logical_processors);
+    cpuCores += logicalProcessors;
+    const loadRatio = numberValueOrNull(cpu.load_ratio);
+    if (loadRatio !== null) {
+      const weight = logicalProcessors || 1;
+      weightedLoad += loadRatio * weight;
+      loadWeight += weight;
+    }
+
+    memoryTotalBytes += numberValue(memory.total_bytes);
+    memoryAvailableBytes += numberValue(memory.available_bytes);
+
+    const gpuDevices = gpuDeviceRecords(hardware);
+    gpuCount += gpuDevices.length;
+    gpuDevices.forEach((device) => {
+      gpuMemoryTotalMb += numberValue(device.memory_total_mb);
+    });
+  });
+
+  const memoryUsedBytes = Math.max(memoryTotalBytes - memoryAvailableBytes, 0);
+
+  return {
+    nodeCount: nodes.length,
+    cpuCores,
+    cpuLoadRatio: loadWeight > 0 ? weightedLoad / loadWeight : null,
+    memoryTotalBytes,
+    memoryAvailableBytes,
+    memoryUsedRatio: memoryTotalBytes > 0 ? memoryUsedBytes / memoryTotalBytes : null,
+    gpuCount,
+    gpuMemoryTotalMb,
+  };
+}
+
+function nodeResourceMetrics(node: SystemSummary['nodes'][number]) {
+  const resources = summarizeRuntimeResources({ nodes: [node], jobs: [] });
+  return [
+    {
+      label: 'CPU',
+      value: resources.cpuCores ? `${resources.cpuCores.toLocaleString()} cores` : '0 cores',
+      detail: resources.cpuLoadRatio === null ? 'No load reported' : `${formatPercent(resources.cpuLoadRatio)} load`,
+    },
+    {
+      label: 'Memory',
+      value: resources.memoryTotalBytes ? formatBytes(resources.memoryTotalBytes) : '0 B',
+      detail: resources.memoryAvailableBytes ? `${formatBytes(resources.memoryAvailableBytes)} available` : 'No available memory reported',
+    },
+    {
+      label: 'GPU',
+      value: `${resources.gpuCount.toLocaleString()} GPU${resources.gpuCount === 1 ? '' : 's'}`,
+      detail: resources.gpuMemoryTotalMb ? `${formatMegabytes(resources.gpuMemoryTotalMb)} memory` : 'No GPU memory reported',
+    },
+  ];
+}
+
+function gpuDeviceRecords(hardware: Record<string, unknown>) {
+  const devices = Array.isArray(hardware.devices) ? hardware.devices : [];
+  const gpuDevices = devices
+    .map(recordValue)
+    .filter((device) => stringValue(device.kind).toLowerCase() === 'gpu' || stringValue(device.type).toLowerCase().includes('gpu'));
+  if (gpuDevices.length > 0) return gpuDevices;
+
+  const gpu = hardware.gpu;
+  if (Array.isArray(gpu)) return gpu.map(recordValue);
+  if (gpu && typeof gpu === 'object' && !Array.isArray(gpu)) return [recordValue(gpu)];
+  return [];
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
 function stringValue(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
 
 function numberValue(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function numberValueOrNull(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let amount = value;
+  let unitIndex = 0;
+  while (amount >= 1024 && unitIndex < units.length - 1) {
+    amount /= 1024;
+    unitIndex += 1;
+  }
+  const precision = amount >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${amount.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+function formatMegabytes(value: number) {
+  return formatBytes(value * 1024 * 1024);
+}
+
+function formatPercent(value: number) {
+  return `${Math.round(Math.max(value, 0) * 100)}%`;
 }
