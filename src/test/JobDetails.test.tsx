@@ -1,9 +1,10 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { toast } from 'sonner';
 import JobDetails from '../pages/JobDetails';
 import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelJob, pauseJob, resumeJob, revealArtifact } from '../api';
+import type { WorkflowProgress } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
 
@@ -961,6 +962,236 @@ describe('JobDetails Component', () => {
     expect(screen.getByText(/3\. Property/)).toBeInTheDocument();
     expect(screen.getByText('income_agent')).toBeInTheDocument();
     expect(screen.getByText('property_agent')).toBeInTheDocument();
+  });
+
+  it('lets users select a completed step and preserves that selection across stream updates', async () => {
+    let emitSnapshot: ((snapshot: WorkflowProgress) => void) | null = null;
+    vi.mocked(streamWorkflowProgress).mockImplementation(async (_id, onSnapshot) => {
+      emitSnapshot = onSnapshot;
+    });
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'test-job-1',
+        graph_id: 'tax_graph',
+        status: 'running',
+        submitted_at: '2026-04-16T12:00:00Z',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    const progress: WorkflowProgress = {
+      schema_version: 1,
+      job_id: 'test-job-1',
+      workflow_id: 'tax_graph',
+      name: 'Tax Graph',
+      description: '',
+      status: 'running',
+      workflow_kind: 'batch',
+      elapsed_seconds: 20,
+      agent_count: { done: 1, running: 2, idle: 0, ready: 3, failed: 0, total: 3 },
+      current_step_id: 'income',
+      current_step_ids: ['income', 'property'],
+      current_step: null,
+      steps: [
+        {
+          id: 'intake',
+          label: 'Intake',
+          goal: 'Load return package',
+          status: 'done',
+          current: false,
+          done_count: 1,
+          running_count: 0,
+          idle_count: 0,
+          ready_count: 1,
+          failed_count: 0,
+          total_count: 1,
+          live: false,
+          elapsed_seconds: 2,
+          activity_summary: 'Agent completed: intake_agent',
+          recent_events: [{ timestamp: '2026-04-16T12:00:02Z', type: 'workflow_step_attempt_completed', step_id: 'intake', agent_id: 'intake_agent', message: 'Agent completed: intake_agent' }],
+          agents: [{ id: 'intake_agent', role: 'Intake', working_on: 'Load return package', model: 'runtime', status: 'done', progress: 1, live: false, elapsed_seconds: 2, activity_summary: 'Agent completed: intake_agent' }],
+        },
+        {
+          id: 'income',
+          label: 'Income',
+          goal: 'Prepare income',
+          status: 'running',
+          current: true,
+          done_count: 0,
+          running_count: 1,
+          idle_count: 0,
+          ready_count: 1,
+          failed_count: 0,
+          total_count: 1,
+          live: false,
+          elapsed_seconds: 4,
+          agents: [{ id: 'income_agent', role: 'Income', working_on: 'Prepare income', model: 'runtime', status: 'running', progress: 0.4, live: false, elapsed_seconds: 4 }],
+        },
+        {
+          id: 'property',
+          label: 'Property',
+          goal: 'Prepare property',
+          status: 'running',
+          current: true,
+          done_count: 0,
+          running_count: 1,
+          idle_count: 0,
+          ready_count: 1,
+          failed_count: 0,
+          total_count: 1,
+          live: false,
+          elapsed_seconds: 4,
+          agents: [{ id: 'property_agent', role: 'Property', working_on: 'Prepare property', model: 'runtime', status: 'running', progress: 0.3, live: false, elapsed_seconds: 4 }],
+        },
+      ],
+      messages: ['Running: graph branches active'],
+      recent_events: [],
+    };
+    vi.mocked(fetchWorkflowProgress).mockResolvedValue(progress);
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+    });
+    await waitFor(() => expect(emitSnapshot).not.toBeNull());
+    expect(screen.getByText(/2 active steps/)).toBeInTheDocument();
+    expect(screen.getByText('income_agent')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /1\. Intake/ }));
+
+    expect(screen.getByText(/Intake · 1 agents/)).toBeInTheDocument();
+    expect(screen.getByText('intake_agent')).toBeInTheDocument();
+    expect(screen.queryByText('income_agent')).not.toBeInTheDocument();
+
+    act(() => {
+      emitSnapshot?.({
+        ...progress,
+        messages: ['Running: stream update arrived'],
+        steps: progress.steps.map((step) => (
+          step.id === 'income' ? { ...step, activity_summary: 'Still preparing income' } : step
+        )),
+      });
+    });
+
+    expect(screen.getByText(/Intake · 1 agents/)).toBeInTheDocument();
+    expect(screen.getByText('intake_agent')).toBeInTheDocument();
+    expect(screen.queryByText('income_agent')).not.toBeInTheDocument();
+  });
+
+  it('renders selected step reasons, timing, attempts, and empty-agent steps', async () => {
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'test-job-1',
+        graph_id: 'retry_graph',
+        status: 'running',
+        submitted_at: '2026-04-16T12:00:00Z',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    vi.mocked(fetchWorkflowProgress).mockResolvedValue({
+      schema_version: 1,
+      job_id: 'test-job-1',
+      workflow_id: 'retry_graph',
+      name: 'Retry Graph',
+      description: '',
+      status: 'running',
+      workflow_kind: 'batch',
+      elapsed_seconds: 30,
+      agent_count: { done: 0, running: 0, idle: 0, ready: 1, failed: 0, total: 1 },
+      current_step_id: 'reconcile',
+      current_step_ids: ['reconcile'],
+      current_step: null,
+      steps: [
+        {
+          id: 'reconcile',
+          label: 'Reconcile',
+          goal: 'Reconcile accounts',
+          status: 'retry_wait',
+          current: true,
+          done_count: 0,
+          running_count: 0,
+          idle_count: 0,
+          ready_count: 1,
+          failed_count: 0,
+          total_count: 1,
+          live: false,
+          elapsed_seconds: 30,
+          retry_at: '2026-04-16T12:01:00Z',
+          deadline_at: '2026-04-16T12:05:00Z',
+          heartbeat_deadline_at: '2026-04-16T12:02:00Z',
+          attempt: 2,
+          attempt_id: 'attempt-2',
+          status_reason: 'Waiting for retry window',
+          activity_summary: 'Retry scheduled: Reconcile',
+          recent_events: [{ timestamp: '2026-04-16T12:00:30Z', type: 'workflow_step_attempt_retry_scheduled', step_id: 'reconcile', agent_id: 'worker_retry', message: 'Retry scheduled: Reconcile' }],
+          agents: [{
+            id: 'worker_retry',
+            role: 'Reconcile',
+            working_on: 'Reconcile accounts',
+            model: 'runtime',
+            assigned_node: 'node-a',
+            status: 'retry_wait',
+            progress: 0.25,
+            live: false,
+            elapsed_seconds: 30,
+            retry_at: '2026-04-16T12:01:00Z',
+            deadline_at: '2026-04-16T12:05:00Z',
+            attempt: 2,
+            attempt_id: 'attempt-2',
+            status_reason: 'Tool rate limit',
+            activity_summary: 'Retry scheduled: Reconcile',
+          }],
+        },
+        {
+          id: 'archive',
+          label: 'Archive',
+          goal: 'Persist final report',
+          status: 'pending',
+          current: false,
+          done_count: 0,
+          running_count: 0,
+          idle_count: 0,
+          ready_count: 0,
+          failed_count: 0,
+          total_count: 0,
+          live: false,
+          elapsed_seconds: 0,
+          requires: ['reconcile'],
+          provides: ['report'],
+          agents: [],
+        },
+      ],
+      messages: [],
+      recent_events: [],
+    });
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /1\. Reconcile/ }));
+
+    expect(screen.getByText('Waiting for retry window')).toBeInTheDocument();
+    expect(screen.getByText('Tool rate limit')).toBeInTheDocument();
+    expect(screen.getAllByText('Attempt 2').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Retry/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Deadline/).length).toBeGreaterThan(0);
+    expect(screen.getByText('node-a')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /2\. Archive/ }));
+
+    expect(screen.getByText(/Archive · 0 agents/)).toBeInTheDocument();
+    expect(screen.getByText('No agents reported for this step yet.')).toBeInTheDocument();
+    expect(screen.getByText('Requires')).toBeInTheDocument();
+    expect(screen.getAllByText('reconcile').length).toBeGreaterThan(0);
   });
 
   it('shows blueprint web ui from the run ui endpoint when job details are compact', async () => {

@@ -1,7 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
-import { Check, Circle, Clock3, ExternalLink, FileText, Loader2, MousePointer2, X } from 'lucide-react';
+import { useState } from 'react';
+import { Activity, Check, Circle, Clock3, ExternalLink, FileText, Loader2, MousePointer2, X } from 'lucide-react';
 import { toast } from 'sonner';
-import type { JobDetails, WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
+import type { JobDetails, WorkflowActivity, WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
 import { revealArtifact } from '../api';
 import { displayAgentName } from '../utils/agentGraph';
 import { artifactDisplayName, isOpenableHref } from '../utils/artifacts';
@@ -79,6 +80,53 @@ const formatProgress = (agent: WorkflowProgressAgent) => {
 const formatTokens = (tokens: number) => {
   if (tokens >= 1000) return `${(tokens / 1000).toFixed(tokens % 1000 === 0 ? 0 : 1)}k`;
   return String(tokens);
+};
+
+const formatTimestamp = (value?: string | null) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return value;
+  return parsed.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+};
+
+const formatClock = (value?: string | null) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return value;
+  return parsed.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+};
+
+const formatList = (values?: string[]) => {
+  const filtered = (values || []).filter(Boolean);
+  return filtered.length ? filtered.join(', ') : 'None';
+};
+
+const eventKey = (event: WorkflowActivity, index: number) => (
+  `${event.timestamp || 'unknown'}-${event.type || 'event'}-${event.step_id || ''}-${event.agent_id || ''}-${index}`
+);
+
+const activityMessage = (event: WorkflowActivity) => (
+  event.message || event.status || event.type || 'Activity observed'
+);
+
+const uniqueActivities = (activities: WorkflowActivity[]) => {
+  const seen = new Set<string>();
+  return activities.filter((event) => {
+    const key = `${event.timestamp || 'unknown'}-${event.type || 'event'}-${event.step_id || ''}-${event.agent_id || ''}-${event.message || ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
@@ -289,26 +337,53 @@ const ProgressResourcesColumn = ({ progress, details, webUi }: { progress: Workf
   );
 };
 
-const StepRow = ({ step, index, workflowKind, showLayer }: { step: WorkflowProgressStep; index: number; workflowKind: string; showLayer: boolean }) => {
+const StepRow = ({
+  step,
+  index,
+  workflowKind,
+  showLayer,
+  highlighted,
+  selected,
+  onSelect,
+}: {
+  step: WorkflowProgressStep;
+  index: number;
+  workflowKind: string;
+  showLayer: boolean;
+  highlighted: boolean;
+  selected: boolean;
+  onSelect: () => void;
+}) => {
   const count = workflowKind === 'service' ? (step.ready_count || step.done_count || 0) : (step.done_count || 0);
+  const mutedText = highlighted ? 'text-neutral-300' : 'text-neutral-500';
   return (
-    <div
-      className={`grid grid-cols-[20px_1fr_auto] items-center gap-2 rounded-md px-2 py-1.5 text-xs ${
-        step.current ? 'bg-neutral-950 text-white' : 'text-neutral-700 hover:bg-neutral-50'
+    <button
+      type="button"
+      aria-pressed={selected}
+      aria-current={step.current ? 'step' : undefined}
+      onClick={onSelect}
+      className={`grid w-full grid-cols-[20px_1fr_auto] items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs outline-none transition focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 ${
+        highlighted
+          ? 'bg-neutral-950 text-white'
+          : step.current
+            ? 'bg-neutral-100 text-neutral-950 hover:bg-neutral-200'
+            : 'text-neutral-700 hover:bg-neutral-50'
       }`}
     >
       <StatusGlyph status={step.status} current={step.current} />
       <div className="min-w-0">
         <div className="truncate font-medium">
-          {showLayer ? <span className={step.current ? 'text-neutral-300' : 'text-neutral-400'}>L{(step.layer || 0) + 1} </span> : null}
+          {showLayer ? <span className={highlighted ? 'text-neutral-300' : 'text-neutral-400'}>L{(step.layer || 0) + 1} </span> : null}
           {index + 1}. {step.label}
         </div>
-        {step.goal ? <div className={`truncate text-xs ${step.current ? 'text-neutral-300' : 'text-neutral-500'}`}>{step.goal}</div> : null}
+        {step.activity_summary || step.goal ? (
+          <div className={`truncate text-xs ${mutedText}`}>{step.activity_summary || step.goal}</div>
+        ) : null}
       </div>
-      <div className={`font-mono text-[11px] ${step.current ? 'text-neutral-200' : 'text-neutral-500'}`}>
+      <div className={`font-mono text-[11px] ${highlighted ? 'text-neutral-200' : 'text-neutral-500'}`}>
         {count}/{step.total_count}
       </div>
-    </div>
+    </button>
   );
 };
 
@@ -330,17 +405,31 @@ const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
       <td className="w-[110px] px-3 py-2 text-xs">
         <span className={`capitalize ${statusTone(agent.status)}`}>{agent.status || 'unknown'}</span>
       </td>
-      <td className="max-w-[340px] px-3 py-2 text-xs text-neutral-700">
+      <td className="max-w-[320px] px-3 py-2 text-xs text-neutral-700">
         {agent.failure ? (
           <ErrorSummary failure={agent.failure} />
         ) : (
-          <div className="truncate" title={agent.status_reason || undefined}>
-            {agent.status_reason || agent.working_on || agent.role || 'worker'}
+          <div className="space-y-0.5">
+            <div className="truncate" title={agent.status_reason || agent.working_on || undefined}>
+              {agent.status_reason || agent.working_on || agent.role || 'worker'}
+            </div>
+            {agent.activity_summary && agent.activity_summary !== agent.status_reason ? (
+              <div className="truncate text-[11px] text-neutral-500" title={agent.activity_summary}>{agent.activity_summary}</div>
+            ) : null}
           </div>
         )}
       </td>
-      <td className="max-w-[220px] px-3 py-2 text-xs text-neutral-600">
+      <td className="max-w-[210px] px-3 py-2 text-xs text-neutral-600">
         <div className="truncate">{agent.model || 'runtime'}</div>
+        {agent.assigned_node ? <div className="truncate text-[11px] text-neutral-400">{agent.assigned_node}</div> : null}
+      </td>
+      <td className="w-[180px] px-3 py-2 text-xs text-neutral-600">
+        <div className="space-y-0.5">
+          <div className="whitespace-nowrap">{formatElapsed(agent.elapsed_seconds || 0)}</div>
+          {agent.attempt ? <div className="whitespace-nowrap text-[11px] text-neutral-500">Attempt {agent.attempt}</div> : null}
+          {agent.retry_at ? <div className="whitespace-nowrap text-[11px] text-amber-700">Retry {formatClock(agent.retry_at)}</div> : null}
+          {agent.deadline_at ? <div className="whitespace-nowrap text-[11px] text-neutral-500">Deadline {formatClock(agent.deadline_at)}</div> : null}
+        </div>
       </td>
       <td className="w-[220px] px-3 py-2">
         <div className="flex items-center gap-2">
@@ -354,7 +443,53 @@ const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
   );
 };
 
+const DetailStat = ({ label, value, tone }: { label: string; value: string | number; tone?: string }) => (
+  <div className="min-w-0 rounded-md border border-neutral-200 bg-white px-2.5 py-2">
+    <div className="text-[11px] font-medium text-neutral-500">{label}</div>
+    <div className={`mt-0.5 truncate text-xs font-semibold ${tone || 'text-neutral-950'}`} title={String(value)}>{value}</div>
+  </div>
+);
+
+const StepMetadata = ({ step }: { step: WorkflowProgressStep }) => {
+  const metadata = [
+    ['Started', formatTimestamp(step.started_at)],
+    ['Ended', formatTimestamp(step.ended_at)],
+    ['Last activity', formatTimestamp(step.last_activity?.timestamp || step.last_event_at)],
+    ['Retry', formatTimestamp(step.retry_at)],
+    ['Deadline', formatTimestamp(step.deadline_at)],
+    ['Heartbeat', formatTimestamp(step.heartbeat_deadline_at)],
+    ['Requires', formatList(step.requires)],
+    ['Provides', formatList(step.provides)],
+  ].filter(([, value]) => value && value !== 'None');
+  return metadata.length ? (
+    <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      {metadata.map(([label, value]) => <DetailStat key={label} label={label} value={value} />)}
+    </div>
+  ) : null;
+};
+
+const ActivityList = ({ activities, fallbackMessages }: { activities: WorkflowActivity[]; fallbackMessages: string[] }) => (
+  <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-2.5">
+    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Recent activity</div>
+    <div className="space-y-1 font-mono text-xs text-neutral-600">
+      {activities.length ? activities.slice(-8).map((event, index) => (
+        <div key={eventKey(event, index)} className="grid grid-cols-[72px_1fr] gap-2">
+          <span className="text-neutral-400">{formatClock(event.timestamp) || 'unknown'}</span>
+          <span className="min-w-0 truncate" title={activityMessage(event)}>
+            {event.agent_id ? `${event.agent_id}: ` : ''}{activityMessage(event)}
+          </span>
+        </div>
+      )) : fallbackMessages.slice(-4).map((message, index) => (
+        <div key={`${message}-${index}`} className="truncate">{message}</div>
+      ))}
+      {activities.length === 0 && fallbackMessages.length === 0 ? <div>No workflow events observed yet.</div> : null}
+    </div>
+  </div>
+);
+
 export function WorkflowProgressPanel({ progress, details, webUi, showFailurePanel = true }: WorkflowProgressPanelProps) {
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+
   if (!progress) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-white font-mono text-xs text-neutral-500">
@@ -364,17 +499,36 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
   }
 
   const currentStep = progress.current_step || progress.steps.find((step) => step.current) || progress.steps[0];
+  const effectiveSelectedStepId = selectedStepId && progress.steps.some((step) => step.id === selectedStepId) ? selectedStepId : null;
+  const selectedStep = effectiveSelectedStepId
+    ? progress.steps.find((step) => step.id === effectiveSelectedStepId) || (currentStep?.id === effectiveSelectedStepId ? currentStep : undefined)
+    : undefined;
   const currentStepIds = new Set(progress.current_step_ids?.length ? progress.current_step_ids : progress.steps.filter((step) => step.current).map((step) => step.id));
   const activeSteps = currentStepIds.size
     ? progress.steps
         .filter((step) => currentStepIds.has(step.id))
         .map((step) => currentStep?.id === step.id && (currentStep.agents || []).length ? currentStep : step)
     : (currentStep ? [currentStep] : []);
-  const agents = activeSteps.flatMap((step) => step.agents || []);
+  const detailSteps = selectedStep ? [selectedStep] : activeSteps;
+  const agents = detailSteps.flatMap((step) => step.agents || []);
   const workflowKind = progress.workflow_kind || 'batch';
   const showLayer = (progress.layers || []).length > 1 || progress.steps.some((step) => step.parents?.length || step.children?.length);
-  const visibleFailure = progress.failure || currentStep?.failure || agents.find((agent) => agent.failure)?.failure;
+  const primaryStep = selectedStep || currentStep;
+  const visibleFailure = progress.failure || primaryStep?.failure || agents.find((agent) => agent.failure)?.failure;
   const failureArtifacts = artifactsFromDetails(details);
+  const activityEvents = uniqueActivities(detailSteps.flatMap((step) => step.recent_events || []))
+    .sort((left, right) => String(left.timestamp || '').localeCompare(String(right.timestamp || '')));
+  const stepTitle = selectedStep
+    ? selectedStep.label
+    : activeSteps.length > 1
+      ? `${activeSteps.length} active steps`
+      : (currentStep?.label || 'Agents');
+  const stepSubtitle = selectedStep
+    ? (selectedStep.goal || selectedStep.activity_summary || selectedStep.id || '')
+    : activeSteps.length > 1
+      ? activeSteps.map((step) => step.label).join(' / ')
+      : (currentStep?.goal || currentStep?.activity_summary || '');
+  const detailStatus = selectedStep?.status || currentStep?.status || progress.status;
 
   return (
     <div className="absolute inset-0 overflow-auto bg-white font-sans lg:overflow-hidden">
@@ -383,7 +537,16 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
           <div className="mb-2 text-xs font-semibold text-neutral-950">Steps</div>
           <div className="space-y-0.5">
             {progress.steps.map((step, index) => (
-              <StepRow key={step.id || index} step={step} index={index} workflowKind={workflowKind} showLayer={showLayer} />
+              <StepRow
+                key={step.id || index}
+                step={step}
+                index={index}
+                workflowKind={workflowKind}
+                showLayer={showLayer}
+                highlighted={effectiveSelectedStepId ? step.id === effectiveSelectedStepId : Boolean(step.current)}
+                selected={step.id === effectiveSelectedStepId}
+                onSelect={() => setSelectedStepId(step.id || null)}
+              />
             ))}
           </div>
           <ProgressResourcesColumn progress={progress} details={details} webUi={webUi} />
@@ -398,45 +561,69 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="truncate text-xs font-semibold text-neutral-950">
-                {activeSteps.length > 1 ? `${activeSteps.length} active steps` : (currentStep?.label || 'Agents')} · {agents.length} agents
+                {stepTitle} · {agents.length} agents
               </div>
-              {activeSteps.length > 1 ? (
-                <div className="truncate text-xs text-neutral-500">{activeSteps.map((step) => step.label).join(' / ')}</div>
-              ) : currentStep?.goal ? <div className="truncate text-xs text-neutral-500">{currentStep.goal}</div> : null}
+              {stepSubtitle ? <div className="truncate text-xs text-neutral-500">{stepSubtitle}</div> : null}
             </div>
-            <div className={`text-[11px] font-medium capitalize ${statusTone(currentStep?.status)}`}>{currentStep?.status || 'unknown'}</div>
+            <div className="flex items-center gap-2">
+              {selectedStep ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedStepId(null)}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2 text-[11px] font-medium text-neutral-700 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2"
+                >
+                  <Activity className="h-3.5 w-3.5" />
+                  Active steps
+                </button>
+              ) : null}
+              <div className={`text-[11px] font-medium capitalize ${statusTone(detailStatus)}`}>{detailStatus || 'unknown'}</div>
+            </div>
           </div>
 
+          {selectedStep ? (
+            <div className="mb-3 rounded-md border border-neutral-200 bg-neutral-50 p-2.5">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                <DetailStat label="Done" value={`${selectedStep.done_count}/${selectedStep.total_count}`} />
+                <DetailStat label="Running" value={selectedStep.running_count} tone={selectedStep.running_count ? 'text-sky-700' : undefined} />
+                <DetailStat label="Idle" value={selectedStep.idle_count} />
+                <DetailStat label="Failed" value={selectedStep.failed_count} tone={selectedStep.failed_count ? 'text-red-700' : undefined} />
+                <DetailStat label="Elapsed" value={formatElapsed(selectedStep.elapsed_seconds || 0)} />
+              </div>
+              {(selectedStep.status_reason || selectedStep.activity_summary || selectedStep.attempt || selectedStep.attempt_id) ? (
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-600">
+                  {selectedStep.status_reason ? <span className="rounded-md bg-white px-2 py-1">{selectedStep.status_reason}</span> : null}
+                  {selectedStep.activity_summary ? <span className="rounded-md bg-white px-2 py-1">{selectedStep.activity_summary}</span> : null}
+                  {selectedStep.attempt ? <span className="rounded-md bg-white px-2 py-1">Attempt {selectedStep.attempt}</span> : null}
+                  {selectedStep.attempt_id ? <span className="rounded-md bg-white px-2 py-1 font-mono">{selectedStep.attempt_id}</span> : null}
+                </div>
+              ) : null}
+              <StepMetadata step={selectedStep} />
+            </div>
+          ) : null}
+
           <div className="overflow-hidden rounded-md border border-neutral-200">
-            <table className="w-full min-w-[680px] table-fixed text-left">
+            <table className="w-full min-w-[900px] table-fixed text-left">
               <thead className="bg-neutral-50 text-[11px] text-neutral-500">
                 <tr>
                   <th className="px-3 py-2 font-medium">Agent</th>
                   <th className="px-3 py-2 font-medium">Status</th>
                   <th className="px-3 py-2 font-medium">Working on</th>
-                  <th className="px-3 py-2 font-medium">Model</th>
+                  <th className="px-3 py-2 font-medium">Runtime</th>
+                  <th className="px-3 py-2 font-medium">Timing</th>
                   <th className="px-3 py-2 font-medium">Progress</th>
                 </tr>
               </thead>
               <tbody>
                 {agents.length ? agents.map((agent) => <AgentRow key={agent.id} agent={agent} />) : (
                   <tr>
-                    <td className="px-3 py-6 text-xs text-neutral-500" colSpan={5}>No agents reported for this step yet.</td>
+                    <td className="px-3 py-6 text-xs text-neutral-500" colSpan={6}>No agents reported for this step yet.</td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
 
-          <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-2.5">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Recent activity</div>
-            <div className="space-y-1 font-mono text-xs text-neutral-600">
-              {(progress.messages || []).slice(-4).map((message, index) => (
-                <div key={`${message}-${index}`} className="truncate">{message}</div>
-              ))}
-              {(!progress.messages || progress.messages.length === 0) ? <div>No workflow events observed yet.</div> : null}
-            </div>
-          </div>
+          <ActivityList activities={activityEvents} fallbackMessages={progress.messages || []} />
         </section>
       </div>
     </div>

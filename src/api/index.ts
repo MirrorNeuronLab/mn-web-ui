@@ -288,6 +288,17 @@ export const LaunchProgressResponseSchema = z.object({
   completed: z.boolean().optional().default(false),
 }).passthrough();
 
+export const WorkflowActivitySchema = z.object({
+  timestamp: z.string().optional(),
+  type: z.string().optional(),
+  step_id: z.string().optional(),
+  agent_id: z.string().optional(),
+  status: z.string().optional(),
+  message: z.string().optional(),
+  payload: z.unknown().optional(),
+  failure: ErrorEnvelopeSchema.optional(),
+}).passthrough();
+
 export const WorkflowProgressAgentSchema = z.object({
   id: z.string().optional().default('unknown'),
   alias: z.string().optional(),
@@ -313,6 +324,9 @@ export const WorkflowProgressAgentSchema = z.object({
   attempt_id: z.string().nullable().optional(),
   status_reason: z.string().nullable().optional(),
   failure: ErrorEnvelopeSchema.nullable().optional(),
+  activity_summary: z.string().optional(),
+  last_activity: WorkflowActivitySchema.nullable().optional(),
+  recent_events: z.array(WorkflowActivitySchema).optional(),
 }).passthrough();
 
 export const WorkflowProgressStepSchema = z.object({
@@ -344,6 +358,9 @@ export const WorkflowProgressStepSchema = z.object({
   attempt_id: z.string().nullable().optional(),
   status_reason: z.string().nullable().optional(),
   failure: ErrorEnvelopeSchema.nullable().optional(),
+  activity_summary: z.string().optional(),
+  last_activity: WorkflowActivitySchema.nullable().optional(),
+  recent_events: z.array(WorkflowActivitySchema).optional(),
   agents: z.array(WorkflowProgressAgentSchema).optional().default([]),
 }).passthrough();
 
@@ -405,6 +422,7 @@ export type BlueprintListResponse = z.infer<typeof BlueprintListResponseSchema>;
 export type BlueprintLaunchResponse = z.infer<typeof BlueprintLaunchResponseSchema>;
 export type LaunchProgressEvent = z.infer<typeof LaunchProgressEventSchema>;
 export type LaunchProgressResponse = z.infer<typeof LaunchProgressResponseSchema>;
+export type WorkflowActivity = z.infer<typeof WorkflowActivitySchema>;
 export type WorkflowProgressAgent = z.infer<typeof WorkflowProgressAgentSchema>;
 export type WorkflowProgressStep = z.infer<typeof WorkflowProgressStepSchema>;
 export type WorkflowProgress = z.infer<typeof WorkflowProgressSchema>;
