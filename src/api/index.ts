@@ -291,10 +291,16 @@ export const LaunchProgressResponseSchema = z.object({
 export const WorkflowActivitySchema = z.object({
   timestamp: z.string().optional(),
   type: z.string().optional(),
+  category: z.string().optional(),
   step_id: z.string().optional(),
   agent_id: z.string().optional(),
   status: z.string().optional(),
   message: z.string().optional(),
+  tool_name: z.string().optional(),
+  target: z.string().optional(),
+  duration_ms: z.number().optional(),
+  result_summary: z.string().optional(),
+  details: z.unknown().optional(),
   payload: z.unknown().optional(),
   failure: ErrorEnvelopeSchema.optional(),
 }).passthrough();

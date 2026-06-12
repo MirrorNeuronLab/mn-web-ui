@@ -116,8 +116,61 @@ const eventKey = (event: WorkflowActivity, index: number) => (
 );
 
 const activityMessage = (event: WorkflowActivity) => (
-  event.message || event.status || event.type || 'Activity observed'
+  event.message || event.result_summary || event.status || event.type || 'Activity observed'
 );
+
+type ActivityFilter = 'all' | 'agent' | 'tool' | 'system' | 'artifact' | 'error';
+
+const activityCategory = (event: WorkflowActivity): ActivityFilter => {
+  const category = String(event.category || '').toLowerCase();
+  if (['agent', 'tool', 'system', 'artifact', 'error'].includes(category)) return category as ActivityFilter;
+  const type = String(event.type || '').toLowerCase();
+  if (event.failure || type.includes('failed') || type.includes('error') || type.includes('timed_out')) return 'error';
+  if (type.includes('tool_call')) return 'tool';
+  if (type.includes('artifact')) return 'artifact';
+  if (type.startsWith('financial_') || type === 'agent_activity') return 'agent';
+  return 'system';
+};
+
+const categoryTone = (category: ActivityFilter) => {
+  switch (category) {
+    case 'agent': return 'border-sky-200 bg-sky-50 text-sky-700';
+    case 'tool': return 'border-violet-200 bg-violet-50 text-violet-700';
+    case 'artifact': return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    case 'error': return 'border-red-200 bg-red-50 text-red-700';
+    case 'system': return 'border-neutral-200 bg-white text-neutral-600';
+    default: return 'border-neutral-200 bg-white text-neutral-600';
+  }
+};
+
+const filterLabel = (filter: ActivityFilter) => (
+  filter === 'all' ? 'All' : filter === 'artifact' ? 'Artifacts' : `${filter.charAt(0).toUpperCase()}${filter.slice(1)}`
+);
+
+const compactJson = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return '';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+};
+
+const activityDetailText = (event: WorkflowActivity) => {
+  const detail = {
+    target: event.target,
+    tool_name: event.tool_name,
+    status: event.status,
+    duration_ms: event.duration_ms,
+    result_summary: event.result_summary,
+    details: event.details,
+    failure: event.failure,
+  };
+  return Object.values(detail).some((value) => value !== undefined && value !== null && value !== '')
+    ? compactJson(detail)
+    : '';
+};
 
 const uniqueActivities = (activities: WorkflowActivity[]) => {
   const seen = new Set<string>();
@@ -468,24 +521,66 @@ const StepMetadata = ({ step }: { step: WorkflowProgressStep }) => {
   ) : null;
 };
 
-const ActivityList = ({ activities, fallbackMessages }: { activities: WorkflowActivity[]; fallbackMessages: string[] }) => (
-  <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-2.5">
-    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Recent activity</div>
-    <div className="space-y-1 font-mono text-xs text-neutral-600">
-      {activities.length ? activities.slice(-8).map((event, index) => (
-        <div key={eventKey(event, index)} className="grid grid-cols-[72px_1fr] gap-2">
-          <span className="text-neutral-400">{formatClock(event.timestamp) || 'unknown'}</span>
-          <span className="min-w-0 truncate" title={activityMessage(event)}>
-            {event.agent_id ? `${event.agent_id}: ` : ''}{activityMessage(event)}
-          </span>
-        </div>
-      )) : fallbackMessages.slice(-4).map((message, index) => (
-        <div key={`${message}-${index}`} className="truncate">{message}</div>
-      ))}
-      {activities.length === 0 && fallbackMessages.length === 0 ? <div>No workflow events observed yet.</div> : null}
+const ActivityList = ({ activities, fallbackMessages }: { activities: WorkflowActivity[]; fallbackMessages: string[] }) => {
+  const [filter, setFilter] = useState<ActivityFilter>('all');
+  const filters: ActivityFilter[] = ['all', 'agent', 'tool', 'system', 'artifact', 'error'];
+  const visibleActivities = activities.filter((event) => filter === 'all' || activityCategory(event) === filter);
+  const rows = visibleActivities.slice(-12);
+
+  return (
+    <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-2.5">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Recent activity</div>
+        {activities.length ? (
+          <div className="flex flex-wrap gap-1">
+            {filters.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setFilter(item)}
+                className={`h-6 rounded-md border px-2 text-[11px] font-medium ${filter === item ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100'}`}
+              >
+                {filterLabel(item)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <div className="space-y-1.5 font-mono text-xs text-neutral-600">
+        {rows.length ? rows.map((event, index) => {
+          const category = activityCategory(event);
+          const detailText = activityDetailText(event);
+          return (
+            <div key={eventKey(event, index)} className="rounded-md bg-white px-2 py-1.5">
+              <div className="grid grid-cols-[72px_76px_1fr] gap-2">
+                <span className="text-neutral-400">{formatClock(event.timestamp) || 'unknown'}</span>
+                <span className={`inline-flex h-5 w-fit items-center rounded border px-1.5 text-[10px] font-semibold uppercase tracking-wide ${categoryTone(category)}`}>
+                  {filterLabel(category)}
+                </span>
+                <span className="min-w-0 truncate" title={activityMessage(event)}>
+                  {event.agent_id ? `${event.agent_id}: ` : ''}{activityMessage(event)}
+                </span>
+              </div>
+              {(event.target || event.result_summary || detailText) ? (
+                <details className="mt-1 pl-[148px] text-[11px] text-neutral-500">
+                  <summary className="cursor-pointer select-none truncate">
+                    {event.target || event.result_summary || 'Details'}
+                  </summary>
+                  {event.result_summary ? <div className="mt-1 whitespace-pre-wrap">{event.result_summary}</div> : null}
+                  {detailText ? <pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2">{detailText}</pre> : null}
+                </details>
+              ) : null}
+            </div>
+          );
+        }) : fallbackMessages.slice(-4).map((message, index) => (
+          <div key={`${message}-${index}`} className="truncate">{message}</div>
+        ))}
+        {activities.length > 0 && rows.length === 0 ? <div>No activity matches this filter.</div> : null}
+        {activities.length === 0 && fallbackMessages.length === 0 ? <div>No workflow events observed yet.</div> : null}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export function WorkflowProgressPanel({ progress, details, webUi, showFailurePanel = true }: WorkflowProgressPanelProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
