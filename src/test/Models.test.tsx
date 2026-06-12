@@ -48,6 +48,28 @@ describe('Models Component', () => {
             warnings: [],
           },
         },
+        {
+          id: 'runtime-helper',
+          name: 'Runtime Helper',
+          provider: 'docker_model_runner',
+          model: 'ai/runtime-helper',
+          docker_model: 'ai/runtime-helper',
+          api_model: 'ai/runtime-helper',
+          backend: 'llama.cpp',
+          installed: true,
+          node: 'mn1@local',
+          nodes: ['mn1@local'],
+          used_by: [],
+          owner_count: 0,
+          orphaned: false,
+          manual: false,
+          compatibility: {
+            status: 'pass',
+            ok: true,
+            message: 'ready',
+            warnings: [],
+          },
+        },
       ],
     });
     vi.mocked(benchmarkRuntimeModel).mockResolvedValue({
@@ -67,14 +89,16 @@ describe('Models Component', () => {
     renderModels();
 
     expect(await screen.findByText('Gemma 4 E2B')).toBeInTheDocument();
+    expect(screen.getAllByText('Gemma 4 E2B')).toHaveLength(1);
     expect(screen.queryByText('Installed Models')).not.toBeInTheDocument();
     expect(screen.queryByText('Blueprint-Owned')).not.toBeInTheDocument();
     expect(screen.queryByText('Orphaned')).not.toBeInTheDocument();
-    expect(screen.getByText('ai/gemma4:E2B')).toBeInTheDocument();
+    expect(screen.queryByText('ai/gemma4:E2B')).not.toBeInTheDocument();
     expect(screen.getByText('personal_income_tax_expert')).toBeInTheDocument();
+    expect(screen.getByText('Runtime')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /install/i })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /benchmark/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Benchmark Gemma 4 E2B' }));
 
     await waitFor(() => expect(benchmarkRuntimeModel).toHaveBeenCalledWith('gemma4:e2b'));
     const dialog = await screen.findByRole('dialog', { name: /benchmark model/i });

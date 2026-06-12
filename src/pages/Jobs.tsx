@@ -36,12 +36,12 @@ export default function Jobs() {
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<'pause' | 'cancel' | null>(null);
   const [isClearing, setIsClearing] = useState(false);
-  const [showTerminalJobs, setShowTerminalJobs] = useState(false);
+  const [activeOnly, setActiveOnly] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await fetchJobs({ includeTerminal: showTerminalJobs });
+        const data = await fetchJobs({ includeTerminal: !activeOnly });
         setJobs(data);
         setSelectedJobIds((current) => {
           const availableIds = new Set(data.map((job) => job.job_id));
@@ -64,10 +64,10 @@ export default function Jobs() {
       window.clearTimeout(initialTimer);
       window.clearInterval(timer);
     };
-  }, [showTerminalJobs]);
+  }, [activeOnly]);
 
   const refreshJobs = async () => {
-    const data = await fetchJobs({ includeTerminal: showTerminalJobs });
+    const data = await fetchJobs({ includeTerminal: !activeOnly });
     setJobs(data);
     setSelectedJobIds((current) => {
       const availableIds = new Set(data.map((job) => job.job_id));
@@ -186,22 +186,22 @@ export default function Jobs() {
           <button
             type="button"
             role="switch"
-            aria-checked={showTerminalJobs}
-            onClick={() => setShowTerminalJobs((value) => !value)}
+            aria-checked={activeOnly}
+            onClick={() => setActiveOnly((value) => !value)}
             className="inline-flex h-8 items-center gap-2 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
           >
             <span
               className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${
-                showTerminalJobs ? 'bg-neutral-950' : 'bg-neutral-200'
+                activeOnly ? 'bg-neutral-950' : 'bg-neutral-200'
               }`}
             >
               <span
                 className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${
-                  showTerminalJobs ? 'translate-x-4' : 'translate-x-0.5'
+                  activeOnly ? 'translate-x-4' : 'translate-x-0.5'
                 }`}
               />
             </span>
-            Past jobs
+            Active only
           </button>
           <Tooltip content="Pause all selected live jobs after confirmation.">
             <span className="inline-flex">

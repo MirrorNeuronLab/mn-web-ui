@@ -75,12 +75,11 @@ describe('Jobs Component', () => {
     expect(screen.getByText('running')).toBeInTheDocument();
     expect(screen.getByText('0 / 2')).toBeInTheDocument();
     expect(screen.getByLabelText('View details for test-job-123')).toHaveAttribute('href', '/jobs/test-job-123');
-    expect(fetchJobs).toHaveBeenCalledWith({ includeTerminal: false });
+    expect(fetchJobs).toHaveBeenCalledWith({ includeTerminal: true });
   });
 
-  it('reloads with terminal jobs when the past jobs switch is enabled', async () => {
+  it('reloads with active jobs when the active-only switch is enabled', async () => {
     vi.mocked(fetchJobs)
-      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         {
           job_id: 'done-job-1',
@@ -90,22 +89,33 @@ describe('Jobs Component', () => {
           active_executors: 0,
           executor_count: 0,
         },
+      ])
+      .mockResolvedValueOnce([
+        {
+          job_id: 'running-job-1',
+          graph_id: 'tax-graph',
+          status: 'running',
+          submitted_at: '2026-04-16T12:01:00Z',
+          active_executors: 1,
+          executor_count: 2,
+        },
       ]);
 
     renderWithRouter(<Jobs />);
 
     await waitFor(() => {
-      expect(screen.getByText('No jobs found.')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Past jobs' }));
-
-    await waitFor(() => {
       expect(screen.getByText('done-job-1')).toBeInTheDocument();
     });
 
-    expect(fetchJobs).toHaveBeenNthCalledWith(1, { includeTerminal: false });
-    expect(fetchJobs).toHaveBeenNthCalledWith(2, { includeTerminal: true });
+    fireEvent.click(screen.getByRole('switch', { name: 'Active only' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('running-job-1')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('done-job-1')).not.toBeInTheDocument();
+    expect(fetchJobs).toHaveBeenNthCalledWith(1, { includeTerminal: true });
+    expect(fetchJobs).toHaveBeenNthCalledWith(2, { includeTerminal: false });
   });
 
   it('enables bulk buttons after selecting rows and pauses selected jobs', async () => {

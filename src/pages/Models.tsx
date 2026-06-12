@@ -125,57 +125,65 @@ export default function Models() {
           </div>
         ) : (
           <CardContent className="overflow-x-auto p-0">
-            <Table className="min-w-full table-fixed text-xs">
+            <Table className="min-w-[640px] table-fixed text-xs">
               <TableHeader className="bg-neutral-50 text-neutral-500">
                 <TableRow>
-                  <TableHead className="w-[38%] px-5 py-3">Model</TableHead>
-                  <TableHead className="w-[22%] px-4 py-3">Node</TableHead>
-                  <TableHead className="w-[22%] px-4 py-3">Used By</TableHead>
-                  <TableHead className="w-[10%] px-4 py-3">Status</TableHead>
-                  <TableHead className="w-[8%] px-5 py-3 text-right">Action</TableHead>
+                  <TableHead className="w-56 max-w-56 px-5 py-3">Model</TableHead>
+                  <TableHead className="px-4 py-3">Node</TableHead>
+                  <TableHead className="px-4 py-3">Used By</TableHead>
+                  <TableHead className="w-36 px-4 py-3">Status</TableHead>
+                  <TableHead className="w-20 px-5 py-3 text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {models.map((model) => {
                   const status = modelStatus(model);
                   const canBenchmark = model.provider === 'docker_model_runner';
+                  const displayName = modelDisplayName(model);
+                  const node = nodeLabel(model);
+                  const owner = ownerLabel(model);
                   return (
                     <TableRow key={`${model.id}-${model.docker_model}`} className="align-top">
-                      <TableCell className="px-5 py-4">
-                        <div className="flex min-w-0 gap-3">
-                          <Boxes className="mt-0.5 h-4 w-4 shrink-0 text-neutral-500" />
-                          <div className="min-w-0">
-                            <div className="font-medium text-neutral-950">{model.name || model.id}</div>
-                            <div className="mt-1 break-all font-mono text-[11px] leading-5 text-neutral-500">{model.docker_model || model.model}</div>
-                          </div>
+                      <TableCell className="w-56 max-w-56 px-5 py-4">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Boxes className="h-4 w-4 shrink-0 text-neutral-500" />
+                          <Tooltip content={displayName}>
+                            <span className="block min-w-0 flex-1 truncate font-medium text-neutral-950">
+                              {displayName}
+                            </span>
+                          </Tooltip>
                         </div>
                       </TableCell>
                       <TableCell className="px-4 py-4">
                         <div className="flex min-w-0 items-center gap-2 text-neutral-700">
                           <Server className="h-3.5 w-3.5 shrink-0 text-neutral-500" />
-                          <span className="truncate" title={nodeLabel(model)}>{nodeLabel(model)}</span>
+                          <Tooltip content={node}>
+                            <span className="block min-w-0 flex-1 truncate">{node}</span>
+                          </Tooltip>
                         </div>
                       </TableCell>
                       <TableCell className="px-4 py-4 text-neutral-700">
-                        <span className="line-clamp-2" title={ownerLabel(model)}>{ownerLabel(model)}</span>
+                        <Tooltip content={owner}>
+                          <span className="line-clamp-2 min-w-0">{owner}</span>
+                        </Tooltip>
                       </TableCell>
-                      <TableCell className="px-4 py-4">
-                        <Badge variant="outline" className={status.className}>
+                      <TableCell className="w-36 px-4 py-4">
+                        <Badge variant="outline" className={`${status.className} whitespace-nowrap`}>
                           {status.label}
                         </Badge>
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-right">
+                      <TableCell className="w-20 px-5 py-4 text-right">
                         <Tooltip content={canBenchmark ? 'Benchmark this model from the runtime node.' : 'Benchmark is only available for Docker Model Runner chat models.'}>
                           <span className="inline-flex">
                             <Button
                               type="button"
                               variant="outline"
-                              size="sm"
+                              size="icon"
+                              aria-label={`Benchmark ${displayName}`}
                               onClick={() => openBenchmark(model)}
                               disabled={!canBenchmark}
                             >
                               <Gauge className="h-3.5 w-3.5" />
-                              Benchmark
                             </Button>
                           </span>
                         </Tooltip>
@@ -323,6 +331,10 @@ function modelKey(model: RuntimeModel) {
   return model.id && model.id !== 'unknown' ? model.id : model.docker_model || model.model;
 }
 
+function modelDisplayName(model: RuntimeModel) {
+  return model.name || model.id || model.docker_model || model.model || 'Unknown model';
+}
+
 function nodeLabel(model: RuntimeModel) {
   if (model.nodes.length > 0) return model.nodes.join(', ');
   return model.node || 'local';
@@ -331,7 +343,7 @@ function nodeLabel(model: RuntimeModel) {
 function ownerLabel(model: RuntimeModel) {
   if (model.used_by.length > 0) return model.used_by.join(', ');
   if (model.manual) return 'Manual install';
-  return 'Unowned';
+  return 'Runtime';
 }
 
 function modelStatus(model: RuntimeModel) {
