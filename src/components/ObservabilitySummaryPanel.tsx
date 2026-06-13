@@ -2,7 +2,7 @@ import { Network } from 'lucide-react';
 import { toast } from 'sonner';
 import { revealArtifact } from '../api';
 import { artifactDisplayName } from '../utils/artifacts';
-import { formatElapsed } from './WorkflowProgressPanel';
+import { formatElapsed } from '../utils/workflowProgress';
 
 export type ObservabilityArtifactRef = {
   artifact_id?: string;

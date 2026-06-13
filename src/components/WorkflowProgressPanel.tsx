@@ -1,11 +1,12 @@
-/* eslint-disable react-refresh/only-export-components */
 import { useState } from 'react';
 import { Activity, Check, Circle, Clock3, ExternalLink, FileText, Loader2, MousePointer2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { JobDetails, WorkflowActivity, WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
 import { revealArtifact } from '../api';
 import { displayAgentName } from '../utils/agentGraph';
-import { artifactDisplayName, isOpenableHref } from '../utils/artifacts';
+import { formatElapsed } from '../utils/workflowProgress';
+import { artifactsFromDetails, buildInputResources, buildOutputResources } from '../utils/workflowResources';
+import type { ProgressResource } from '../utils/workflowResources';
 import FailurePanel, { ErrorSummary } from './FailurePanel';
 
 type WorkflowProgressPanelProps = {
@@ -18,24 +19,6 @@ type WorkflowProgressPanelProps = {
     status?: string;
   } | null;
   showFailurePanel?: boolean;
-};
-
-type ProgressResource = {
-  id: string;
-  label: string;
-  value: string;
-  href?: string;
-  revealUrl?: string;
-  kind: 'file' | 'url' | 'input' | 'text';
-};
-
-type FailureArtifact = {
-  artifact_id?: string;
-  relative_path?: string;
-  path?: string;
-  url?: string;
-  reveal_url?: string;
-  size_bytes?: number;
 };
 
 const statusTone = (status: string | undefined) => {
@@ -59,14 +42,6 @@ const StatusGlyph = ({ status, current }: { status?: string; current?: boolean }
   if (['idle', 'ready'].includes(normalized)) return <Circle className="h-3.5 w-3.5 text-neutral-500" />;
   if (['pending', 'scheduled', 'validated', 'preparing'].includes(normalized)) return <Clock3 className="h-3.5 w-3.5 text-neutral-500" />;
   return <Circle className="h-3.5 w-3.5 text-neutral-400" />;
-};
-
-export const formatElapsed = (seconds?: number) => {
-  const value = Number(seconds || 0);
-  if (!Number.isFinite(value) || value <= 0) return '0s';
-  if (value < 60) return `${Math.round(value)}s`;
-  if (value < 3600) return `${Math.floor(value / 60)}m ${Math.round(value % 60)}s`;
-  return `${Math.floor(value / 3600)}h ${Math.floor((value % 3600) / 60)}m`;
 };
 
 const formatProgress = (agent: WorkflowProgressAgent) => {
@@ -180,137 +155,6 @@ const uniqueActivities = (activities: WorkflowActivity[]) => {
     seen.add(key);
     return true;
   });
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-);
-
-const displayNameFromPath = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return 'Untitled';
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.hostname || trimmed;
-  } catch {
-    const normalized = trimmed.replace(/\/+$/, '');
-    return normalized.split('/').filter(Boolean).pop() || normalized;
-  }
-};
-
-const isUrl = (value: string) => /^https?:\/\//i.test(value.trim());
-
-const stringProp = (source: Record<string, unknown>, key: string): string | undefined => {
-  const value = source[key];
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-};
-
-const resourceFromValue = (value: unknown, id: string, fallbackLabel?: string): ProgressResource | null => {
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    const text = String(value).trim();
-    if (!text) return null;
-    return {
-      id,
-      label: fallbackLabel || displayNameFromPath(text),
-      value: text,
-      href: isOpenableHref(text) ? text : undefined,
-      kind: isUrl(text) ? 'url' : text.includes('/') || text.includes('.') ? 'file' : 'text',
-    };
-  }
-  if (!isRecord(value)) return null;
-  const artifact = {
-    artifact_id: stringProp(value, 'artifact_id'),
-    relative_path: stringProp(value, 'relative_path'),
-    path: stringProp(value, 'path'),
-    url: stringProp(value, 'url'),
-    reveal_url: stringProp(value, 'reveal_url'),
-    label: stringProp(value, 'label'),
-    title: stringProp(value, 'title'),
-    name: stringProp(value, 'name'),
-  };
-  const rawValue = artifact.relative_path || artifact.path || value.file || value.file_path || value.local_path || value.value || artifact.url || value.href || artifact.name;
-  if (typeof rawValue !== 'string' && typeof rawValue !== 'number' && typeof rawValue !== 'boolean') return null;
-  const text = String(rawValue).trim();
-  if (!text) return null;
-  const hrefValue = stringProp(value, 'url') || stringProp(value, 'href');
-  const label = artifactDisplayName(artifact, fallbackLabel || displayNameFromPath(text));
-  return {
-    id,
-    label,
-    value: text,
-    href: isOpenableHref(hrefValue) ? hrefValue : isOpenableHref(text) ? text : undefined,
-    revealUrl: artifact.reveal_url,
-    kind: isUrl(hrefValue || text) ? 'url' : 'file',
-  };
-};
-
-const collectResources = (source: unknown, keys: string[], prefix: string): ProgressResource[] => {
-  if (!isRecord(source)) return [];
-  const resources: ProgressResource[] = [];
-  keys.forEach((key) => {
-    const raw = source[key];
-    if (Array.isArray(raw)) {
-      raw.forEach((item, index) => {
-        const resource = resourceFromValue(item, `${prefix}-${key}-${index}`);
-        if (resource) resources.push(resource);
-      });
-      return;
-    }
-    if (isRecord(raw)) {
-      Object.entries(raw).forEach(([name, item], index) => {
-        const resource = resourceFromValue(item, `${prefix}-${key}-${name}-${index}`, name);
-        if (resource) resources.push(resource);
-      });
-      return;
-    }
-    const resource = resourceFromValue(raw, `${prefix}-${key}`, key);
-    if (resource) resources.push(resource);
-  });
-  return resources;
-};
-
-const uniqueResources = (resources: ProgressResource[]) => {
-  const seen = new Set<string>();
-  return resources.filter((resource) => {
-    const key = `${resource.kind}:${resource.revealUrl || resource.href || resource.value}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
-
-const artifactsFromDetails = (details?: JobDetails | null) => {
-  const root = details as Record<string, unknown> | null | undefined;
-  const artifacts = root?.artifacts || root?.output_files || details?.job?.artifacts;
-  return Array.isArray(artifacts) ? artifacts.filter(isRecord) as FailureArtifact[] : [];
-};
-
-export const buildOutputResources = (progress: WorkflowProgress, details?: JobDetails | null): ProgressResource[] => {
-  const detailRoot = details as Record<string, unknown> | null | undefined;
-  const job = isRecord(details?.job) ? details.job : {};
-  const summary = isRecord(details?.summary) ? details.summary : {};
-  const events = [...(progress.recent_events || []), ...(details?.recent_events || [])];
-  return uniqueResources([
-    ...collectResources(progress, ['outputs', 'output', 'artifacts', 'artifact', 'files', 'urls', 'results', 'result'], 'progress'),
-    ...progress.steps.flatMap((step, index) => collectResources(step, ['outputs', 'output', 'artifacts', 'files', 'provides'], `step-${index}`)),
-    ...collectResources(detailRoot, ['outputs', 'output', 'artifacts', 'artifact', 'files', 'urls', 'results', 'result'], 'details'),
-    ...collectResources(job, ['outputs', 'output', 'artifacts', 'artifact', 'files', 'urls', 'results', 'result'], 'job'),
-    ...collectResources(summary, ['outputs', 'output', 'artifacts', 'artifact', 'files', 'urls', 'results', 'result'], 'summary'),
-    ...events.flatMap((event, index) => collectResources(event.payload, ['outputs', 'output', 'artifacts', 'artifact', 'files', 'urls', 'results', 'result'], `event-${index}`)),
-  ]);
-};
-
-const buildInputResources = (progress: WorkflowProgress, details?: JobDetails | null): ProgressResource[] => {
-  const detailRoot = details as Record<string, unknown> | null | undefined;
-  const job = isRecord(details?.job) ? details.job : {};
-  const summary = isRecord(details?.summary) ? details.summary : {};
-  return uniqueResources([
-    ...collectResources(progress, ['inputs', 'input', 'sources', 'source'], 'progress-input'),
-    ...progress.steps.flatMap((step, index) => collectResources(step, ['inputs', 'input', 'sources', 'source', 'requires'], `step-input-${index}`)),
-    ...collectResources(detailRoot, ['inputs', 'input', 'sources', 'source'], 'details-input'),
-    ...collectResources(job, ['inputs', 'input', 'sources', 'source'], 'job-input'),
-    ...collectResources(summary, ['inputs', 'input', 'sources', 'source', 'config'], 'summary-input'),
-  ]).map((resource) => ({ ...resource, kind: resource.kind === 'url' ? resource.kind : 'input' }));
 };
 
 const openResourceLocation = (resource: ProgressResource) => {

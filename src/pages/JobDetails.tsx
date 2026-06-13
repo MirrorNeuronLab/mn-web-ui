@@ -6,7 +6,7 @@ import type { AgentGraph, ErrorEnvelope, JobDetails as JobDetailsType, JobEvent,
 import { format } from 'date-fns';
 import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, MessageSquare, ExternalLink, List, Code2, FileText } from 'lucide-react';
 import { WorkflowAgentGraph } from '../components/WorkflowAgentGraph';
-import { WorkflowProgressPanel, buildOutputResources, formatElapsed } from '../components/WorkflowProgressPanel';
+import { WorkflowProgressPanel } from '../components/WorkflowProgressPanel';
 import FailurePanel from '../components/FailurePanel';
 import ObservabilitySummaryPanel, { type ObservabilityArtifactRef } from '../components/ObservabilitySummaryPanel';
 import { confirmActionToast } from '../components/ui/confirm-toast';
@@ -25,6 +25,8 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { cn } from '../lib/utils';
+import { formatElapsed } from '../utils/workflowProgress';
+import { buildOutputResources } from '../utils/workflowResources';
 
 const StatusIcon = ({ status }: { status: string }) => {
   switch (status) {

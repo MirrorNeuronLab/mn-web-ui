@@ -433,6 +433,33 @@ export type WorkflowProgressAgent = z.infer<typeof WorkflowProgressAgentSchema>;
 export type WorkflowProgressStep = z.infer<typeof WorkflowProgressStepSchema>;
 export type WorkflowProgress = z.infer<typeof WorkflowProgressSchema>;
 
+const parseOrFallback = <T>(
+  schema: z.ZodType<T>,
+  data: unknown,
+  fallback: unknown,
+  validationLabel: string,
+): T => {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    console.error(`${validationLabel} validation failed:`, result.error);
+    return schema.parse(fallback);
+  }
+  return result.data;
+};
+
+const parseArrayOrEmpty = <T>(
+  schema: z.ZodType<T>,
+  data: unknown,
+  validationLabel: string,
+): T[] => {
+  const result = z.array(schema).safeParse(data);
+  if (!result.success) {
+    console.error(`${validationLabel} validation failed:`, result.error);
+    return [];
+  }
+  return result.data;
+};
+
 export const isServiceJob = (job: Partial<Job> | null | undefined, summary?: { type?: unknown; job_type?: unknown; stream_mode?: unknown; policies?: unknown }): boolean => {
   const summaryType = typeof summary?.job_type === 'string' ? summary.job_type : typeof summary?.type === 'string' ? summary.type : '';
   const jobType = job?.job_type || job?.type || '';
@@ -469,52 +496,27 @@ const refreshJobListStatus = async (job: Job): Promise<Job> => {
   }
 };
 
-export const fetchSystemSummary = () => api.get('/system/summary').then(r => {
-  const result = SystemSummarySchema.safeParse(r.data);
-  if (!result.success) {
-    console.error('SystemSummary validation failed:', result.error);
-    return SystemSummarySchema.parse({}); // return default structured fallback
-  }
-  return result.data;
-});
+export const fetchSystemSummary = () => api.get('/system/summary').then(r => (
+  parseOrFallback(SystemSummarySchema, r.data, {}, 'SystemSummary')
+));
 
-export const fetchRuntimeModels = () => api.get('/models').then(r => {
-  const result = RuntimeModelListResponseSchema.safeParse(r.data);
-  if (!result.success) {
-    console.error('fetchRuntimeModels validation failed:', result.error);
-    return RuntimeModelListResponseSchema.parse({});
-  }
-  return result.data;
-});
+export const fetchRuntimeModels = () => api.get('/models').then(r => (
+  parseOrFallback(RuntimeModelListResponseSchema, r.data, {}, 'fetchRuntimeModels')
+));
 
 export const benchmarkRuntimeModel = (model: string, payload: { prompt?: string; max_tokens?: number } = {}) => (
-  api.post(`/models/${encodeURIComponent(model)}/benchmark`, payload).then(r => {
-    const result = RuntimeModelBenchmarkSchema.safeParse(r.data);
-    if (!result.success) {
-      console.error(`benchmarkRuntimeModel(${model}) validation failed:`, result.error);
-      return RuntimeModelBenchmarkSchema.parse({ model });
-    }
-    return result.data;
-  })
+  api.post(`/models/${encodeURIComponent(model)}/benchmark`, payload).then(r => (
+    parseOrFallback(RuntimeModelBenchmarkSchema, r.data, { model }, `benchmarkRuntimeModel(${model})`)
+  ))
 );
 
-export const addClusterNode = (payload: { host: string; token: string }) => api.post('/system/cluster/nodes:add', payload).then(r => {
-  const result = ClusterNodeAddResponseSchema.safeParse(r.data);
-  if (!result.success) {
-    console.error('addClusterNode validation failed:', result.error);
-    return ClusterNodeAddResponseSchema.parse({});
-  }
-  return result.data;
-});
+export const addClusterNode = (payload: { host: string; token: string }) => api.post('/system/cluster/nodes:add', payload).then(r => (
+  parseOrFallback(ClusterNodeAddResponseSchema, r.data, {}, 'addClusterNode')
+));
 
-export const removeClusterNode = (nodeName: string) => api.post('/system/cluster/nodes:remove', { node_name: nodeName }).then(r => {
-  const result = ClusterNodeRemoveResponseSchema.safeParse(r.data);
-  if (!result.success) {
-    console.error('removeClusterNode validation failed:', result.error);
-    return ClusterNodeRemoveResponseSchema.parse({ node_name: nodeName });
-  }
-  return result.data;
-});
+export const removeClusterNode = (nodeName: string) => api.post('/system/cluster/nodes:remove', { node_name: nodeName }).then(r => (
+  parseOrFallback(ClusterNodeRemoveResponseSchema, r.data, { node_name: nodeName }, 'removeClusterNode')
+));
 
 export type FetchJobsOptions = {
   includeTerminal?: boolean;
@@ -527,64 +529,29 @@ export const fetchJobs = async (options: FetchJobsOptions = {}) => {
       : api.get('/jobs');
   const r = await request;
   const data = r.data?.data || [];
-  const result = z.array(JobSchema).safeParse(data);
-  if (!result.success) {
-    console.error('fetchJobs validation failed:', result.error);
-    return [];
-  }
-  return Promise.all(result.data.map(refreshJobListStatus));
+  const jobs = parseArrayOrEmpty(JobSchema, data, 'fetchJobs');
+  return Promise.all(jobs.map(refreshJobListStatus));
 };
 
-export const fetchJobDetails = (id: string) => api.get(`/jobs/${id}`).then(r => {
-  const result = JobDetailsSchema.safeParse(r.data);
-  if (!result.success) {
-    console.error(`fetchJobDetails(${id}) validation failed:`, result.error);
-    return JobDetailsSchema.parse({ job: { job_id: id, status: 'unknown' } }); 
-  }
-  return result.data;
-});
+export const fetchJobDetails = (id: string) => api.get(`/jobs/${id}`).then(r => (
+  parseOrFallback(JobDetailsSchema, r.data, { job: { job_id: id, status: 'unknown' } }, `fetchJobDetails(${id})`)
+));
 
-export const fetchJobEvents = (id: string) => api.get(`/jobs/${id}/events`).then(r => {
-  const data = r.data?.data || [];
-  const result = z.array(JobEventSchema).safeParse(data);
-  if (!result.success) {
-    console.error(`fetchJobEvents(${id}) validation failed:`, result.error);
-    return [];
-  }
-  return result.data;
-});
-export const fetchJobAgentGraph = (id: string) => api.get(`/jobs/${id}/agent-graph`).then(r => {
-  const result = AgentGraphSchema.safeParse(r.data);
-  if (!result.success) {
-    console.error(`fetchJobAgentGraph(${id}) validation failed:`, result.error);
-    return AgentGraphSchema.parse({ job_id: id, nodes: [], edges: [] });
-  }
-  return result.data;
-});
-export const fetchRunUi = (id: string) => api.get(`/runs/${encodeURIComponent(id)}/ui`).then(r => {
-  const result = RunUiResponseSchema.safeParse(r.data);
-  if (!result.success) {
-    console.error(`fetchRunUi(${id}) validation failed:`, result.error);
-    return RunUiResponseSchema.parse({ run_id: id, ui: { run_id: id, title: 'Blueprint Run' } });
-  }
-  return result.data;
-});
-export const fetchBlueprints = () => api.get('/blueprints').then(r => {
-  const result = BlueprintListResponseSchema.safeParse(r.data);
-  if (!result.success) {
-    console.error('fetchBlueprints validation failed:', result.error);
-    return BlueprintListResponseSchema.parse({});
-  }
-  return result.data;
-});
-export const fetchWorkflowProgress = (id: string) => api.get(`/jobs/${encodeURIComponent(id)}/workflow-progress`).then(r => {
-  const result = WorkflowProgressSchema.safeParse(r.data);
-  if (!result.success) {
-    console.error(`fetchWorkflowProgress(${id}) validation failed:`, result.error);
-    return WorkflowProgressSchema.parse({ job_id: id, workflow_id: id, name: id });
-  }
-  return result.data;
-});
+export const fetchJobEvents = (id: string) => api.get(`/jobs/${id}/events`).then(r => (
+  parseArrayOrEmpty(JobEventSchema, r.data?.data || [], `fetchJobEvents(${id})`)
+));
+export const fetchJobAgentGraph = (id: string) => api.get(`/jobs/${id}/agent-graph`).then(r => (
+  parseOrFallback(AgentGraphSchema, r.data, { job_id: id, nodes: [], edges: [] }, `fetchJobAgentGraph(${id})`)
+));
+export const fetchRunUi = (id: string) => api.get(`/runs/${encodeURIComponent(id)}/ui`).then(r => (
+  parseOrFallback(RunUiResponseSchema, r.data, { run_id: id, ui: { run_id: id, title: 'Blueprint Run' } }, `fetchRunUi(${id})`)
+));
+export const fetchBlueprints = () => api.get('/blueprints').then(r => (
+  parseOrFallback(BlueprintListResponseSchema, r.data, {}, 'fetchBlueprints')
+));
+export const fetchWorkflowProgress = (id: string) => api.get(`/jobs/${encodeURIComponent(id)}/workflow-progress`).then(r => (
+  parseOrFallback(WorkflowProgressSchema, r.data, { job_id: id, workflow_id: id, name: id }, `fetchWorkflowProgress(${id})`)
+));
 
 const apiBaseUrl = () => String(api.defaults.baseURL || '/api/v1').replace(/\/$/, '');
 const apiPathFromUrl = (url: string) => {
@@ -601,6 +568,27 @@ const authHeader = (): Record<string, string> => {
   return typeof header === 'string' && header ? { Authorization: header } : {};
 };
 const workflowProgressStreamUrl = (id: string) => `${apiBaseUrl()}/jobs/${encodeURIComponent(id)}/workflow-progress/stream`;
+
+const handleWorkflowProgressStreamData = (
+  id: string,
+  data: string,
+  onSnapshot: (snapshot: WorkflowProgress) => void,
+) => {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(data);
+  } catch (error) {
+    console.error(`streamWorkflowProgress(${id}) JSON parse failed:`, error);
+    return;
+  }
+
+  const parsed = WorkflowProgressSchema.safeParse(payload);
+  if (parsed.success) {
+    onSnapshot(parsed.data);
+  } else {
+    console.error(`streamWorkflowProgress(${id}) validation failed:`, parsed.error);
+  }
+};
 
 export const revealArtifact = (revealUrl: string) => api.post(apiPathFromUrl(revealUrl)).then(r => r.data as { ok?: boolean; path?: string; folder?: string });
 
@@ -633,12 +621,7 @@ export const streamWorkflowProgress = async (
         .map((line) => line.slice(5).trimStart())
         .join('\n');
       if (eventName !== 'snapshot' || !data) continue;
-      const parsed = WorkflowProgressSchema.safeParse(JSON.parse(data));
-      if (parsed.success) {
-        onSnapshot(parsed.data);
-      } else {
-        console.error(`streamWorkflowProgress(${id}) validation failed:`, parsed.error);
-      }
+      handleWorkflowProgressStreamData(id, data, onSnapshot);
     }
   }
 };
@@ -666,10 +649,5 @@ export const launchBlueprintJob = (payload: unknown) => api.post('/blueprints/la
 });
 
 export const fetchLaunchProgress = (progressId: string) => api.get(`/blueprints/launch/progress/${encodeURIComponent(progressId)}`).then(r => {
-  const result = LaunchProgressResponseSchema.safeParse(r.data);
-  if (!result.success) {
-    console.error(`fetchLaunchProgress(${progressId}) validation failed:`, result.error);
-    return LaunchProgressResponseSchema.parse({ progress_id: progressId, events: [] });
-  }
-  return result.data;
+  return parseOrFallback(LaunchProgressResponseSchema, r.data, { progress_id: progressId, events: [] }, `fetchLaunchProgress(${progressId})`);
 });

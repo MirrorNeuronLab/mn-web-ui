@@ -12,9 +12,14 @@ import {
   benchmarkRuntimeModel,
   fetchRuntimeModels,
   removeClusterNode,
+  streamWorkflowProgress,
 } from '../api';
 
 const mockApi = vi.hoisted(() => ({
+  defaults: {
+    baseURL: '/api/v1',
+    headers: { common: {} as Record<string, string> },
+  },
   get: vi.fn(),
   post: vi.fn(),
 }));
@@ -31,6 +36,7 @@ describe('api parsing helpers', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('normalizes sparse job list records with safe defaults', async () => {
@@ -456,6 +462,46 @@ describe('api parsing helpers', () => {
       }),
     );
     expect(mockApi.get).toHaveBeenCalledWith('/jobs/job-1/workflow-progress');
+  });
+
+  it('skips malformed workflow progress stream snapshots and keeps reading', async () => {
+    const snapshot = JSON.stringify({
+      job_id: 'job-1',
+      workflow_id: 'workflow-1',
+      name: 'Workflow One',
+      status: 'running',
+    });
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`event: snapshot\ndata: {bad json}\n\n`));
+        controller.enqueue(new TextEncoder().encode(`event: snapshot\ndata: ${snapshot}\n\n`));
+        controller.close();
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const onSnapshot = vi.fn();
+
+    await streamWorkflowProgress('job-1', onSnapshot);
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/jobs/job-1/workflow-progress/stream', {
+      headers: {},
+      signal: undefined,
+    });
+    expect(console.error).toHaveBeenCalledWith(
+      'streamWorkflowProgress(job-1) JSON parse failed:',
+      expect.any(SyntaxError),
+    );
+    expect(onSnapshot).toHaveBeenCalledTimes(1);
+    expect(onSnapshot).toHaveBeenCalledWith(expect.objectContaining({
+      job_id: 'job-1',
+      workflow_id: 'workflow-1',
+      status: 'running',
+    }));
   });
 });
 
