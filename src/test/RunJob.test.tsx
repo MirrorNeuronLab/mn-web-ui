@@ -214,4 +214,55 @@ describe('RunJob Component', () => {
     });
     expect(mockNavigate).not.toHaveBeenCalled();
   });
+
+  it('shows friendly hardware requirement text when an NVIDIA runtime node is needed', async () => {
+    vi.mocked(launchBlueprintJob).mockRejectedValue({
+      response: {
+        data: {
+          error: 'requirements_not_met',
+          detail: "Add or connect a runtime node that meets this blueprint's hardware requirements, then launch again.",
+          validation: {
+            errors: ['gpu: validation failed'],
+            issues: [
+              {
+                code: 'requirements.gpu_node_unavailable',
+                message: 'gpu requirement validation failed',
+                location: { source: 'requirements', path: 'gpu' },
+                expected: {
+                  vendor: 'nvidia',
+                  driver: 'cuda',
+                  min_api_version: '12.0',
+                  api_version_operator: '>',
+                  min_memory_mb: 49152,
+                  memory_operator: '>',
+                },
+              },
+            ],
+          },
+        },
+      },
+      message: 'Request failed with status code 412',
+    });
+
+    renderRunJob();
+    await waitFor(() => {
+      expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    expect(await screen.findByText('Launch this job?')).toBeInTheDocument();
+
+    const launchButtons = screen.getAllByRole('button', { name: 'Launch' });
+    fireEvent.click(launchButtons[launchButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'This blueprint needs an NVIDIA CUDA runtime node with more than 48GB GPU memory and CUDA newer than 12.0. Add or connect an NVIDIA node, then launch again.',
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText('gpu: validation failed')).not.toBeInTheDocument();
+    expect(screen.queryByText(/wrong/i)).not.toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
 });
