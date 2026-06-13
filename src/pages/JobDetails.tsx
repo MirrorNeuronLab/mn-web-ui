@@ -11,6 +11,7 @@ import FailurePanel from '../components/FailurePanel';
 import ObservabilitySummaryPanel, { type ObservabilityArtifactRef } from '../components/ObservabilitySummaryPanel';
 import { confirmActionToast } from '../components/ui/confirm-toast';
 import { Tooltip } from '../components/ui/tooltip';
+import { usePollingEffect } from '../hooks/usePollingEffect';
 import { buildDisplayGraph } from '../utils/agentGraph';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -28,6 +29,7 @@ import { cn } from '../lib/utils';
 import { formatElapsed } from '../utils/workflowProgress';
 import { buildOutputResources } from '../utils/workflowResources';
 import { blueprintWebUiInfo, buildFallbackWorkflowProgress, webUiInfoFromRecord } from '../utils/jobDetailsView';
+import { isTerminalJobStatus, jobStatusBadgeClass } from '../utils/jobStatus';
 
 const StatusIcon = ({ status }: { status: string }) => {
   switch (status) {
@@ -38,18 +40,6 @@ const StatusIcon = ({ status }: { status: string }) => {
     case 'paused': return <PauseCircle className="h-3.5 w-3.5 text-neutral-700" />;
     case 'cancelled': return <Ban className="h-3.5 w-3.5 text-neutral-500" />;
     default: return <AlertCircle className="h-3.5 w-3.5 text-neutral-400" />;
-  }
-};
-
-const statusClass = (status: string) => {
-  switch (status) {
-    case 'running': return 'bg-neutral-100 text-neutral-950 border-neutral-300';
-    case 'completed': return 'bg-neutral-100 text-neutral-950 border-neutral-300';
-    case 'failed':
-    case 'error': return 'bg-neutral-100 text-neutral-950 border-neutral-300';
-    case 'paused': return 'bg-neutral-100 text-neutral-950 border-neutral-300';
-    case 'pending': return 'bg-neutral-100 text-neutral-950 border-neutral-300';
-    default: return 'bg-neutral-50 text-neutral-700 border-neutral-200';
   }
 };
 
@@ -90,8 +80,6 @@ const traceIdFrom = (
     observabilitySummary?.trace_id,
   )
 );
-
-const TERMINAL_STATUSES = new Set(['completed', 'done', 'finished', 'succeeded', 'success', 'failed', 'cancelled', 'canceled', 'error']);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -139,7 +127,7 @@ const displayStatusFromSources = (
   graphStatus: unknown,
 ): string | undefined => {
   const progress = normalizedStatus(progressStatus);
-  if (progress && isTerminalStatus(progress)) return progress;
+  if (progress && isTerminalJobStatus(progress)) return progress;
   const action = normalizedStatus(actionStatus);
   if (action) return action;
   const job = normalizedStatus(jobStatus);
@@ -154,8 +142,6 @@ const formattedTimestamp = (...values: unknown[]): string | undefined => {
   if (!Number.isFinite(parsed.getTime())) return undefined;
   return format(parsed, 'PP p');
 };
-
-const isTerminalStatus = (status?: string): boolean => TERMINAL_STATUSES.has(String(status || '').toLowerCase());
 
 export default function JobDetails() {
   const { id } = useParams();
@@ -218,14 +204,7 @@ export default function JobDetails() {
     }
   }, [id]);
 
-  useEffect(() => {
-    const initialLoad = setTimeout(load, 0);
-    const timer = setInterval(load, 3000);
-    return () => {
-      clearTimeout(initialLoad);
-      clearInterval(timer);
-    };
-  }, [load]);
+  usePollingEffect(load, { intervalMs: 3000 });
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -400,7 +379,7 @@ export default function JobDetails() {
           <div className="mb-2 flex items-center space-x-3">
             <h2 className="text-lg font-bold leading-6 text-neutral-950">{jobId}</h2>
             {displayStatus ? (
-              <Badge variant="outline" className={cn('gap-1.5 capitalize', statusClass(displayStatus))}>
+              <Badge variant="outline" className={cn('gap-1.5 capitalize', jobStatusBadgeClass(displayStatus))}>
                 <StatusIcon status={displayStatus} />
                 {displayStatus}
               </Badge>
@@ -578,7 +557,7 @@ export default function JobDetails() {
                               <TableCell className="px-4 py-2 font-mono text-xs font-medium text-neutral-950">{agent.label || agent.id || 'unknown'}</TableCell>
                               <TableCell className="px-4 py-2 text-xs text-neutral-600">{agent.agent_type || 'unknown'} / {agent.type || 'unknown'}</TableCell>
                               <TableCell className="px-4 py-2 text-xs">
-                                <Badge variant="outline" className={cn('capitalize', statusClass(agent.status))}>{agent.status || 'unknown'}</Badge>
+                                <Badge variant="outline" className={cn('capitalize', jobStatusBadgeClass(agent.status))}>{agent.status || 'unknown'}</Badge>
                               </TableCell>
                               <TableCell className="px-4 py-2 text-xs text-neutral-600">{agent.processed_messages ?? 0} processed, {agent.mailbox_depth ?? 0} in queue</TableCell>
                               <TableCell className="px-4 py-2 text-xs text-neutral-500">{agent.assigned_node || 'unassigned'}</TableCell>

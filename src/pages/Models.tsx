@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Boxes, Gauge, Loader2, RefreshCw, Server } from 'lucide-react';
 import { benchmarkRuntimeModel, fetchRuntimeModels } from '../api';
 import type { RuntimeModel, RuntimeModelBenchmark, RuntimeModelListResponse } from '../api';
@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
+import { usePollingEffect } from '../hooks/usePollingEffect';
 import { apiErrorMessage } from '../utils/apiErrors';
 
 export default function Models() {
@@ -48,18 +49,7 @@ export default function Models() {
     }
   }, []);
 
-  useEffect(() => {
-    const initialTimer = window.setTimeout(() => {
-      void loadModels();
-    }, 0);
-    const refreshTimer = window.setInterval(() => {
-      void loadModels();
-    }, 10000);
-    return () => {
-      window.clearTimeout(initialTimer);
-      window.clearInterval(refreshTimer);
-    };
-  }, [loadModels]);
+  usePollingEffect(loadModels, { intervalMs: 10000 });
 
   const models = useMemo(() => modelState?.models || [], [modelState]);
 

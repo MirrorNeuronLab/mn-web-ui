@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { fetchJobs, fetchSystemSummary } from '../api';
 import type { Job, SystemSummary } from '../api';
 import { Activity, BriefcaseBusiness, CircuitBoard, Cpu, MemoryStick, Server } from 'lucide-react';
 import { Tooltip } from '../components/ui/tooltip';
 import { Card, CardContent } from '../components/ui/card';
 import { Skeleton } from '../components/ui/skeleton';
+import { usePollingEffect } from '../hooks/usePollingEffect';
 import { cn } from '../lib/utils';
+import { isActiveJobStatus } from '../utils/jobStatus';
 import {
   formatMemoryPair,
   formatPercent,
@@ -15,8 +17,6 @@ import {
   summarizeRuntimeResources,
   type IdentityBadge,
 } from '../utils/runtimeResources';
-
-const activeStatuses = new Set(['running', 'pending', 'paused']);
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<SystemSummary | null>(null);
@@ -46,25 +46,14 @@ export default function Dashboard() {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    const initialTimer = window.setTimeout(() => {
-      void loadDashboard();
-    }, 0);
-    const refreshTimer = window.setInterval(() => {
-      void loadDashboard();
-    }, 5000);
-    return () => {
-      window.clearTimeout(initialTimer);
-      window.clearInterval(refreshTimer);
-    };
-  }, [loadDashboard]);
+  usePollingEffect(loadDashboard, { intervalMs: 5000 });
 
   const metricJobs = useMemo<Partial<Job>[]>(() => jobs ?? summary?.jobs ?? [], [jobs, summary]);
 
   const resources = useMemo(() => summarizeRuntimeResources(summary), [summary]);
 
   const totalJobs = metricJobs.length;
-  const activeJobs = metricJobs.filter((job) => activeStatuses.has(job.status ?? '')).length;
+  const activeJobs = metricJobs.filter((job) => isActiveJobStatus(job.status)).length;
   const clusterNodes = summary?.nodes.length || 0;
 
   if (loading) {

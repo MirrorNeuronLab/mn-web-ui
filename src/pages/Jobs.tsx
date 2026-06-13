@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { AlertCircle, Ban, CheckCircle, Clock, Eye, Loader2, PauseCircle, PlayCircle, Trash2, XCircle } from 'lucide-react';
@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
+import { usePollingEffect } from '../hooks/usePollingEffect';
 import { cn } from '../lib/utils';
 import { apiErrorMessage } from '../utils/apiErrors';
 
@@ -39,41 +40,34 @@ export default function Jobs() {
   const [isClearing, setIsClearing] = useState(false);
   const [activeOnly, setActiveOnly] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await fetchJobs({ includeTerminal: !activeOnly });
-        setJobs(data);
-        setSelectedJobIds((current) => {
-          const availableIds = new Set(data.map((job) => job.job_id));
-          return new Set([...current].filter((jobId) => availableIds.has(jobId)));
-        });
-      } catch (e) {
-        console.error('Failed to load jobs', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    const initialTimer = window.setTimeout(() => {
-      setLoading(true);
-      void load();
-    }, 0);
-    const timer = window.setInterval(() => {
-      void load();
-    }, 5000);
-    return () => {
-      window.clearTimeout(initialTimer);
-      window.clearInterval(timer);
-    };
-  }, [activeOnly]);
-
-  const refreshJobs = async () => {
-    const data = await fetchJobs({ includeTerminal: !activeOnly });
+  const applyJobs = useCallback((data: Job[]) => {
     setJobs(data);
     setSelectedJobIds((current) => {
       const availableIds = new Set(data.map((job) => job.job_id));
       return new Set([...current].filter((jobId) => availableIds.has(jobId)));
     });
+  }, []);
+
+  const loadJobs = useCallback(async () => {
+    try {
+      const data = await fetchJobs({ includeTerminal: !activeOnly });
+      applyJobs(data);
+    } catch (e) {
+      console.error('Failed to load jobs', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeOnly, applyJobs]);
+
+  const markInitialLoading = useCallback(() => {
+    setLoading(true);
+  }, []);
+
+  usePollingEffect(loadJobs, { intervalMs: 5000, onInitialPoll: markInitialLoading });
+
+  const refreshJobs = async () => {
+    const data = await fetchJobs({ includeTerminal: !activeOnly });
+    applyJobs(data);
   };
 
   const toggleJobSelection = (jobId: string) => {

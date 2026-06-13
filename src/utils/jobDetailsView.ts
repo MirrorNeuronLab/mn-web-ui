@@ -1,5 +1,6 @@
 import { isServiceJob } from '../api';
 import type { AgentGraph, JobDetails, JobEvent, WorkflowProgress } from '../api';
+import { isTerminalJobStatus } from './jobStatus';
 
 export type WebUiInfo = {
   url: string;
@@ -7,7 +8,6 @@ export type WebUiInfo = {
   status?: string;
 };
 
-const TERMINAL_STATUSES = new Set(['completed', 'done', 'finished', 'succeeded', 'success', 'failed', 'cancelled', 'canceled', 'error']);
 const ACTIVE_EVENT_TYPES = new Set(['agent_message_received', 'executor_lease_acquired', 'route_selected', 'video_frame_tick_generated']);
 const COMPLETE_EVENT_TYPES = new Set(['sandbox_job_completed', 'executor_lease_released']);
 
@@ -39,8 +39,6 @@ const elapsedSecondsSince = (timestamp?: string): number => {
   return Math.max(0, Math.round((Date.now() - submitted) / 1000));
 };
 
-const isTerminalStatus = (status?: string): boolean => TERMINAL_STATUSES.has(String(status || '').toLowerCase());
-
 const eventStatus = (event: JobEvent | undefined, fallback: string): string => {
   const type = String(event?.type || '').toLowerCase();
   if (type.includes('failed') || type.includes('error')) return 'failed';
@@ -58,7 +56,7 @@ const fallbackEventStatus = (event: JobEvent | undefined, fallback: string, work
 };
 
 const progressForStatus = (status: string, jobStatus: string): number => {
-  if (isTerminalStatus(status) || isTerminalStatus(jobStatus)) return 1;
+  if (isTerminalJobStatus(status) || isTerminalJobStatus(jobStatus)) return 1;
   if (String(status || '').toLowerCase() === 'idle') return 0.1;
   if (['running', 'active', 'ready', 'observed'].includes(String(status || '').toLowerCase())) return 0.45;
   return 0;
@@ -142,9 +140,9 @@ export const buildFallbackWorkflowProgress = (
       ended_at: null,
     };
   });
-  const doneCount = isTerminalStatus(jobStatus)
+  const doneCount = isTerminalJobStatus(jobStatus)
     ? agents.length
-    : agents.filter((agent) => isTerminalStatus(agent.status)).length;
+    : agents.filter((agent) => isTerminalJobStatus(agent.status)).length;
   const runningCount = agents.filter((agent) => agent.status === 'running').length;
   const idleCount = agents.filter((agent) => agent.status === 'idle').length;
   const failedCount = agents.filter((agent) => ['failed', 'cancelled', 'error'].includes(agent.status)).length;
@@ -159,8 +157,8 @@ export const buildFallbackWorkflowProgress = (
     id: 'runtime-agents',
     label: 'Runtime Agents',
     goal: 'Live job and agent status from the current API.',
-    status: isTerminalStatus(jobStatus) ? jobStatus : (jobStatus === 'running' ? 'running' : jobStatus || 'observed'),
-    current: !isTerminalStatus(jobStatus),
+    status: isTerminalJobStatus(jobStatus) ? jobStatus : (jobStatus === 'running' ? 'running' : jobStatus || 'observed'),
+    current: !isTerminalJobStatus(jobStatus),
     done_count: doneCount,
     running_count: runningCount,
     idle_count: idleCount,
@@ -170,7 +168,7 @@ export const buildFallbackWorkflowProgress = (
     live: workflowKind === 'service',
     elapsed_seconds: elapsedSecondsSince(submittedAt),
     started_at: submittedAt || null,
-    ended_at: isTerminalStatus(jobStatus) ? (updatedAt || null) : null,
+    ended_at: isTerminalJobStatus(jobStatus) ? (updatedAt || null) : null,
     agents,
   };
   const recentMessages = recentEvents.slice(-4).map((event) => (

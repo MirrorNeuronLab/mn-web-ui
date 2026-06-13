@@ -8,10 +8,32 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+build
 dist
 dist-ssr
+coverage
+playwright-report
 test-results
+.cache
+.vite
+.vitest
+*.tsbuildinfo
+*.tgz
 *.local
+
+# Local environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Python/local tooling artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Editor directories and files
 .vscode/*

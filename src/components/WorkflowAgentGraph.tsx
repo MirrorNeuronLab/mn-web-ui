@@ -7,6 +7,7 @@ import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
 import type { Agent, AgentGraph, WorkflowProgress } from '../api';
 import { buildDisplayGraph } from '../utils/agentGraph';
+import { jobStatusBadgeClass } from '../utils/jobStatus';
 import { Tooltip } from './ui/tooltip';
 
 type AgentNodeData = {
@@ -65,18 +66,6 @@ const getLayoutedElements = (nodes: Node<AgentNodeData>[], edges: Edge[], direct
   return { nodes: newNodes, edges };
 };
 
-const statusClass = (status: string) => {
-  switch (status) {
-    case 'running': return 'bg-neutral-100 text-neutral-950 border-neutral-300';
-    case 'completed': return 'bg-neutral-100 text-neutral-950 border-neutral-300';
-    case 'failed':
-    case 'error': return 'bg-neutral-100 text-neutral-950 border-neutral-300';
-    case 'paused': return 'bg-neutral-100 text-neutral-950 border-neutral-300';
-    case 'pending': return 'bg-neutral-100 text-neutral-950 border-neutral-300';
-    default: return 'bg-neutral-50 text-neutral-700 border-neutral-200';
-  }
-};
-
 export function WorkflowAgentGraph({
   graph,
   agents,
@@ -105,7 +94,7 @@ export function WorkflowAgentGraph({
             <div className="truncate text-sm font-semibold text-neutral-950">{agent.label || agent.id}</div>
             <div className="flex items-center justify-between gap-3 text-xs text-neutral-500">
               <span className="truncate">{agent.agent_type || 'unknown'}</span>
-              <span className={`rounded-full border px-2 py-0.5 capitalize ${statusClass(agent.status)}`}>{agent.status || 'unknown'}</span>
+              <span className={`rounded-full border px-2 py-0.5 capitalize ${jobStatusBadgeClass(agent.status)}`}>{agent.status || 'unknown'}</span>
             </div>
             <div className="text-xs text-neutral-400">{agent.processed_messages ?? 0} processed / {agent.mailbox_depth ?? 0} queued</div>
           </div>
