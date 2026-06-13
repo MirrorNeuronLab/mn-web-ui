@@ -1,12 +1,20 @@
 import { useState } from 'react';
 import { Activity, Check, Circle, Clock3, ExternalLink, FileText, Loader2, MousePointer2, X } from 'lucide-react';
-import { toast } from 'sonner';
 import type { JobDetails, WorkflowActivity, WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
-import { revealArtifact } from '../api';
 import { displayAgentName } from '../utils/agentGraph';
 import { formatElapsed } from '../utils/workflowProgress';
 import { artifactsFromDetails, buildInputResources, buildOutputResources } from '../utils/workflowResources';
 import type { ProgressResource } from '../utils/workflowResources';
+import { openArtifactLocation } from '../utils/artifactReveal';
+import {
+  activityCategory,
+  activityDetailText,
+  activityMessage,
+  categoryTone,
+  filterLabel,
+  uniqueActivities,
+  type ActivityFilter,
+} from '../utils/workflowActivity';
 import FailurePanel, { ErrorSummary } from './FailurePanel';
 
 type WorkflowProgressPanelProps = {
@@ -90,80 +98,6 @@ const eventKey = (event: WorkflowActivity, index: number) => (
   `${event.timestamp || 'unknown'}-${event.type || 'event'}-${event.step_id || ''}-${event.agent_id || ''}-${index}`
 );
 
-const activityMessage = (event: WorkflowActivity) => (
-  event.message || event.result_summary || event.status || event.type || 'Activity observed'
-);
-
-type ActivityFilter = 'all' | 'agent' | 'tool' | 'system' | 'artifact' | 'error';
-
-const activityCategory = (event: WorkflowActivity): ActivityFilter => {
-  const category = String(event.category || '').toLowerCase();
-  if (['agent', 'tool', 'system', 'artifact', 'error'].includes(category)) return category as ActivityFilter;
-  const type = String(event.type || '').toLowerCase();
-  if (event.failure || type.includes('failed') || type.includes('error') || type.includes('timed_out')) return 'error';
-  if (type.includes('tool_call')) return 'tool';
-  if (type.includes('artifact')) return 'artifact';
-  if (type.startsWith('financial_') || type === 'agent_activity') return 'agent';
-  return 'system';
-};
-
-const categoryTone = (category: ActivityFilter) => {
-  switch (category) {
-    case 'agent': return 'border-sky-200 bg-sky-50 text-sky-700';
-    case 'tool': return 'border-violet-200 bg-violet-50 text-violet-700';
-    case 'artifact': return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-    case 'error': return 'border-red-200 bg-red-50 text-red-700';
-    case 'system': return 'border-neutral-200 bg-white text-neutral-600';
-    default: return 'border-neutral-200 bg-white text-neutral-600';
-  }
-};
-
-const filterLabel = (filter: ActivityFilter) => (
-  filter === 'all' ? 'All' : filter === 'artifact' ? 'Artifacts' : `${filter.charAt(0).toUpperCase()}${filter.slice(1)}`
-);
-
-const compactJson = (value: unknown) => {
-  if (value === null || value === undefined || value === '') return '';
-  if (typeof value === 'string') return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-};
-
-const activityDetailText = (event: WorkflowActivity) => {
-  const detail = {
-    target: event.target,
-    tool_name: event.tool_name,
-    status: event.status,
-    duration_ms: event.duration_ms,
-    result_summary: event.result_summary,
-    details: event.details,
-    failure: event.failure,
-  };
-  return Object.values(detail).some((value) => value !== undefined && value !== null && value !== '')
-    ? compactJson(detail)
-    : '';
-};
-
-const uniqueActivities = (activities: WorkflowActivity[]) => {
-  const seen = new Set<string>();
-  return activities.filter((event) => {
-    const key = `${event.timestamp || 'unknown'}-${event.type || 'event'}-${event.step_id || ''}-${event.agent_id || ''}-${event.message || ''}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
-
-const openResourceLocation = (resource: ProgressResource) => {
-  if (!resource.revealUrl) return;
-  void revealArtifact(resource.revealUrl)
-    .then(() => toast.message('Opened file location', { description: resource.label }))
-    .catch(() => toast.error('Could not open file location', { description: resource.label }));
-};
-
 const ResourceList = ({ resources, emptyText }: { resources: ProgressResource[]; emptyText: string }) => (
   <div className="space-y-1">
     {resources.length ? resources.slice(0, 8).map((resource) => {
@@ -176,7 +110,7 @@ const ResourceList = ({ resources, emptyText }: { resources: ProgressResource[];
       );
       const className = "flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-neutral-900 hover:bg-neutral-100";
       return resource.revealUrl ? (
-        <button key={resource.id} type="button" className={className} onClick={() => openResourceLocation(resource)} title={`Open ${resource.label} in local file system`}>
+        <button key={resource.id} type="button" className={className} onClick={() => openArtifactLocation(resource.revealUrl, resource.label)} title={`Open ${resource.label} in local file system`}>
           {content}
         </button>
       ) : resource.href ? (

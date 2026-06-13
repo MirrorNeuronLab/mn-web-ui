@@ -1,8 +1,7 @@
 import { AlertTriangle, ExternalLink, FileText } from 'lucide-react';
-import { toast } from 'sonner';
-import { revealArtifact } from '../api';
 import type { ErrorEnvelope } from '../api';
 import { artifactDisplayName } from '../utils/artifacts';
+import { openArtifactLocation } from '../utils/artifactReveal';
 
 type ArtifactRef = {
   artifact_id?: string;
@@ -50,12 +49,6 @@ const detailValue = (failure: ErrorEnvelope | null | undefined, key: string) => 
 const artifactForLink = (artifactId: string | undefined, artifacts?: ArtifactRef[]) => {
   if (!artifactId || !artifacts?.length) return undefined;
   return artifacts.find((artifact) => artifact.artifact_id === artifactId);
-};
-
-const openArtifactLocation = (revealUrl: string, label: string) => {
-  void revealArtifact(revealUrl)
-    .then(() => toast.message('Opened file location', { description: label }))
-    .catch(() => toast.error('Could not open file location', { description: label }));
 };
 
 export const ErrorSummary = ({ failure }: { failure?: ErrorEnvelope | null }) => {

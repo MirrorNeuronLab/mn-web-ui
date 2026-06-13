@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
+import { apiErrorMessage } from '../utils/apiErrors';
 
 export default function Models() {
   const [modelState, setModelState] = useState<RuntimeModelListResponse | null>(null);
@@ -369,22 +370,4 @@ function formatMs(value: number) {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: value >= 10 ? 1 : 2 }).format(value || 0);
-}
-
-function apiErrorMessage(error: unknown, fallback: string) {
-  const responseData = error && typeof error === 'object' && 'response' in error
-    ? (error as { response?: { data?: unknown } }).response?.data
-    : null;
-
-  if (responseData && typeof responseData === 'object' && !Array.isArray(responseData)) {
-    const record = responseData as Record<string, unknown>;
-    const detail = stringValue(record.detail) || stringValue(record.message) || stringValue(record.error);
-    if (detail) return detail;
-  }
-
-  return error instanceof Error && error.message ? error.message : fallback;
-}
-
-function stringValue(value: unknown) {
-  return typeof value === 'string' ? value : '';
 }

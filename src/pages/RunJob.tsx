@@ -12,36 +12,13 @@ import { Input } from '../components/ui/input';
 import { Progress } from '../components/ui/progress';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { cn } from '../lib/utils';
+import { apiErrorMessage } from '../utils/apiErrors';
 
 type LaunchMode = 'blueprint' | 'path' | 'bundle';
 
 type UploadedBundle = {
   bundle_path: string;
-  manifest: Record<string, unknown> & { graph_id?: string; job_name?: string };
-};
-
-type ValidationIssue = {
-  code?: string;
-  message?: string;
-  help?: string;
-  location?: { source?: string; path?: string };
-  expected?: unknown;
-  actual?: unknown;
-};
-
-type ApiError = {
-  response?: {
-    data?: {
-      error?: string;
-      detail?: string | { error?: string; message?: string };
-      validation?: {
-        errors?: string[];
-        issues?: ValidationIssue[];
-      };
-      errors?: ValidationIssue[];
-    };
-  };
-  message?: string;
+  manifest: Record<string, unknown>;
 };
 
 const modeTabs: Array<{ id: LaunchMode; label: string; description: string }> = [
@@ -147,76 +124,10 @@ function LaunchProgressModal({
   );
 }
 
-const issueText = (issue: ValidationIssue) => {
-  const path = issue.location?.path ? `${issue.location.path}: ` : '';
-  return `${path}${issue.message || issue.help || 'Validation issue'}`;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-);
-
-const numberValue = (value: unknown) => {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-};
-
-const stringValue = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
-
-const formatGpuMemory = (memoryMb: number) => {
-  const gb = memoryMb / 1024;
-  return Number.isInteger(gb) ? `${gb}GB` : `${gb.toFixed(1)}GB`;
-};
-
-const memoryComparisonText = (operator: string | null, memoryMb: number) => {
-  const memory = formatGpuMemory(memoryMb);
-  if (operator === '>') return `more than ${memory} GPU memory`;
-  if (operator === '==') return `exactly ${memory} GPU memory`;
-  return `at least ${memory} GPU memory`;
-};
-
-const apiComparisonText = (driver: string, operator: string | null, version: string) => {
-  if (operator === '>') return `${driver} newer than ${version}`;
-  if (operator === '==') return `${driver} ${version}`;
-  return `${driver} ${version} or newer`;
-};
-
-const isHardwareRequirementIssue = (issue: ValidationIssue) => (
-  issue.code?.startsWith('requirements.gpu') ||
-  (issue.location?.source === 'requirements' && issue.location?.path === 'gpu')
-);
-
-const hardwareRequirementText = (issue: ValidationIssue) => {
-  const expected = isRecord(issue.expected) ? issue.expected : {};
-  const vendor = (stringValue(expected['vendor']) || 'NVIDIA').toUpperCase();
-  const driver = (stringValue(expected['driver']) || 'CUDA').toUpperCase();
-  const phrases: string[] = [];
-  const memoryMb = numberValue(expected['min_memory_mb']);
-  if (memoryMb !== null) phrases.push(memoryComparisonText(stringValue(expected['memory_operator']), memoryMb));
-  const apiVersion = stringValue(expected['min_api_version']);
-  if (apiVersion) phrases.push(apiComparisonText(driver, stringValue(expected['api_version_operator']), apiVersion));
-  const details = phrases.length > 0 ? ` with ${phrases.join(' and ')}` : '';
-  return `This blueprint needs an ${vendor} ${driver} runtime node${details}. Add or connect an ${vendor} node, then launch again.`;
-};
-
-const errorMessage = (err: unknown, fallback: string) => {
-  const apiError = err as ApiError;
-  const data = apiError.response?.data;
-  const validationIssues = data?.validation?.issues || data?.errors || [];
-  const hardwareIssue = validationIssues.find(isHardwareRequirementIssue);
-  if (hardwareIssue) return hardwareRequirementText(hardwareIssue);
-  const validationErrors = data?.validation?.errors || [];
-  if (validationErrors.length > 0) return validationErrors.join('\n');
-  if (validationIssues.length > 0) return validationIssues.map(issueText).join('\n');
-  if (data?.error) return data.error;
-  if (typeof data?.detail === 'string') return data.detail;
-  if (data?.detail?.error) return data.detail.error;
-  if (data?.detail?.message) return data.detail.message;
-  return apiError.message || fallback;
+const manifestLabel = (manifest: Record<string, unknown>, fallback = 'uploaded bundle') => {
+  const graphId = typeof manifest.graph_id === 'string' && manifest.graph_id.trim() ? manifest.graph_id.trim() : '';
+  const jobName = typeof manifest.job_name === 'string' && manifest.job_name.trim() ? manifest.job_name.trim() : '';
+  return graphId || jobName || fallback;
 };
 
 export default function RunJob() {
@@ -246,7 +157,7 @@ export default function RunJob() {
           setSelectedBlueprintId((current) => current || response.blueprints?.[0]?.id || '');
         })
         .catch((err: unknown) => {
-          if (!cancelled) setError(errorMessage(err, 'Failed to load blueprints'));
+          if (!cancelled) setError(apiErrorMessage(err, 'Failed to load blueprints'));
         })
         .finally(() => {
           if (!cancelled) setLoadingBlueprints(false);
@@ -318,11 +229,11 @@ export default function RunJob() {
       },
       success: (result: UploadedBundle) => ({
         title: 'Bundle uploaded',
-        description: String(result.manifest.graph_id || result.manifest.job_name || selectedFile.name),
+        description: manifestLabel(result.manifest, selectedFile.name),
       }),
       error: (err) => ({
         title: 'Upload failed',
-        description: errorMessage(err, 'Failed to upload bundle'),
+        description: apiErrorMessage(err, 'Failed to upload bundle'),
       }),
       onCancel: resetFileInput,
       onConfirm: async () => {
@@ -335,7 +246,7 @@ export default function RunJob() {
           resetFileInput();
           return res;
         } catch (err: unknown) {
-          const message = errorMessage(err, 'Failed to upload bundle');
+          const message = apiErrorMessage(err, 'Failed to upload bundle');
           setError(message);
           resetFileInput();
           throw new Error(message);
@@ -355,7 +266,7 @@ export default function RunJob() {
   const launchSummary = () => {
     if (mode === 'blueprint') return selectedBlueprint?.name || selectedBlueprintId;
     if (mode === 'path') return pathValue.trim();
-    return String(bundleData?.manifest.graph_id || bundleData?.manifest.job_name || bundleData?.bundle_path || 'uploaded bundle');
+    return bundleData ? manifestLabel(bundleData.manifest, bundleData.bundle_path || 'uploaded bundle') : 'uploaded bundle';
   };
 
   const confirmLaunch = () => {
@@ -379,7 +290,7 @@ export default function RunJob() {
       }),
       error: (err) => ({
         title: 'Launch failed',
-        description: errorMessage(err, 'Failed to validate and launch job'),
+        description: apiErrorMessage(err, 'Failed to validate and launch job'),
       }),
       onConfirm: async () => {
         setRunning(true);
@@ -402,7 +313,7 @@ export default function RunJob() {
           return jobId;
         } catch (err: unknown) {
           await refreshLaunchProgress(launchProgressId);
-          const message = errorMessage(err, 'Failed to validate and launch job');
+          const message = apiErrorMessage(err, 'Failed to validate and launch job');
           setError(message);
           setRunning(false);
           setProgressModalOpen(true);
@@ -524,7 +435,7 @@ export default function RunJob() {
                         <div>
                           <h3 className="text-xs font-medium text-neutral-950">Bundle uploaded</h3>
                           <p className="mt-1 text-xs text-neutral-700">
-                            Workflow ID: <strong className="font-mono">{bundleData.manifest.graph_id || bundleData.manifest.job_name || 'bundle'}</strong>
+                            Workflow ID: <strong className="font-mono">{manifestLabel(bundleData.manifest, 'bundle')}</strong>
                           </p>
                           <p className="mt-1 font-mono text-xs text-neutral-500">{bundleData.bundle_path}</p>
                         </div>

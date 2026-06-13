@@ -7,12 +7,18 @@ import {
   fetchWorkflowProgress,
   fetchSystemSummary,
   clearJobs,
+  cancelJob,
   isServiceJob,
   addClusterNode,
   benchmarkRuntimeModel,
   fetchRuntimeModels,
+  launchBlueprintJob,
   removeClusterNode,
+  pauseJob,
+  resumeJob,
+  revealArtifact,
   streamWorkflowProgress,
+  uploadBundle,
 } from '../api';
 
 const mockApi = vi.hoisted(() => ({
@@ -81,6 +87,51 @@ describe('api parsing helpers', () => {
     await expect(clearJobs()).resolves.toEqual({ cleared_count: 2 });
 
     expect(mockApi.post).toHaveBeenCalledWith('/jobs/cleanup');
+  });
+
+  it('uses safe fallbacks for malformed mutation responses', async () => {
+    mockApi.post.mockResolvedValueOnce({ data: { cleared_count: 'two' } });
+    await expect(clearJobs()).resolves.toEqual({ cleared_count: 0 });
+
+    mockApi.post.mockResolvedValueOnce({ data: { status: 42 } });
+    await expect(cancelJob('job-1')).resolves.toEqual(expect.objectContaining({
+      job_id: 'job-1',
+      status: 'cancelled',
+    }));
+
+    mockApi.post.mockResolvedValueOnce({ data: { status: null } });
+    await expect(pauseJob('job-1')).resolves.toEqual(expect.objectContaining({
+      job_id: 'job-1',
+      status: 'paused',
+    }));
+
+    mockApi.post.mockResolvedValueOnce({ data: { status: false } });
+    await expect(resumeJob('job-1')).resolves.toEqual(expect.objectContaining({
+      job_id: 'job-1',
+      status: 'running',
+    }));
+  });
+
+  it('encodes dynamic job ids before building routes', async () => {
+    mockApi.get.mockResolvedValueOnce({
+      data: { job: { job_id: 'job/with space', status: 'running' } },
+    });
+    await fetchJobDetails('job/with space');
+    expect(mockApi.get).toHaveBeenLastCalledWith('/jobs/job%2Fwith%20space');
+
+    mockApi.get.mockResolvedValueOnce({ data: { data: [] } });
+    await fetchJobEvents('job/with space');
+    expect(mockApi.get).toHaveBeenLastCalledWith('/jobs/job%2Fwith%20space/events');
+
+    mockApi.get.mockResolvedValueOnce({
+      data: { job_id: 'job/with space', nodes: [], edges: [] },
+    });
+    await fetchJobAgentGraph('job/with space');
+    expect(mockApi.get).toHaveBeenLastCalledWith('/jobs/job%2Fwith%20space/agent-graph');
+
+    mockApi.post.mockResolvedValueOnce({ data: { status: 'paused' } });
+    await pauseJob('job/with space');
+    expect(mockApi.post).toHaveBeenLastCalledWith('/jobs/job%2Fwith%20space/pause');
   });
 
   it('reconciles stale paused service rows with live workflow progress', async () => {
@@ -305,6 +356,46 @@ describe('api parsing helpers', () => {
       }),
     );
     expect(mockApi.post).toHaveBeenCalledWith('/models/gemma4%3Ae2b/benchmark', { max_tokens: 32 });
+  });
+
+  it('normalizes malformed upload and launch responses', async () => {
+    mockApi.post.mockResolvedValueOnce({
+      data: {
+        bundle_path: 42,
+        manifest: 'not-a-manifest',
+      },
+    });
+
+    const file = new File(['bundle'], 'bundle.zip', { type: 'application/zip' });
+    await expect(uploadBundle(file)).resolves.toEqual({
+      bundle_path: '',
+      manifest: {},
+    });
+
+    mockApi.post.mockResolvedValueOnce({
+      data: {
+        id: 123,
+        status: 456,
+      },
+    });
+
+    await expect(launchBlueprintJob({ source: 'catalog' })).resolves.toEqual({ status: 'pending' });
+    expect(console.error).toHaveBeenCalledWith(
+      'launchBlueprintJob validation failed:',
+      expect.anything(),
+    );
+  });
+
+  it('posts reveal artifact calls through same-origin API paths only', async () => {
+    mockApi.post.mockResolvedValueOnce({ data: { ok: true, folder: '/tmp/job-1' } });
+
+    await expect(revealArtifact('/api/v1/artifacts/logs/reveal')).resolves.toEqual(
+      expect.objectContaining({ ok: true, folder: '/tmp/job-1' }),
+    );
+    expect(mockApi.post).toHaveBeenLastCalledWith('/artifacts/logs/reveal');
+
+    await expect(revealArtifact('https://evil.example/artifacts/logs/reveal')).rejects.toThrow('same-origin');
+    expect(mockApi.post).toHaveBeenCalledTimes(1);
   });
 
   it('keeps job detail screens renderable when the detail payload is malformed', async () => {

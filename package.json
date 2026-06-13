@@ -39,7 +39,6 @@
     "dagre": "^0.8.5",
     "date-fns": "^4.1.0",
     "lucide-react": "^1.8.0",
-    "mirrorneuron-web-ui": "^1.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.1",

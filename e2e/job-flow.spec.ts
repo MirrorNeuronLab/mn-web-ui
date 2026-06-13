@@ -3,6 +3,23 @@ import { expect, test } from '@playwright/test';
 test('submits a bundle and controls the job from the real app shell', async ({ page }) => {
   let jobStatus = 'running';
 
+  await page.route('**/api/v1/blueprints', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        repo_dir: '/tmp/blueprints',
+        blueprints: [
+          {
+            id: 'browser_flow_graph',
+            name: 'Browser flow graph',
+            description: 'Browser flow job',
+          },
+        ],
+        categories: [],
+      }),
+    });
+  });
+
   await page.route('**/api/v1/bundles/upload', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -18,16 +35,41 @@ test('submits a bundle and controls the job from the real app shell', async ({ p
     });
   });
 
-  await page.route('**/api/v1/jobs', async (route) => {
-    const request = route.request();
-    if (request.method() === 'POST') {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ id: 'browser-job-1', status: 'pending' }),
-      });
-      return;
-    }
+  await page.route('**/api/v1/blueprints/launch/runs', async (route) => {
+    const payload = await route.request().postDataJSON();
+    expect(payload).toMatchObject({
+      source: 'bundle',
+      _bundle_path: '/tmp/e2e-bundle',
+    });
+    expect(String(payload.progress_id)).toMatch(/^launch-/);
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'browser-job-1',
+        job_id: 'browser-job-1',
+        run_id: 'browser-run-1',
+        status: 'pending',
+        progress_id: payload.progress_id,
+      }),
+    });
+  });
 
+  await page.route('**/api/v1/blueprints/launch/progress/**', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        progress_id: 'launch-e2e',
+        events: [
+          { phase: 'resolve_source', status: 'completed', message: 'Bundle source resolved.' },
+          { phase: 'submit', status: 'completed', message: 'Job submitted.' },
+        ],
+        latest: { phase: 'submit', status: 'completed', message: 'Job submitted.' },
+        completed: true,
+      }),
+    });
+  });
+
+  await page.route(/\/api\/v1\/jobs(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -183,29 +225,39 @@ test('submits a bundle and controls the job from the real app shell', async ({ p
   });
 
   await page.goto('/run');
+  await page.getByRole('tab', { name: 'ZIP bundle' }).click();
   await page.setInputFiles('input[type="file"]', {
     name: 'bundle.zip',
     mimeType: 'application/zip',
     buffer: Buffer.from('fake zip contents'),
   });
+  await expect(page.getByText('Upload this ZIP bundle?')).toBeVisible();
+  await page.getByRole('button', { name: 'Upload ZIP' }).click();
 
-  await expect(page.getByText('Bundle validated successfully')).toBeVisible();
-  await expect(page.getByText('browser_flow_graph', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Bundle uploaded' })).toBeVisible();
+  await expect(page.locator('strong').filter({ hasText: 'browser_flow_graph' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Run Job Now' }).click();
+  await page.getByRole('button', { name: 'Launch' }).click();
+  await expect(page.getByText('Launch this job?')).toBeVisible();
+  await page.getByRole('button', { name: 'Launch' }).last().click();
   await expect(page).toHaveURL(/\/jobs\/browser-job-1$/);
   await expect(page.getByRole('heading', { name: 'browser-job-1' })).toBeVisible();
   await expect(page.getByText('running').first()).toBeVisible();
 
   await page.getByRole('button', { name: 'Pause' }).click();
+  await expect(page.getByText('Pause this job?')).toBeVisible();
+  await page.getByRole('button', { name: 'Pause job' }).click();
   await expect(page.getByText('paused').first()).toBeVisible();
 
   await page.getByRole('button', { name: 'Resume' }).click();
+  await expect(page.getByText('Resume this job?')).toBeVisible();
+  await page.getByRole('button', { name: 'Resume job' }).click();
   await expect(page.getByText('running').first()).toBeVisible();
 
   await page.getByRole('button', { name: 'Cancel' }).click();
-  await page.getByRole('button', { name: 'Cancel Job' }).click();
+  await expect(page.getByText('Cancel this job?')).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel job' }).click();
   await expect(page).toHaveURL(/\/jobs$/);
-  await expect(page.getByText('browser-job-1')).toBeVisible();
-  await expect(page.getByText('cancelled')).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'browser-job-1', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: /cancelled/i })).toBeVisible();
 });

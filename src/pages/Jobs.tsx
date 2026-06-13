@@ -19,6 +19,7 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { cn } from '../lib/utils';
+import { apiErrorMessage } from '../utils/apiErrors';
 
 const StatusIcon = ({ status }: { status: string }) => {
   switch (status) {
@@ -348,22 +349,4 @@ export default function Jobs() {
       </CardContent>
     </Card>
   );
-}
-
-function apiErrorMessage(error: unknown, fallback: string) {
-  const responseData = error && typeof error === 'object' && 'response' in error
-    ? (error as { response?: { data?: unknown } }).response?.data
-    : null;
-
-  if (responseData && typeof responseData === 'object' && !Array.isArray(responseData)) {
-    const record = responseData as Record<string, unknown>;
-    const detail = stringValue(record.detail) || stringValue(record.message) || stringValue(record.error);
-    if (detail) return detail;
-  }
-
-  return error instanceof Error && error.message ? error.message : fallback;
-}
-
-function stringValue(value: unknown) {
-  return typeof value === 'string' ? value : '';
 }

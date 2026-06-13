@@ -1,7 +1,6 @@
 import { Network } from 'lucide-react';
-import { toast } from 'sonner';
-import { revealArtifact } from '../api';
 import { artifactDisplayName } from '../utils/artifacts';
+import { openArtifactLocation } from '../utils/artifactReveal';
 import { formatElapsed } from '../utils/workflowProgress';
 
 export type ObservabilityArtifactRef = {
@@ -44,14 +43,6 @@ const formatPeak = (value: unknown, suffix: string): string | undefined => {
   const number = numericValue(value);
   if (typeof number !== 'number') return undefined;
   return `${Math.round(number * 10) / 10}${suffix}`;
-};
-
-const openArtifactLocation = (artifact: ObservabilityArtifactRef) => {
-  if (!artifact.reveal_url) return;
-  const label = artifactDisplayName(artifact);
-  void revealArtifact(artifact.reveal_url)
-    .then(() => toast.message('Opened file location', { description: label }))
-    .catch(() => toast.error('Could not open file location', { description: label }));
 };
 
 export default function ObservabilitySummaryPanel({ summary, traceId, artifacts }: Props) {
@@ -108,7 +99,7 @@ export default function ObservabilitySummaryPanel({ summary, traceId, artifacts 
           const displayLabel = artifactDisplayName(artifact, label);
           const className = "rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-medium text-neutral-700 hover:border-neutral-300 hover:bg-white";
           return artifact.reveal_url ? (
-            <button key={artifactId} type="button" onClick={() => openArtifactLocation(artifact)} className={className}>
+            <button key={artifactId} type="button" onClick={() => openArtifactLocation(artifact.reveal_url, displayLabel)} className={className}>
               {displayLabel}
             </button>
           ) : (

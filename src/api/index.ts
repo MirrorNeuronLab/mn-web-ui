@@ -1,5 +1,8 @@
 import api from './client';
 import { z } from 'zod';
+import { parseArrayOrEmpty, parseOrFallback } from './parsing';
+import { apiPathFromUrl, bundlePath, jobPath, launchProgressPath, modelPath, runPath } from './routes';
+import { createWorkflowProgressStreamer } from './streaming';
 
 export const ErrorEnvelopeSchema = z.object({
   schema_version: z.string().optional().default('mn.error.v1'),
@@ -273,6 +276,35 @@ export const BlueprintLaunchResponseSchema = z.object({
   command: z.string().optional(),
 }).passthrough();
 
+export const UploadedBundleSchema = z.object({
+  bundle_path: z.string().optional().default(''),
+  manifest: z.record(z.string(), z.unknown()).optional().default({}),
+}).passthrough();
+
+export const JobActionResponseSchema = z.object({
+  ok: z.boolean().optional(),
+  job_id: z.string().optional(),
+  status: z.string().optional().default('unknown'),
+  message: z.string().optional(),
+}).passthrough();
+
+export const ClearJobsResponseSchema = z.object({
+  cleared_count: z.number().optional().default(0),
+}).passthrough();
+
+export const ReloadBundleResponseSchema = z.object({
+  ok: z.boolean().optional(),
+  status: z.string().optional(),
+  message: z.string().optional(),
+}).passthrough();
+
+export const RevealArtifactResponseSchema = z.object({
+  ok: z.boolean().optional(),
+  path: z.string().optional(),
+  folder: z.string().optional(),
+  message: z.string().optional(),
+}).passthrough();
+
 export const LaunchProgressEventSchema = z.object({
   ts: z.string().optional(),
   phase: z.string().optional().default('launch'),
@@ -426,39 +458,17 @@ export type RunUiResponse = z.infer<typeof RunUiResponseSchema>;
 export type Blueprint = z.infer<typeof BlueprintSchema>;
 export type BlueprintListResponse = z.infer<typeof BlueprintListResponseSchema>;
 export type BlueprintLaunchResponse = z.infer<typeof BlueprintLaunchResponseSchema>;
+export type UploadedBundle = z.infer<typeof UploadedBundleSchema>;
+export type JobActionResponse = z.infer<typeof JobActionResponseSchema>;
+export type ClearJobsResponse = z.infer<typeof ClearJobsResponseSchema>;
+export type ReloadBundleResponse = z.infer<typeof ReloadBundleResponseSchema>;
+export type RevealArtifactResponse = z.infer<typeof RevealArtifactResponseSchema>;
 export type LaunchProgressEvent = z.infer<typeof LaunchProgressEventSchema>;
 export type LaunchProgressResponse = z.infer<typeof LaunchProgressResponseSchema>;
 export type WorkflowActivity = z.infer<typeof WorkflowActivitySchema>;
 export type WorkflowProgressAgent = z.infer<typeof WorkflowProgressAgentSchema>;
 export type WorkflowProgressStep = z.infer<typeof WorkflowProgressStepSchema>;
 export type WorkflowProgress = z.infer<typeof WorkflowProgressSchema>;
-
-const parseOrFallback = <T>(
-  schema: z.ZodType<T>,
-  data: unknown,
-  fallback: unknown,
-  validationLabel: string,
-): T => {
-  const result = schema.safeParse(data);
-  if (!result.success) {
-    console.error(`${validationLabel} validation failed:`, result.error);
-    return schema.parse(fallback);
-  }
-  return result.data;
-};
-
-const parseArrayOrEmpty = <T>(
-  schema: z.ZodType<T>,
-  data: unknown,
-  validationLabel: string,
-): T[] => {
-  const result = z.array(schema).safeParse(data);
-  if (!result.success) {
-    console.error(`${validationLabel} validation failed:`, result.error);
-    return [];
-  }
-  return result.data;
-};
 
 export const isServiceJob = (job: Partial<Job> | null | undefined, summary?: { type?: unknown; job_type?: unknown; stream_mode?: unknown; policies?: unknown }): boolean => {
   const summaryType = typeof summary?.job_type === 'string' ? summary.job_type : typeof summary?.type === 'string' ? summary.type : '';
@@ -486,7 +496,7 @@ const listStatusFromProgress = (progress: WorkflowProgress): string | null => {
 const refreshJobListStatus = async (job: Job): Promise<Job> => {
   if (!shouldRefreshListStatus(job) || !job.job_id || job.job_id === 'unknown') return job;
   try {
-    const response = await api.get(`/jobs/${encodeURIComponent(job.job_id)}/workflow-progress`);
+    const response = await api.get(jobPath(job.job_id, '/workflow-progress'));
     const parsed = WorkflowProgressSchema.safeParse(response.data);
     if (!parsed.success) return job;
     const status = listStatusFromProgress(parsed.data);
@@ -505,7 +515,7 @@ export const fetchRuntimeModels = () => api.get('/models').then(r => (
 ));
 
 export const benchmarkRuntimeModel = (model: string, payload: { prompt?: string; max_tokens?: number } = {}) => (
-  api.post(`/models/${encodeURIComponent(model)}/benchmark`, payload).then(r => (
+  api.post(modelPath(model, '/benchmark'), payload).then(r => (
     parseOrFallback(RuntimeModelBenchmarkSchema, r.data, { model }, `benchmarkRuntimeModel(${model})`)
   ))
 );
@@ -533,121 +543,86 @@ export const fetchJobs = async (options: FetchJobsOptions = {}) => {
   return Promise.all(jobs.map(refreshJobListStatus));
 };
 
-export const fetchJobDetails = (id: string) => api.get(`/jobs/${id}`).then(r => (
+export const fetchJobDetails = (id: string) => api.get(jobPath(id)).then(r => (
   parseOrFallback(JobDetailsSchema, r.data, { job: { job_id: id, status: 'unknown' } }, `fetchJobDetails(${id})`)
 ));
 
-export const fetchJobEvents = (id: string) => api.get(`/jobs/${id}/events`).then(r => (
+export const fetchJobEvents = (id: string) => api.get(jobPath(id, '/events')).then(r => (
   parseArrayOrEmpty(JobEventSchema, r.data?.data || [], `fetchJobEvents(${id})`)
 ));
-export const fetchJobAgentGraph = (id: string) => api.get(`/jobs/${id}/agent-graph`).then(r => (
+export const fetchJobAgentGraph = (id: string) => api.get(jobPath(id, '/agent-graph')).then(r => (
   parseOrFallback(AgentGraphSchema, r.data, { job_id: id, nodes: [], edges: [] }, `fetchJobAgentGraph(${id})`)
 ));
-export const fetchRunUi = (id: string) => api.get(`/runs/${encodeURIComponent(id)}/ui`).then(r => (
+export const fetchRunUi = (id: string) => api.get(runPath(id, '/ui')).then(r => (
   parseOrFallback(RunUiResponseSchema, r.data, { run_id: id, ui: { run_id: id, title: 'Blueprint Run' } }, `fetchRunUi(${id})`)
 ));
 export const fetchBlueprints = () => api.get('/blueprints').then(r => (
   parseOrFallback(BlueprintListResponseSchema, r.data, {}, 'fetchBlueprints')
 ));
-export const fetchWorkflowProgress = (id: string) => api.get(`/jobs/${encodeURIComponent(id)}/workflow-progress`).then(r => (
+export const fetchWorkflowProgress = (id: string) => api.get(jobPath(id, '/workflow-progress')).then(r => (
   parseOrFallback(WorkflowProgressSchema, r.data, { job_id: id, workflow_id: id, name: id }, `fetchWorkflowProgress(${id})`)
 ));
 
 const apiBaseUrl = () => String(api.defaults.baseURL || '/api/v1').replace(/\/$/, '');
-const apiPathFromUrl = (url: string) => {
-  const trimmed = url.trim();
-  const base = apiBaseUrl();
-  if (trimmed.startsWith(`${base}/`)) return trimmed.slice(base.length);
-  if (trimmed === base) return '/';
-  if (trimmed.startsWith('/api/v1/')) return trimmed.slice('/api/v1'.length);
-  if (trimmed === '/api/v1') return '/';
-  return trimmed;
-};
 const authHeader = (): Record<string, string> => {
   const header = api.defaults.headers.common.Authorization;
   return typeof header === 'string' && header ? { Authorization: header } : {};
 };
-const workflowProgressStreamUrl = (id: string) => `${apiBaseUrl()}/jobs/${encodeURIComponent(id)}/workflow-progress/stream`;
+const workflowProgressStreamUrl = (id: string) => `${apiBaseUrl()}${jobPath(id, '/workflow-progress/stream')}`;
 
-const handleWorkflowProgressStreamData = (
-  id: string,
-  data: string,
-  onSnapshot: (snapshot: WorkflowProgress) => void,
-) => {
-  let payload: unknown;
+export const revealArtifact = (revealUrl: string) => {
+  let path: string;
   try {
-    payload = JSON.parse(data);
+    path = apiPathFromUrl(revealUrl, apiBaseUrl());
   } catch (error) {
-    console.error(`streamWorkflowProgress(${id}) JSON parse failed:`, error);
-    return;
+    return Promise.reject(error);
   }
-
-  const parsed = WorkflowProgressSchema.safeParse(payload);
-  if (parsed.success) {
-    onSnapshot(parsed.data);
-  } else {
-    console.error(`streamWorkflowProgress(${id}) validation failed:`, parsed.error);
-  }
+  return api.post(path).then(r => (
+    parseOrFallback(RevealArtifactResponseSchema, r.data, {}, 'revealArtifact')
+  ));
 };
 
-export const revealArtifact = (revealUrl: string) => api.post(apiPathFromUrl(revealUrl)).then(r => r.data as { ok?: boolean; path?: string; folder?: string });
+export const streamWorkflowProgress = createWorkflowProgressStreamer({
+  schema: WorkflowProgressSchema,
+  streamUrl: workflowProgressStreamUrl,
+  authHeader,
+  validationLabel: (id) => `streamWorkflowProgress(${id})`,
+});
+export const clearJobs = () => api.post('/jobs/cleanup').then(r => (
+  parseOrFallback(ClearJobsResponseSchema, r.data, {}, 'clearJobs')
+));
+export const cancelJob = (id: string) => api.post(jobPath(id, '/cancel')).then(r => (
+  parseOrFallback(JobActionResponseSchema, r.data, { job_id: id, status: 'cancelled' }, `cancelJob(${id})`)
+));
+export const reloadBundle = (bundle_id: string) => api.post(bundlePath(bundle_id, '/reload')).then(r => (
+  parseOrFallback(ReloadBundleResponseSchema, r.data, {}, `reloadBundle(${bundle_id})`)
+));
 
-export const streamWorkflowProgress = async (
-  id: string,
-  onSnapshot: (snapshot: WorkflowProgress) => void,
-  signal?: AbortSignal,
-) => {
-  const response = await fetch(workflowProgressStreamUrl(id), {
-    headers: authHeader(),
-    signal,
-  });
-  if (!response.ok || !response.body) {
-    throw new Error(`workflow progress stream failed: ${response.status}`);
-  }
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const chunks = buffer.split(/\n\n/);
-    buffer = chunks.pop() || '';
-    for (const chunk of chunks) {
-      const eventName = chunk.split('\n').find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message';
-      const data = chunk
-        .split('\n')
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).trimStart())
-        .join('\n');
-      if (eventName !== 'snapshot' || !data) continue;
-      handleWorkflowProgressStreamData(id, data, onSnapshot);
-    }
-  }
-};
-export const clearJobs = () => api.post('/jobs/cleanup').then(r => r.data as { cleared_count: number });
-export const cancelJob = (id: string) => api.post(`/jobs/${id}/cancel`).then(r => r.data);
-export const reloadBundle = (bundle_id: string) => api.post(`/bundles/${bundle_id}/reload`).then(r => r.data);
-
-export const pauseJob = (id: string) => api.post(`/jobs/${id}/pause`).then(r => r.data);
-export const resumeJob = (id: string) => api.post(`/jobs/${id}/resume`).then(r => r.data);
+export const pauseJob = (id: string) => api.post(jobPath(id, '/pause')).then(r => (
+  parseOrFallback(JobActionResponseSchema, r.data, { job_id: id, status: 'paused' }, `pauseJob(${id})`)
+));
+export const resumeJob = (id: string) => api.post(jobPath(id, '/resume')).then(r => (
+  parseOrFallback(JobActionResponseSchema, r.data, { job_id: id, status: 'running' }, `resumeJob(${id})`)
+));
 export const uploadBundle = (file: File) => {
   const formData = new FormData();
   formData.append('bundle', file);
   return api.post('/bundles/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
-  }).then(r => r.data);
+  }).then(r => (
+    parseOrFallback(UploadedBundleSchema, r.data, {}, 'uploadBundle')
+  ));
 };
 export const createJob = (payload: unknown) => api.post('/jobs', payload).then(r => r.data);
 export const launchBlueprintJob = (payload: unknown) => api.post('/blueprints/launch/runs', payload).then(r => {
   const result = BlueprintLaunchResponseSchema.safeParse(r.data);
   if (!result.success) {
     console.error('launchBlueprintJob validation failed:', result.error);
-    return BlueprintLaunchResponseSchema.parse(r.data || {});
+    return BlueprintLaunchResponseSchema.parse({});
   }
   return result.data;
 });
 
-export const fetchLaunchProgress = (progressId: string) => api.get(`/blueprints/launch/progress/${encodeURIComponent(progressId)}`).then(r => {
+export const fetchLaunchProgress = (progressId: string) => api.get(launchProgressPath(progressId)).then(r => {
   return parseOrFallback(LaunchProgressResponseSchema, r.data, { progress_id: progressId, events: [] }, `fetchLaunchProgress(${progressId})`);
 });
