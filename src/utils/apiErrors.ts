@@ -9,21 +9,23 @@ type ValidationIssue = {
 
 type ApiError = {
   response?: {
-    data?: {
-      error?: string;
-      detail?: string | { error?: string; message?: string };
-      message?: string;
-      model_install?: {
-        models?: Array<{ id?: string; model?: string }>;
-      };
-      validation?: {
-        errors?: string[];
-        issues?: ValidationIssue[];
-      };
-      errors?: ValidationIssue[];
-    };
+    data?: ApiErrorData;
   };
   message?: string;
+};
+
+type ApiErrorData = {
+  error?: string;
+  detail?: string | { error?: string; message?: string };
+  message?: string;
+  model_install?: {
+    models?: Array<{ id?: string; model?: string }>;
+  };
+  validation?: {
+    errors?: string[];
+    issues?: ValidationIssue[];
+  };
+  errors?: ValidationIssue[];
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
@@ -83,13 +85,13 @@ const modelNameFromText = (value: string | undefined) => {
   return named || null;
 };
 
-const modelNameFromInstall = (data: ApiError['response']['data']) => {
+const modelNameFromInstall = (data: ApiErrorData | undefined) => {
   const models = data?.model_install?.models || [];
   const first = models.find((model) => stringValue(model.id) || stringValue(model.model));
   return stringValue(first?.id) || stringValue(first?.model) || null;
 };
 
-const runtimeModelIssueText = (issue: ValidationIssue, data: ApiError['response']['data']) => {
+const runtimeModelIssueText = (issue: ValidationIssue, data: ApiErrorData | undefined) => {
   const model = modelNameFromText(issue.message) || modelNameFromText(issue.help) || modelNameFromInstall(data) || 'the required runtime model';
   return `Required runtime model ${model} could not be prepared. Check model installation/runtime model settings and try again.`;
 };
