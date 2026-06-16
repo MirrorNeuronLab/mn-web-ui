@@ -43,6 +43,52 @@ describe('apiErrorMessage', () => {
     );
   });
 
+  it('shows model setup failures as runtime model preparation problems', () => {
+    expect(apiErrorMessage({
+      response: {
+        data: {
+          error: 'blueprint_model_install_failed',
+          validation: {
+            issues: [
+              {
+                code: 'runtime_model_install_failed',
+                message: "llm: unknown runtime model 'gemma4:e2b'",
+                location: { path: 'llm' },
+              },
+            ],
+          },
+        },
+      },
+      message: 'OtterDesk could not reach the MirrorNeuron runtime',
+    }, 'Fallback')).toBe(
+      'Required runtime model gemma4:e2b could not be prepared. Check model installation/runtime model settings and try again.',
+    );
+  });
+
+  it('uses model install metadata when model setup issue text is generic', () => {
+    expect(apiErrorMessage({
+      response: {
+        data: {
+          error: 'blueprint_model_install_failed',
+          model_install: {
+            models: [{ id: 'gemma4:e2b', model: 'ai/gemma4:E2B' }],
+          },
+          validation: {
+            issues: [
+              {
+                code: 'runtime_model_install_failed',
+                message: 'hardware is not compatible',
+                location: { path: 'llm' },
+              },
+            ],
+          },
+        },
+      },
+    }, 'Fallback')).toBe(
+      'Required runtime model gemma4:e2b could not be prepared. Check model installation/runtime model settings and try again.',
+    );
+  });
+
   it('falls back to response detail, error message, then default text', () => {
     expect(apiErrorMessage({ response: { data: { detail: { message: 'Nested detail' } } } }, 'Fallback')).toBe('Nested detail');
     expect(apiErrorMessage({ message: 'Network failed' }, 'Fallback')).toBe('Network failed');

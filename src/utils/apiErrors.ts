@@ -13,6 +13,9 @@ type ApiError = {
       error?: string;
       detail?: string | { error?: string; message?: string };
       message?: string;
+      model_install?: {
+        models?: Array<{ id?: string; model?: string }>;
+      };
       validation?: {
         errors?: string[];
         issues?: ValidationIssue[];
@@ -66,6 +69,31 @@ const isHardwareRequirementIssue = (issue: ValidationIssue) => (
   (issue.location?.source === 'requirements' && issue.location?.path === 'gpu')
 );
 
+const isRuntimeModelIssue = (issue: ValidationIssue) => (
+  issue.code === 'runtime_model_install_failed' ||
+  issue.code === 'blueprint_model_install_failed' ||
+  issue.code === 'unknown_runtime_model'
+);
+
+const modelNameFromText = (value: string | undefined) => {
+  if (!value) return null;
+  const quoted = value.match(/['"]([^'"]*(?:gemma|model)[^'"]*)['"]/i)?.[1];
+  if (quoted) return quoted;
+  const named = value.match(/\b([a-z0-9_.-]+:[a-z0-9_.-]+)\b/i)?.[1];
+  return named || null;
+};
+
+const modelNameFromInstall = (data: ApiError['response']['data']) => {
+  const models = data?.model_install?.models || [];
+  const first = models.find((model) => stringValue(model.id) || stringValue(model.model));
+  return stringValue(first?.id) || stringValue(first?.model) || null;
+};
+
+const runtimeModelIssueText = (issue: ValidationIssue, data: ApiError['response']['data']) => {
+  const model = modelNameFromText(issue.message) || modelNameFromText(issue.help) || modelNameFromInstall(data) || 'the required runtime model';
+  return `Required runtime model ${model} could not be prepared. Check model installation/runtime model settings and try again.`;
+};
+
 const hardwareRequirementText = (issue: ValidationIssue) => {
   const expected = isRecord(issue.expected) ? issue.expected : {};
   const vendor = (stringValue(expected.vendor) || 'NVIDIA').toUpperCase();
@@ -85,6 +113,8 @@ export const apiErrorMessage = (err: unknown, fallback: string) => {
   const validationIssues = data?.validation?.issues || data?.errors || [];
   const hardwareIssue = validationIssues.find(isHardwareRequirementIssue);
   if (hardwareIssue) return hardwareRequirementText(hardwareIssue);
+  const runtimeModelIssue = validationIssues.find(isRuntimeModelIssue);
+  if (runtimeModelIssue) return runtimeModelIssueText(runtimeModelIssue, data);
   const validationErrors = data?.validation?.errors || [];
   if (validationErrors.length > 0) return validationErrors.join('\n');
   if (validationIssues.length > 0) return validationIssues.map(issueText).join('\n');

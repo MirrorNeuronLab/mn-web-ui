@@ -265,4 +265,45 @@ describe('RunJob Component', () => {
     expect(screen.queryByText(/wrong/i)).not.toBeInTheDocument();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
+
+  it('shows runtime model setup failures from launch', async () => {
+    vi.mocked(launchBlueprintJob).mockRejectedValue({
+      response: {
+        data: {
+          error: 'blueprint_model_install_failed',
+          detail: 'A required runtime model could not be installed automatically.',
+          validation: {
+            issues: [
+              {
+                code: 'runtime_model_install_failed',
+                message: "llm: unknown runtime model 'gemma4:e2b'",
+                location: { path: 'llm' },
+              },
+            ],
+          },
+        },
+      },
+      message: 'OtterDesk could not reach the MirrorNeuron runtime',
+    });
+
+    renderRunJob();
+    await waitFor(() => {
+      expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    expect(await screen.findByText('Launch this job?')).toBeInTheDocument();
+
+    const launchButtons = screen.getAllByRole('button', { name: 'Launch' });
+    fireEvent.click(launchButtons[launchButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Required runtime model gemma4:e2b could not be prepared. Check model installation/runtime model settings and try again.',
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText('OtterDesk could not reach the MirrorNeuron runtime')).not.toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
 });
