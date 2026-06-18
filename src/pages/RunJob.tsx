@@ -393,7 +393,7 @@ export default function RunJob() {
                       type="text"
                       value={pathValue}
                       onChange={(event) => setPathValue(event.target.value)}
-                      placeholder="/Users/homer/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant"
+                      placeholder="~/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant"
                       className="min-w-0 flex-1 font-mono text-xs"
                       disabled={running}
                     />

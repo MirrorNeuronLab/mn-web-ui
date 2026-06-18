@@ -90,7 +90,7 @@ describe('RunJob Component', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'File system path' }));
     fireEvent.change(screen.getByLabelText('Blueprint folder path'), {
-      target: { value: '/Users/homer/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant' },
+      target: { value: '/tmp/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
     expect(await screen.findByText('Launch this job?')).toBeInTheDocument();
@@ -102,7 +102,7 @@ describe('RunJob Component', () => {
     await waitFor(() => {
       expect(launchBlueprintJob).toHaveBeenCalledWith(expect.objectContaining({
         source: 'path',
-        path: '/Users/homer/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant',
+        path: '/tmp/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant',
       }));
       const payload = vi.mocked(launchBlueprintJob).mock.calls[0][0] as Record<string, unknown>;
       expect(String(payload.progress_id)).toMatch(/^launch-/);

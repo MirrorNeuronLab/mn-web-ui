@@ -282,7 +282,7 @@ describe('JobDetails Component', () => {
       {
         artifact_id: 'output_0_report_markdown',
         name: 'artifact-run-report.md',
-        path: '/Users/homer/Downloads/artifact-run-report.md',
+        path: '/tmp/downloads/artifact-run-report.md',
         source: 'post_launch_output',
         external: true,
         url: '/api/v1/runs/artifact-run/outputs/0',
