@@ -484,8 +484,21 @@ const normalizedText = (value: unknown): string => (
   typeof value === 'string' ? value.trim().toLowerCase() : ''
 );
 
+const LIST_STATUS_REFRESH_STATUSES = new Set([
+  'pending',
+  'planned',
+  'validated',
+  'scheduled',
+  'queued',
+  'starting',
+  'preparing',
+  'running',
+  'paused',
+]);
+
 const shouldRefreshListStatus = (job: Job): boolean => {
-  return Boolean(job.job_id && job.job_id !== 'unknown');
+  const status = normalizedText(job.status).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return Boolean(job.job_id && job.job_id !== 'unknown' && LIST_STATUS_REFRESH_STATUSES.has(status));
 };
 
 const listStatusFromProgress = (progress: WorkflowProgress): string | null => {
