@@ -1,14 +1,12 @@
 import axios from 'axios';
-
-const env = import.meta.env as ImportMetaEnv & Record<string, string>;
-const token = env.MN_WEB_API_TOKEN || '';
+import { apiBaseUrl, config } from '../config/browser';
 
 const api = axios.create({
-  baseURL: env.MN_WEB_API_BASE_URL || '/api/v1',
+  baseURL: apiBaseUrl(),
 });
 
-if (token) {
-  api.defaults.headers.common.Authorization = `Bearer ${token}`;
+if (config.webApiToken) {
+  api.defaults.headers.common.Authorization = `Bearer ${config.webApiToken}`;
 }
 
 export default api;

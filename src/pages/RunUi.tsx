@@ -1,13 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { ExternalLink, Loader2 } from 'lucide-react';
-
-const env = import.meta.env as ImportMetaEnv & Record<string, string>;
-
-const gradioBaseUrl = () => {
-  const configured = env.MN_GRADIO_UI_BASE_URL || '';
-  return (configured || 'http://localhost:7860').replace(/\/+$/, '');
-};
+import { gradioBaseUrl } from '../config/browser';
 
 export default function RunUi() {
   const { runId } = useParams();

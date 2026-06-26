@@ -1,22 +1,23 @@
 import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { loadNodeConfig, publicBrowserConfig } from './config/node'
 
-const apiHost = process.env.MN_API_HOST || 'localhost'
-const apiPort = process.env.MN_API_PORT || '54001'
-const webUiHost = process.env.MN_WEB_UI_HOST || 'localhost'
-const webUiPort = Number(process.env.MN_WEB_UI_PORT || '55173')
+const nodeConfig = loadNodeConfig()
+const appConfig = nodeConfig.app
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  envPrefix: ['VITE_', 'MN_'],
+  define: {
+    __MN_WEB_CONFIG__: JSON.stringify(publicBrowserConfig(nodeConfig.raw)),
+  },
   server: {
-    host: webUiHost,
-    port: webUiPort,
+    host: appConfig.webUiHost,
+    port: appConfig.webUiPort,
     proxy: {
       '/api': {
-        target: `http://${apiHost}:${apiPort}`,
+        target: `http://${appConfig.apiHost}:${appConfig.apiPort}`,
         changeOrigin: true,
       }
     }
