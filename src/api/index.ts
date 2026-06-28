@@ -4,7 +4,19 @@ import { parseArrayOrEmpty, parseOrFallback } from './parsing';
 import { apiPathFromUrl, bundlePath, jobPath, launchProgressPath, modelPath, runPath } from './routes';
 import { createWorkflowProgressStreamer } from './streaming';
 
+const InterfaceVersionSchema = z.number().optional().default(1) as unknown as z.ZodOptional<z.ZodNumber>;
+const withInterfaceVersion = <T>(payload: T): T | (Record<string, unknown> & { version: number }) => {
+  if (
+    !payload ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload) ||
+    (typeof FormData !== 'undefined' && payload instanceof FormData)
+  ) return payload;
+  return { version: 1, ...(payload as Record<string, unknown>) };
+};
+
 export const ErrorEnvelopeSchema = z.object({
+  version: InterfaceVersionSchema,
   schema_version: z.string().optional().default('mn.error.v1'),
   code: z.string().optional().default('runtime.failure'),
   desc: z.string().optional().default('Runtime failure'),
@@ -25,6 +37,7 @@ export const ErrorEnvelopeSchema = z.object({
 export const ObservabilitySummarySchema = z.record(z.string(), z.unknown()).optional();
 
 export const AgentSchema = z.object({
+  version: InterfaceVersionSchema,
   agent_id: z.string().optional().default('unknown'),
   alias: z.string().optional(),
   display_name: z.string().optional(),
@@ -45,6 +58,7 @@ export const AgentSchema = z.object({
 }).passthrough();
 
 export const JobEventSchema = z.object({
+  version: InterfaceVersionSchema,
   timestamp: z.string().optional().default('unknown'),
   type: z.string().optional().default('unknown'),
   agent_id: z.string().optional(),
@@ -54,6 +68,7 @@ export const JobEventSchema = z.object({
 }).passthrough();
 
 export const JobSchema = z.object({
+  version: InterfaceVersionSchema,
   job_id: z.string().optional().default('unknown'),
   graph_id: z.string().nullable().optional().default('unknown'),
   status: z.string().optional().default('unknown'),
@@ -74,6 +89,7 @@ export const JobSchema = z.object({
 }).passthrough();
 
 export const JobDetailsSchema = z.object({
+  version: InterfaceVersionSchema,
   job: JobSchema.optional(),
   summary: z.record(z.string(), z.unknown()).optional(),
   agents: z.array(AgentSchema).optional().default([]),
@@ -88,6 +104,7 @@ export const JobDetailsSchema = z.object({
 }).passthrough();
 
 export const AgentGraphNodeSchema = z.object({
+  version: InterfaceVersionSchema,
   id: z.string(),
   alias: z.string().optional(),
   display_name: z.string().optional(),
@@ -102,6 +119,7 @@ export const AgentGraphNodeSchema = z.object({
 }).passthrough();
 
 export const AgentGraphEdgeSchema = z.object({
+  version: InterfaceVersionSchema,
   id: z.string(),
   source: z.string(),
   target: z.string(),
@@ -112,6 +130,7 @@ export const AgentGraphEdgeSchema = z.object({
 }).passthrough();
 
 export const AgentGraphSchema = z.object({
+  version: InterfaceVersionSchema,
   job_id: z.string(),
   graph_id: z.string().nullable().optional(),
   status: z.string().optional().default('unknown'),
@@ -126,6 +145,7 @@ export const AgentGraphSchema = z.object({
 }).passthrough();
 
 export const SystemSummarySchema = z.object({
+  version: InterfaceVersionSchema,
   nodes: z.array(z.object({
     name: z.string().optional().default('unknown'),
     connected_nodes: z.array(z.string()).optional().default([]),
@@ -145,6 +165,7 @@ export const SystemSummarySchema = z.object({
 }).passthrough();
 
 export const RuntimeModelCompatibilitySchema = z.object({
+  version: InterfaceVersionSchema,
   status: z.string().optional().default('unknown'),
   ok: z.boolean().optional().default(false),
   message: z.string().optional().default(''),
@@ -152,6 +173,7 @@ export const RuntimeModelCompatibilitySchema = z.object({
 }).passthrough().nullable();
 
 export const RuntimeModelSchema = z.object({
+  version: InterfaceVersionSchema,
   id: z.string().optional().default('unknown'),
   name: z.string().optional().default('Runtime model'),
   provider: z.string().optional().default('docker_model_runner'),
@@ -170,6 +192,7 @@ export const RuntimeModelSchema = z.object({
 }).passthrough();
 
 export const RuntimeModelListResponseSchema = z.object({
+  version: InterfaceVersionSchema,
   models: z.array(RuntimeModelSchema).optional().default([]),
   node: z.string().optional().default('local'),
   runner_available: z.boolean().optional().default(false),
@@ -177,6 +200,7 @@ export const RuntimeModelListResponseSchema = z.object({
 }).passthrough();
 
 export const RuntimeModelBenchmarkSchema = z.object({
+  version: InterfaceVersionSchema,
   model: z.string().optional().default('unknown'),
   name: z.string().optional().default('Runtime model'),
   docker_model: z.string().optional().default('unknown'),
@@ -191,6 +215,7 @@ export const RuntimeModelBenchmarkSchema = z.object({
 }).passthrough();
 
 export const ClusterNodeAddResponseSchema = z.object({
+  version: InterfaceVersionSchema,
   ok: z.boolean().optional().default(true),
   host: z.string().optional().default(''),
   node_name: z.string().optional().default(''),
@@ -199,6 +224,7 @@ export const ClusterNodeAddResponseSchema = z.object({
 }).passthrough();
 
 export const ClusterNodeRemoveResponseSchema = z.object({
+  version: InterfaceVersionSchema,
   ok: z.boolean().optional().default(true),
   node_name: z.string().optional().default(''),
   status: z.string().optional().default('unknown'),
@@ -206,6 +232,7 @@ export const ClusterNodeRemoveResponseSchema = z.object({
 }).passthrough();
 
 export const RunUiComponentSchema = z.object({
+  version: InterfaceVersionSchema,
   type: z.string().optional().default('events'),
   label: z.string().optional(),
   source: z.string().optional(),
@@ -214,6 +241,7 @@ export const RunUiComponentSchema = z.object({
 }).passthrough();
 
 export const RunUiDefinitionSchema = z.object({
+  version: InterfaceVersionSchema,
   schema_version: z.number().optional().default(1),
   adapter: z.string().optional().default('gradio'),
   kind: z.string().optional().default('output'),
@@ -227,6 +255,7 @@ export const RunUiDefinitionSchema = z.object({
 }).passthrough();
 
 export const WebUiHandleSchema = z.object({
+  version: InterfaceVersionSchema,
   adapter: z.string().optional().default('gradio'),
   kind: z.string().optional().default('output'),
   url: z.string().optional().default(''),
@@ -239,6 +268,7 @@ export const WebUiHandleSchema = z.object({
 const DefaultWebUiHandle = WebUiHandleSchema.parse({});
 
 export const RunUiResponseSchema = z.object({
+  version: InterfaceVersionSchema,
   run_id: z.string(),
   run_dir: z.string().optional(),
   ui: RunUiDefinitionSchema,
@@ -249,6 +279,7 @@ export const RunUiResponseSchema = z.object({
 }).passthrough();
 
 export const BlueprintSchema = z.object({
+  version: InterfaceVersionSchema,
   id: z.string(),
   name: z.string().optional(),
   description: z.string().optional().default(''),
@@ -258,12 +289,14 @@ export const BlueprintSchema = z.object({
 }).passthrough();
 
 export const BlueprintListResponseSchema = z.object({
+  version: InterfaceVersionSchema,
   repo_dir: z.string().optional(),
   blueprints: z.array(BlueprintSchema).optional().default([]),
   categories: z.array(z.record(z.string(), z.unknown())).optional().default([]),
 }).passthrough();
 
 export const BlueprintLaunchResponseSchema = z.object({
+  version: InterfaceVersionSchema,
   id: z.string().optional(),
   job_id: z.string().optional(),
   run_id: z.string().optional().nullable(),
@@ -277,11 +310,13 @@ export const BlueprintLaunchResponseSchema = z.object({
 }).passthrough();
 
 export const UploadedBundleSchema = z.object({
+  version: InterfaceVersionSchema,
   bundle_path: z.string().optional().default(''),
   manifest: z.record(z.string(), z.unknown()).optional().default({}),
 }).passthrough();
 
 export const JobActionResponseSchema = z.object({
+  version: InterfaceVersionSchema,
   ok: z.boolean().optional(),
   job_id: z.string().optional(),
   status: z.string().optional().default('unknown'),
@@ -289,16 +324,19 @@ export const JobActionResponseSchema = z.object({
 }).passthrough();
 
 export const ClearJobsResponseSchema = z.object({
+  version: InterfaceVersionSchema,
   cleared_count: z.number().optional().default(0),
 }).passthrough();
 
 export const ReloadBundleResponseSchema = z.object({
+  version: InterfaceVersionSchema,
   ok: z.boolean().optional(),
   status: z.string().optional(),
   message: z.string().optional(),
 }).passthrough();
 
 export const RevealArtifactResponseSchema = z.object({
+  version: InterfaceVersionSchema,
   ok: z.boolean().optional(),
   path: z.string().optional(),
   folder: z.string().optional(),
@@ -306,6 +344,7 @@ export const RevealArtifactResponseSchema = z.object({
 }).passthrough();
 
 export const LaunchProgressEventSchema = z.object({
+  version: InterfaceVersionSchema,
   ts: z.string().optional(),
   phase: z.string().optional().default('launch'),
   status: z.string().optional().default('pending'),
@@ -314,6 +353,7 @@ export const LaunchProgressEventSchema = z.object({
 }).passthrough();
 
 export const LaunchProgressResponseSchema = z.object({
+  version: InterfaceVersionSchema,
   progress_id: z.string(),
   events: z.array(LaunchProgressEventSchema).optional().default([]),
   latest: LaunchProgressEventSchema.nullable().optional(),
@@ -321,6 +361,7 @@ export const LaunchProgressResponseSchema = z.object({
 }).passthrough();
 
 export const WorkflowActivitySchema = z.object({
+  version: InterfaceVersionSchema,
   timestamp: z.string().optional(),
   type: z.string().optional(),
   category: z.string().optional(),
@@ -338,6 +379,7 @@ export const WorkflowActivitySchema = z.object({
 }).passthrough();
 
 export const WorkflowProgressAgentSchema = z.object({
+  version: InterfaceVersionSchema,
   id: z.string().optional().default('unknown'),
   alias: z.string().optional(),
   display_name: z.string().optional(),
@@ -373,6 +415,7 @@ export const WorkflowProgressAgentSchema = z.object({
 }).passthrough();
 
 export const WorkflowProgressStepSchema = z.object({
+  version: InterfaceVersionSchema,
   id: z.string().optional().default('step'),
   label: z.string().optional().default('Step'),
   goal: z.string().optional().default(''),
@@ -409,6 +452,7 @@ export const WorkflowProgressStepSchema = z.object({
 }).passthrough();
 
 export const WorkflowProgressSchema = z.object({
+  version: InterfaceVersionSchema,
   schema_version: z.number().optional().default(1),
   job_id: z.string().optional().default('unknown'),
   workflow_id: z.string().optional().default('blueprint'),
@@ -536,16 +580,16 @@ export const fetchRuntimeModels = () => api.get('/models').then(r => (
 ));
 
 export const benchmarkRuntimeModel = (model: string, payload: { prompt?: string; max_tokens?: number } = {}) => (
-  api.post(modelPath(model, '/benchmark'), payload).then(r => (
+  api.post(modelPath(model, '/benchmark'), withInterfaceVersion(payload)).then(r => (
     parseOrFallback(RuntimeModelBenchmarkSchema, r.data, { model }, `benchmarkRuntimeModel(${model})`)
   ))
 );
 
-export const addClusterNode = (payload: { host: string; token: string }) => api.post('/system/cluster/nodes:add', payload).then(r => (
+export const addClusterNode = (payload: { host: string; token: string }) => api.post('/system/cluster/nodes:add', withInterfaceVersion(payload)).then(r => (
   parseOrFallback(ClusterNodeAddResponseSchema, r.data, {}, 'addClusterNode')
 ));
 
-export const removeClusterNode = (nodeName: string) => api.post('/system/cluster/nodes:remove', { node_name: nodeName }).then(r => (
+export const removeClusterNode = (nodeName: string) => api.post('/system/cluster/nodes:remove', withInterfaceVersion({ node_name: nodeName })).then(r => (
   parseOrFallback(ClusterNodeRemoveResponseSchema, r.data, { node_name: nodeName }, 'removeClusterNode')
 ));
 
@@ -634,8 +678,8 @@ export const uploadBundle = (file: File) => {
     parseOrFallback(UploadedBundleSchema, r.data, {}, 'uploadBundle')
   ));
 };
-export const createJob = (payload: unknown) => api.post('/jobs', payload).then(r => r.data);
-export const launchBlueprintJob = (payload: unknown) => api.post('/blueprints/launch/runs', payload).then(r => {
+export const createJob = (payload: unknown) => api.post('/jobs', withInterfaceVersion(payload)).then(r => r.data);
+export const launchBlueprintJob = (payload: unknown) => api.post('/blueprints/launch/runs', withInterfaceVersion(payload)).then(r => {
   const result = BlueprintLaunchResponseSchema.safeParse(r.data);
   if (!result.success) {
     console.error('launchBlueprintJob validation failed:', result.error);
