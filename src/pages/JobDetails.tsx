@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelJob, pauseJob, resumeJob } from '../api';
@@ -11,7 +11,6 @@ import FailurePanel from '../components/FailurePanel';
 import ObservabilitySummaryPanel, { type ObservabilityArtifactRef } from '../components/ObservabilitySummaryPanel';
 import { confirmActionToast } from '../components/ui/confirm-toast';
 import { Tooltip } from '../components/ui/tooltip';
-import { usePollingEffect } from '../hooks/usePollingEffect';
 import { buildDisplayGraph } from '../utils/agentGraph';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -143,6 +142,23 @@ const formattedTimestamp = (...values: unknown[]): string | undefined => {
   return format(parsed, 'PP p');
 };
 
+type ProgressStreamState = 'connecting' | 'live' | 'stale' | 'disconnected' | 'closed';
+
+const progressStreamBadgeClass = (state: ProgressStreamState) => {
+  switch (state) {
+    case 'live':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    case 'stale':
+      return 'border-amber-200 bg-amber-50 text-amber-700';
+    case 'disconnected':
+      return 'border-red-200 bg-red-50 text-red-700';
+    case 'closed':
+      return 'border-neutral-200 bg-neutral-50 text-neutral-600';
+    default:
+      return 'border-sky-200 bg-sky-50 text-sky-700';
+  }
+};
+
 export default function JobDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -158,6 +174,8 @@ export default function JobDetails() {
   const [isPausing, setIsPausing] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
+  const [progressStreamState, setProgressStreamState] = useState<ProgressStreamState>('connecting');
+  const terminalRefreshRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -204,11 +222,17 @@ export default function JobDetails() {
     }
   }, [id]);
 
-  usePollingEffect(load, { intervalMs: 3000 });
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setActionStatus(null);
+      terminalRefreshRef.current = null;
     }, 0);
     return () => window.clearTimeout(timer);
   }, [id]);
@@ -217,18 +241,54 @@ export default function JobDetails() {
     if (!id) return;
     const controller = new AbortController();
     let cancelled = false;
+    let staleTimer: number | undefined;
+    let disconnectedTimer: number | undefined;
+    const clearHealthTimers = () => {
+      if (staleTimer !== undefined) window.clearTimeout(staleTimer);
+      if (disconnectedTimer !== undefined) window.clearTimeout(disconnectedTimer);
+      staleTimer = undefined;
+      disconnectedTimer = undefined;
+    };
+    const markLive = () => {
+      if (cancelled) return;
+      setProgressStreamState('live');
+      clearHealthTimers();
+      staleTimer = window.setTimeout(() => setProgressStreamState('stale'), 15_000);
+      disconnectedTimer = window.setTimeout(() => setProgressStreamState('disconnected'), 30_000);
+    };
+    const connectTimer = window.setTimeout(() => setProgressStreamState('connecting'), 0);
     streamWorkflowProgress(id, (snapshot) => {
-      if (!cancelled) setWorkflowProgress(snapshot);
-    }, controller.signal).catch((err) => {
+      if (cancelled) return;
+      if (isTerminalJobStatus(snapshot.status)) {
+        clearHealthTimers();
+        setProgressStreamState('closed');
+      } else {
+        markLive();
+      }
+      setWorkflowProgress(snapshot);
+      if (isTerminalJobStatus(snapshot.status) && terminalRefreshRef.current !== snapshot.status) {
+        terminalRefreshRef.current = snapshot.status || 'terminal';
+        void load();
+      }
+    }, controller.signal, markLive).then(() => {
+      if (!cancelled) {
+        clearHealthTimers();
+        setProgressStreamState('closed');
+      }
+    }).catch((err) => {
       if (!cancelled && err?.name !== 'AbortError') {
+        clearHealthTimers();
+        setProgressStreamState('disconnected');
         console.error('Workflow progress stream closed', err);
       }
     });
     return () => {
       cancelled = true;
+      window.clearTimeout(connectTimer);
+      clearHealthTimers();
       controller.abort();
     };
-  }, [id]);
+  }, [id, load]);
 
   if (!details || !details.job) return <div className="p-5 text-sm text-neutral-500">Loading or Invalid Job...</div>;
   const webUi = blueprintWebUiInfo(details) || webUiInfoFromRecord(runWebUi);
@@ -384,6 +444,10 @@ export default function JobDetails() {
                 {displayStatus}
               </Badge>
             ) : null}
+            <Badge variant="outline" className={cn('gap-1.5 capitalize', progressStreamBadgeClass(progressStreamState))}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+              {progressStreamState}
+            </Badge>
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs leading-5 text-neutral-500">
             {graphId ? <span>Workflow: <strong className="text-neutral-700">{graphId}</strong></span> : null}

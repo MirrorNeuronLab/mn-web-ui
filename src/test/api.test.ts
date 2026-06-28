@@ -509,7 +509,9 @@ describe('api parsing helpers', () => {
         job_id: 'job-1',
         workflow_id: 'workflow-1',
         name: 'Workflow One',
+        sequence: 7,
         status: 'running',
+        progress_source: 'explicit',
         workflow_kind: 'service',
         agent_count: { done: 1, total: 2 },
         current_step_id: 'research',
@@ -528,7 +530,17 @@ describe('api parsing helpers', () => {
             done_count: 1,
             ready_count: 2,
             total_count: 2,
-            agents: [{ id: 'research:docs', status: 'idle', progress: 0.2, live: true }],
+            agents: [{
+              id: 'research:docs',
+              status: 'idle',
+              progress: 0.2,
+              progress_source: 'items',
+              items_done: 2,
+              items_total: 10,
+              tokens_used: 300,
+              token_budget: 1200,
+              live: true,
+            }],
           },
         ],
       },
@@ -538,6 +550,8 @@ describe('api parsing helpers', () => {
       expect.objectContaining({
         job_id: 'job-1',
         workflow_id: 'workflow-1',
+        sequence: 7,
+        progress_source: 'explicit',
         workflow_kind: 'service',
         current_step_ids: ['research'],
         edges: [{ from: 'intake', to: 'research', event: 'intake_ready' }],
@@ -547,7 +561,16 @@ describe('api parsing helpers', () => {
             id: 'research',
             parents: ['intake'],
             layer: 1,
-            agents: [expect.objectContaining({ id: 'research:docs', status: 'idle', live: true })],
+            agents: [expect.objectContaining({
+              id: 'research:docs',
+              status: 'idle',
+              progress_source: 'items',
+              items_done: 2,
+              items_total: 10,
+              tokens_used: 300,
+              token_budget: 1200,
+              live: true,
+            })],
           }),
         ],
       }),
@@ -556,6 +579,7 @@ describe('api parsing helpers', () => {
   });
 
   it('skips malformed workflow progress stream snapshots and keeps reading', async () => {
+    vi.stubGlobal('EventSource', undefined);
     const snapshot = JSON.stringify({
       job_id: 'job-1',
       workflow_id: 'workflow-1',
@@ -565,6 +589,7 @@ describe('api parsing helpers', () => {
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new TextEncoder().encode(`event: snapshot\ndata: {bad json}\n\n`));
+        controller.enqueue(new TextEncoder().encode(`event: heartbeat\ndata: {"job_id":"job-1"}\n\n`));
         controller.enqueue(new TextEncoder().encode(`event: snapshot\ndata: ${snapshot}\n\n`));
         controller.close();
       },
@@ -576,8 +601,9 @@ describe('api parsing helpers', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const onSnapshot = vi.fn();
+    const onHeartbeat = vi.fn();
 
-    await streamWorkflowProgress('job-1', onSnapshot);
+    await streamWorkflowProgress('job-1', onSnapshot, undefined, onHeartbeat);
 
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/jobs/job-1/workflow-progress/stream', {
       headers: {},
@@ -587,6 +613,7 @@ describe('api parsing helpers', () => {
       'streamWorkflowProgress(job-1) JSON parse failed:',
       expect.any(SyntaxError),
     );
+    expect(onHeartbeat).toHaveBeenCalledTimes(1);
     expect(onSnapshot).toHaveBeenCalledTimes(1);
     expect(onSnapshot).toHaveBeenCalledWith(expect.objectContaining({
       job_id: 'job-1',

@@ -53,8 +53,19 @@ const StatusGlyph = ({ status, current }: { status?: string; current?: boolean }
 };
 
 const formatProgress = (agent: WorkflowProgressAgent) => {
-  const parts = [`${Math.round(Math.max(0, Math.min(1, agent.progress || 0)) * 100)}%`];
-  if (agent.tokens) parts.push(`${formatTokens(agent.tokens)} tok`);
+  const source = agent.progress_source || 'estimated';
+  const inferred = !['explicit', 'items', 'complete'].includes(source);
+  const percent = `${Math.round(Math.max(0, Math.min(1, agent.progress || 0)) * 100)}%${inferred ? ' est.' : ''}`;
+  const parts = [percent];
+  const legacyTokensAreBudget = Boolean(agent.token_budget && agent.tokens === agent.token_budget && !agent.tokens_used);
+  if (agent.items_total) parts.push(`${agent.items_done || 0}/${agent.items_total} items`);
+  if (agent.tokens_used && agent.token_budget) {
+    parts.push(`${formatTokens(agent.tokens_used)}/${formatTokens(agent.token_budget)} tok`);
+  } else if (agent.tokens_used || (agent.tokens && !legacyTokensAreBudget)) {
+    parts.push(`${formatTokens(agent.tokens_used || agent.tokens || 0)} tok`);
+  } else if (agent.token_budget) {
+    parts.push(`${formatTokens(agent.token_budget)} tok budget`);
+  }
   if (agent.tools !== null && agent.tools !== undefined) parts.push(`${agent.tools} tools`);
   if (agent.elapsed_seconds) parts.push(formatElapsed(agent.elapsed_seconds));
   return parts.join(' · ');
@@ -267,7 +278,7 @@ const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
           <div className="h-1.5 w-20 overflow-hidden rounded-full bg-neutral-100">
             <div className="h-full bg-neutral-950" style={{ width: `${progress * 100}%` }} />
           </div>
-          <span className="whitespace-nowrap font-mono text-[11px] text-neutral-600">{formatProgress(agent)}</span>
+          <span className="whitespace-nowrap font-mono text-[11px] text-neutral-600" title={`Progress source: ${agent.progress_source || 'estimated'}`}>{formatProgress(agent)}</span>
         </div>
       </td>
     </tr>

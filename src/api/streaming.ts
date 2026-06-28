@@ -33,9 +33,39 @@ export const createWorkflowProgressStreamer = <T>(options: StreamOptions<T>) => 
   id: string,
   onSnapshot: (snapshot: T) => void,
   signal?: AbortSignal,
+  onHeartbeat?: () => void,
 ) => {
+  const headers = options.authHeader();
+  if (typeof EventSource !== 'undefined' && Object.keys(headers).length === 0) {
+    await new Promise<void>((resolve, reject) => {
+      const source = new EventSource(options.streamUrl(id));
+      let settled = false;
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        source.close();
+        signal?.removeEventListener('abort', abort);
+        if (error) reject(error);
+        else resolve();
+      };
+      const abort = () => finish();
+      source.addEventListener('snapshot', (event) => {
+        handleWorkflowProgressStreamData(options, id, event.data, onSnapshot);
+      });
+      source.addEventListener('heartbeat', () => {
+        onHeartbeat?.();
+      });
+      source.onerror = () => {
+        if (signal?.aborted) finish();
+      };
+      signal?.addEventListener('abort', abort, { once: true });
+      if (signal?.aborted) abort();
+    });
+    return;
+  }
+
   const response = await fetch(options.streamUrl(id), {
-    headers: options.authHeader(),
+    headers,
     signal,
   });
   if (!response.ok || !response.body) {
@@ -57,6 +87,10 @@ export const createWorkflowProgressStreamer = <T>(options: StreamOptions<T>) => 
         .filter((line) => line.startsWith('data:'))
         .map((line) => line.slice(5).trimStart())
         .join('\n');
+      if (eventName === 'heartbeat') {
+        onHeartbeat?.();
+        continue;
+      }
       if (eventName !== 'snapshot' || !data) continue;
       handleWorkflowProgressStreamData(options, id, data, onSnapshot);
     }
