@@ -84,14 +84,14 @@ describe('api parsing helpers', () => {
   it('clears jobs through the slash cleanup endpoint', async () => {
     mockApi.post.mockResolvedValue({ data: { cleared_count: 2 } });
 
-    await expect(clearJobs()).resolves.toEqual({ cleared_count: 2 });
+    await expect(clearJobs()).resolves.toEqual({ version: 1, cleared_count: 2 });
 
     expect(mockApi.post).toHaveBeenCalledWith('/jobs/cleanup');
   });
 
   it('uses safe fallbacks for malformed mutation responses', async () => {
     mockApi.post.mockResolvedValueOnce({ data: { cleared_count: 'two' } });
-    await expect(clearJobs()).resolves.toEqual({ cleared_count: 0 });
+    await expect(clearJobs()).resolves.toEqual({ version: 1, cleared_count: 0 });
 
     mockApi.post.mockResolvedValueOnce({ data: { status: 42 } });
     await expect(cancelJob('job-1')).resolves.toEqual(expect.objectContaining({
@@ -261,7 +261,7 @@ describe('api parsing helpers', () => {
       },
     });
 
-    await expect(fetchSystemSummary()).resolves.toEqual({ nodes: [], jobs: [] });
+    await expect(fetchSystemSummary()).resolves.toEqual({ version: 1, nodes: [], jobs: [] });
   });
 
   it('adds cluster nodes through the system cluster endpoint', async () => {
@@ -281,7 +281,7 @@ describe('api parsing helpers', () => {
         status: 'connected',
       }),
     );
-    expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:add', { host: '10.0.0.42', token: 'join-token' });
+    expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:add', { version: 1, host: '10.0.0.42', token: 'join-token' });
   });
 
   it('removes cluster nodes through the system cluster endpoint', async () => {
@@ -299,7 +299,7 @@ describe('api parsing helpers', () => {
         status: 'disconnected',
       }),
     );
-    expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:remove', { node_name: 'mirror_neuron@10.0.0.42' });
+    expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:remove', { version: 1, node_name: 'mirror_neuron@10.0.0.42' });
   });
 
   it('fetches installed runtime models', async () => {
@@ -355,7 +355,7 @@ describe('api parsing helpers', () => {
         tokens_per_second: 12.5,
       }),
     );
-    expect(mockApi.post).toHaveBeenCalledWith('/models/gemma4%3Ae2b/benchmark', { max_tokens: 32 });
+    expect(mockApi.post).toHaveBeenCalledWith('/models/gemma4%3Ae2b/benchmark', { version: 1, max_tokens: 32 });
   });
 
   it('normalizes malformed upload and launch responses', async () => {
@@ -368,6 +368,7 @@ describe('api parsing helpers', () => {
 
     const file = new File(['bundle'], 'bundle.zip', { type: 'application/zip' });
     await expect(uploadBundle(file)).resolves.toEqual({
+      version: 1,
       bundle_path: '',
       manifest: {},
     });
@@ -379,7 +380,7 @@ describe('api parsing helpers', () => {
       },
     });
 
-    await expect(launchBlueprintJob({ source: 'catalog' })).resolves.toEqual({ status: 'pending' });
+    await expect(launchBlueprintJob({ source: 'catalog' })).resolves.toEqual({ version: 1, status: 'pending' });
     expect(console.error).toHaveBeenCalledWith(
       'launchBlueprintJob validation failed:',
       expect.anything(),
