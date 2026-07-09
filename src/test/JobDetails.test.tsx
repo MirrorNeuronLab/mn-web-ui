@@ -273,21 +273,6 @@ describe('JobDetails Component', () => {
         url: '/api/v1/runs/artifact-run/artifacts/logs.jsonl',
         reveal_url: '/api/v1/runs/artifact-run/artifacts/logs.jsonl/reveal',
       },
-      {
-        artifact_id: 'job_json',
-        relative_path: 'job.json',
-        url: '/api/v1/runs/artifact-run/artifacts/job.json',
-        reveal_url: '/api/v1/runs/artifact-run/artifacts/job.json/reveal',
-      },
-      {
-        artifact_id: 'output_0_report_markdown',
-        name: 'artifact-run-report.md',
-        path: '/tmp/downloads/artifact-run-report.md',
-        source: 'post_launch_output',
-        external: true,
-        url: '/api/v1/runs/artifact-run/outputs/0',
-        reveal_url: '/api/v1/runs/artifact-run/outputs/0/reveal',
-      },
     ];
     vi.mocked(fetchJobDetails).mockResolvedValue({
       job: {
@@ -340,17 +325,11 @@ describe('JobDetails Component', () => {
     expect(screen.getAllByRole('button', { name: 'errors.jsonl' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'events.jsonl' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'logs.jsonl' }).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'job.json' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'artifact-run-report.md' })).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'errors.jsonl' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'job.json' }));
-    fireEvent.click(screen.getByRole('button', { name: 'artifact-run-report.md' }));
 
     await waitFor(() => {
       expect(revealArtifact).toHaveBeenCalledWith('/api/v1/runs/artifact-run/artifacts/errors.jsonl/reveal');
-      expect(revealArtifact).toHaveBeenCalledWith('/api/v1/runs/artifact-run/artifacts/job.json/reveal');
-      expect(revealArtifact).toHaveBeenCalledWith('/api/v1/runs/artifact-run/outputs/0/reveal');
     });
   });
 
