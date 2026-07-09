@@ -735,6 +735,7 @@ describe('api parsing helpers', () => {
               status: 'idle',
               progress: 0.2,
               progress_source: 'items',
+              activity_summary: null,
               items_done: 2,
               items_total: 10,
               tokens_used: 300,
@@ -765,6 +766,7 @@ describe('api parsing helpers', () => {
               id: 'research:docs',
               status: 'idle',
               progress_source: 'items',
+              activity_summary: '',
               items_done: 2,
               items_total: 10,
               tokens_used: 300,
@@ -776,6 +778,86 @@ describe('api parsing helpers', () => {
       }),
     );
     expect(mockApi.get).toHaveBeenCalledWith('/jobs/job-1/workflow-progress');
+  });
+
+  it('normalizes wrapped workflow progress snapshots from the newer API shape', async () => {
+    mockApi.get.mockResolvedValue({
+      data: {
+        event: 'snapshot',
+        data: {
+          workflowProgress: {
+            schema_version: 'otterdesk.workflow_progress.v1',
+            jobId: 'job-2',
+            workflowId: 'workflow-2',
+            workflowKind: 'live',
+            state: 'in_progress',
+            currentStepId: 'prepare',
+            phases: [
+              {
+                stepId: 'prepare',
+                name: 'Prepare workspace',
+                state: 'in_progress',
+                agentCount: { running: '1', total: '1' },
+              },
+            ],
+            agents: [
+              {
+                agentId: 'worker-1',
+                displayName: 'Worker One',
+                currentStepId: 'prepare',
+                state: 'working',
+                progressPercent: 45,
+                tokensUsed: '1500',
+                tokenBudget: '3000',
+                currentTask: 'Preparing workspace',
+              },
+            ],
+            edges: [{ source: 'prepare', target: 'submit', type: 'next' }],
+            recentEvents: [{ time: '2026-06-12T17:38:02Z', event: 'agent_beacon', message: 'Preparing workspace' }],
+          },
+        },
+      },
+    });
+
+    await expect(fetchWorkflowProgress('job-2')).resolves.toEqual(
+      expect.objectContaining({
+        schema_version: 'otterdesk.workflow_progress.v1',
+        job_id: 'job-2',
+        workflow_id: 'workflow-2',
+        workflow_kind: 'service',
+        status: 'running',
+        current_step_id: 'prepare',
+        current_step_ids: ['prepare'],
+        agent_count: expect.objectContaining({ running: 1, total: 1 }),
+        edges: [expect.objectContaining({ from: 'prepare', to: 'submit', event: 'next' })],
+        steps: [
+          expect.objectContaining({
+            id: 'prepare',
+            label: 'Prepare workspace',
+            status: 'running',
+            current: true,
+            running_count: 1,
+            total_count: 1,
+            agents: [
+              expect.objectContaining({
+                id: 'worker-1',
+                display_name: 'Worker One',
+                status: 'running',
+                progress: 0.45,
+                tokens_used: 1500,
+                token_budget: 3000,
+                working_on: 'Preparing workspace',
+              }),
+            ],
+          }),
+        ],
+        recent_events: [expect.objectContaining({ timestamp: '2026-06-12T17:38:02Z', type: 'agent_beacon' })],
+      }),
+    );
+    expect(console.error).not.toHaveBeenCalledWith(
+      'fetchWorkflowProgress(job-2) validation failed:',
+      expect.anything(),
+    );
   });
 
   it('skips malformed workflow progress stream snapshots and keeps reading', async () => {
@@ -819,6 +901,42 @@ describe('api parsing helpers', () => {
       job_id: 'job-1',
       workflow_id: 'workflow-1',
       status: 'running',
+    }));
+  });
+
+  it('normalizes wrapped workflow progress stream snapshots', async () => {
+    vi.stubGlobal('EventSource', undefined);
+    const snapshot = JSON.stringify({
+      event: 'snapshot',
+      data: {
+        workflow_progress: {
+          jobId: 'job-stream',
+          workflowId: 'stream-workflow',
+          currentStepId: 'run',
+          steps: [{ id: 'run', label: 'Run', state: 'working' }],
+        },
+      },
+    });
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`event: snapshot\ndata: ${snapshot}\n\n`));
+        controller.close();
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body,
+    }));
+    const onSnapshot = vi.fn();
+
+    await streamWorkflowProgress('job-stream', onSnapshot);
+
+    expect(onSnapshot).toHaveBeenCalledWith(expect.objectContaining({
+      job_id: 'job-stream',
+      workflow_id: 'stream-workflow',
+      current_step_id: 'run',
+      steps: [expect.objectContaining({ id: 'run', status: 'running', current: true })],
     }));
   });
 });

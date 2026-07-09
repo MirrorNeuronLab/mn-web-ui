@@ -105,6 +105,61 @@ const formatList = (values?: string[]) => {
   return filtered.length ? filtered.join(', ') : 'None';
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+);
+
+const firstString = (...values: unknown[]) => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return '';
+};
+
+const uniqueStrings = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
+
+const nestedId = (value: unknown) => {
+  const record = isRecord(value) ? value : {};
+  return firstString(record.id, record.step_id, record.stepId, record.node_id, record.nodeId, record.name, record.label);
+};
+
+const stepAssociationIds = (step: WorkflowProgressStep, index: number) => {
+  const record = step as Record<string, unknown>;
+  return uniqueStrings([
+    firstString(step.id),
+    firstString(record.step_id, record.stepId),
+    firstString(record.workflow_step_id, record.workflowStepId),
+    firstString(record.node_id, record.nodeId),
+    firstString(record.phase, record.name, step.label),
+    `step-${index + 1}`,
+  ]);
+};
+
+const agentStepIds = (agent: WorkflowProgressAgent) => {
+  const record = agent as Record<string, unknown>;
+  return uniqueStrings([
+    firstString(record.step_id, record.stepId),
+    firstString(record.current_step_id, record.currentStepId),
+    firstString(record.workflow_step_id, record.workflowStepId),
+    firstString(record.phase_id, record.phaseId),
+    firstString(record.stage_id, record.stageId),
+    firstString(record.node_id, record.nodeId),
+    nestedId(record.step),
+    nestedId(record.current_step || record.currentStep),
+    nestedId(record.workflow_step || record.workflowStep),
+  ]);
+};
+
+const topLevelAgents = (progress: WorkflowProgress) => {
+  const agents = (progress as unknown as { agents?: unknown }).agents;
+  return Array.isArray(agents) ? agents.filter(isRecord) as unknown as WorkflowProgressAgent[] : [];
+};
+
+const stepMatchesId = (step: WorkflowProgressStep, index: number, id: string | null) => (
+  Boolean(id && stepAssociationIds(step, index).includes(id))
+);
+
 const eventKey = (event: WorkflowActivity, index: number) => (
   `${event.timestamp || 'unknown'}-${event.type || 'event'}-${event.step_id || ''}-${event.agent_id || ''}-${index}`
 );
@@ -292,6 +347,13 @@ const DetailStat = ({ label, value, tone }: { label: string; value: string | num
   </div>
 );
 
+const MonitorStat = ({ label, value, tone }: { label: string; value: string | number; tone?: string }) => (
+  <div className="min-w-0">
+    <div className="text-[11px] font-medium text-neutral-500">{label}</div>
+    <div className={`mt-0.5 truncate text-sm font-semibold ${tone || 'text-neutral-950'}`} title={String(value)}>{value}</div>
+  </div>
+);
+
 const StepMetadata = ({ step }: { step: WorkflowProgressStep }) => {
   const metadata = [
     ['Started', formatTimestamp(step.started_at)],
@@ -382,19 +444,36 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
     );
   }
 
+  const workflowAgents = topLevelAgents(progress);
   const currentStep = progress.current_step || progress.steps.find((step) => step.current) || progress.steps[0];
-  const effectiveSelectedStepId = selectedStepId && progress.steps.some((step) => step.id === selectedStepId) ? selectedStepId : null;
+  const effectiveSelectedStepId = selectedStepId && progress.steps.some((step, index) => stepMatchesId(step, index, selectedStepId)) ? selectedStepId : null;
   const selectedStep = effectiveSelectedStepId
-    ? progress.steps.find((step) => step.id === effectiveSelectedStepId) || (currentStep?.id === effectiveSelectedStepId ? currentStep : undefined)
+    ? progress.steps.find((step, index) => stepMatchesId(step, index, effectiveSelectedStepId)) || (currentStep?.id === effectiveSelectedStepId ? currentStep : undefined)
     : undefined;
-  const currentStepIds = new Set(progress.current_step_ids?.length ? progress.current_step_ids : progress.steps.filter((step) => step.current).map((step) => step.id));
+  const currentStepIds = new Set(uniqueStrings([
+    ...(progress.current_step_ids?.length ? progress.current_step_ids : []),
+    progress.current_step_id || '',
+    currentStep?.id || '',
+    ...progress.steps.flatMap((step, index) => step.current ? stepAssociationIds(step, index) : []),
+  ]));
   const activeSteps = currentStepIds.size
     ? progress.steps
-        .filter((step) => currentStepIds.has(step.id))
+        .filter((step, index) => stepAssociationIds(step, index).some((id) => currentStepIds.has(id)))
         .map((step) => currentStep?.id === step.id && (currentStep.agents || []).length ? currentStep : step)
     : (currentStep ? [currentStep] : []);
   const detailSteps = selectedStep ? [selectedStep] : activeSteps;
-  const agents = detailSteps.flatMap((step) => step.agents || []);
+  const stepAgents = detailSteps.flatMap((step) => step.agents || []);
+  const detailStepIds = new Set(detailSteps.flatMap((step, index) => stepAssociationIds(step, index)));
+  const matchingWorkflowAgents = workflowAgents.filter((agent) => agentStepIds(agent).some((id) => detailStepIds.has(id)));
+  const hasWorkflowAgentStepIds = workflowAgents.some((agent) => agentStepIds(agent).length > 0);
+  const selectedStepsAreActive = detailSteps.some((step) => step.current || ['running', 'active'].includes(String(step.status || '').toLowerCase()));
+  const agents = stepAgents.length
+    ? stepAgents
+    : matchingWorkflowAgents.length
+      ? matchingWorkflowAgents
+      : !hasWorkflowAgentStepIds && selectedStepsAreActive
+        ? workflowAgents
+        : [];
   const workflowKind = progress.workflow_kind || 'batch';
   const showLayer = (progress.layers || []).length > 1 || progress.steps.some((step) => step.parents?.length || step.children?.length);
   const primaryStep = selectedStep || currentStep;
@@ -413,6 +492,18 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
       ? activeSteps.map((step) => step.label).join(' / ')
       : (currentStep?.goal || currentStep?.activity_summary || '');
   const detailStatus = selectedStep?.status || currentStep?.status || progress.status;
+  const workflowTotal = progress.agent_count.total || progress.steps.reduce((total, step) => total + (step.total_count || 0), 0) || progress.steps.length || agents.length;
+  const workflowDone = progress.agent_count.done || progress.steps.reduce((total, step) => total + (step.done_count || 0), 0);
+  const workflowRunning = progress.agent_count.running || progress.steps.reduce((total, step) => total + (step.running_count || 0), 0);
+  const workflowFailed = progress.agent_count.failed || progress.steps.reduce((total, step) => total + (step.failed_count || 0), 0);
+  const monitorActivity = primaryStep?.activity_summary
+    || primaryStep?.status_reason
+    || agents.find((agent) => agent.activity_summary)?.activity_summary
+    || agents.find((agent) => agent.status_reason)?.status_reason
+    || agents.find((agent) => agent.working_on)?.working_on
+    || '';
+  const workflowLabel = progress.name || progress.workflow_id || 'Workflow';
+  const currentLabel = primaryStep?.label || progress.current_step_id || 'None';
 
   return (
     <div className="absolute inset-0 overflow-auto bg-white font-sans lg:overflow-hidden">
@@ -427,9 +518,9 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
                 index={index}
                 workflowKind={workflowKind}
                 showLayer={showLayer}
-                highlighted={effectiveSelectedStepId ? step.id === effectiveSelectedStepId : Boolean(step.current)}
-                selected={step.id === effectiveSelectedStepId}
-                onSelect={() => setSelectedStepId(step.id || null)}
+                highlighted={effectiveSelectedStepId ? stepMatchesId(step, index, effectiveSelectedStepId) : Boolean(step.current)}
+                selected={stepMatchesId(step, index, effectiveSelectedStepId)}
+                onSelect={() => setSelectedStepId(stepAssociationIds(step, index)[0] || null)}
               />
             ))}
           </div>
@@ -437,6 +528,29 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
         </aside>
 
         <section className="min-w-0 p-3 lg:min-h-0 lg:overflow-auto">
+          <div className="mb-3 border-b border-neutral-200 pb-3">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0">
+                <div className="truncate text-xs font-semibold text-neutral-950">{workflowLabel}</div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-500">
+                  <span>Current: <strong className="font-medium text-neutral-700">{currentLabel}</strong></span>
+                  <span className={`capitalize ${statusTone(progress.status)}`}>{progress.status || 'unknown'}</span>
+                  {progress.progress_source ? <span>Source: {progress.progress_source}</span> : null}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+                <MonitorStat label="Done" value={`${workflowDone}/${workflowTotal}`} />
+                <MonitorStat label="Running" value={workflowRunning} tone={workflowRunning ? 'text-sky-700' : undefined} />
+                <MonitorStat label="Failed" value={workflowFailed} tone={workflowFailed ? 'text-red-700' : undefined} />
+                <MonitorStat label="Elapsed" value={formatElapsed(progress.elapsed_seconds || 0)} />
+              </div>
+            </div>
+            {monitorActivity ? (
+              <div className="mt-2 truncate rounded-md bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-600" title={monitorActivity}>
+                {monitorActivity}
+              </div>
+            ) : null}
+          </div>
           {showFailurePanel && visibleFailure ? (
             <div className="mb-3">
               <FailurePanel failure={visibleFailure} title={progress.failure ? 'Job Failure' : 'Step Failure'} artifacts={failureArtifacts} />
@@ -498,7 +612,7 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
                 </tr>
               </thead>
               <tbody>
-                {agents.length ? agents.map((agent) => <AgentRow key={agent.id} agent={agent} />) : (
+                {agents.length ? agents.map((agent, index) => <AgentRow key={`${agent.id || 'agent'}-${index}`} agent={agent} />) : (
                   <tr>
                     <td className="px-3 py-6 text-xs text-neutral-500" colSpan={6}>No agents reported for this step yet.</td>
                   </tr>

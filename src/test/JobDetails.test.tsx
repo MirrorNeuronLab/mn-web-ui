@@ -183,10 +183,10 @@ describe('JobDetails Component', () => {
     // Default tab is Progress
     expect(screen.queryByRole('button', { name: 'Graph View' })).not.toBeInTheDocument();
     expect(screen.queryByText('test-workflow')).not.toBeInTheDocument();
-    expect(screen.getByText('Live Agents')).toBeInTheDocument();
-    expect(screen.getByText('1/1')).toBeInTheDocument();
+    expect(screen.getAllByText('Progress').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('0/1').length).toBeGreaterThan(0);
     expect(screen.getByText('Events')).toBeInTheDocument();
-    expect(screen.getByText(/Step One/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Step One/).length).toBeGreaterThan(0);
 
     // Switch to Agents tab; list view is the default, graph view is available there.
     fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
@@ -543,6 +543,55 @@ describe('JobDetails Component', () => {
     expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument();
   });
 
+  it('infers completed batch status from complete progress counters', async () => {
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      job: {
+        job_id: 'batch-job-1',
+        graph_id: 'batch_workflow_v1',
+        status: 'running',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchJobEvents).mockResolvedValue([]);
+    const completeProgress: WorkflowProgress = {
+      schema_version: 1,
+      job_id: 'batch-job-1',
+      workflow_id: 'batch_workflow_v1',
+      name: 'Batch Workflow',
+      description: '',
+      status: 'running',
+      workflow_kind: 'batch',
+      progress_source: 'complete',
+      elapsed_seconds: 10,
+      agent_count: { done: 2, running: 0, idle: 0, ready: 2, failed: 0, total: 2 },
+      current_step_id: null,
+      current_step: null,
+      steps: [],
+      messages: [],
+      recent_events: [],
+    };
+    vi.mocked(fetchWorkflowProgress).mockResolvedValue(completeProgress);
+    vi.mocked(streamWorkflowProgress).mockImplementation(async (_id, onSnapshot, _signal, onHeartbeat) => {
+      onSnapshot({ ...completeProgress, status: 'completed' });
+      onHeartbeat?.();
+    });
+
+    renderWithRouter(<JobDetails />);
+
+    await waitFor(() => {
+      expect(screen.getByText('batch-job-1')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('completed').length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getAllByText('closed').length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+  });
+
   it('renders job details when agent graph is unavailable', async () => {
     const mockDetails = {
       job: {
@@ -853,7 +902,7 @@ describe('JobDetails Component', () => {
 
     expect(screen.getByText(/0\/2/)).toBeInTheDocument();
     expect(screen.getAllByText('idle').length).toBeGreaterThan(0);
-    expect(screen.getByText('Review visual detection')).toBeInTheDocument();
+    expect(screen.getAllByText('Review visual detection').length).toBeGreaterThan(0);
   });
 
   it('renders graph workflow layers and multiple active steps in the Progress tab', async () => {

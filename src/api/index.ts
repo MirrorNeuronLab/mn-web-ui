@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { parseArrayOrEmpty, parseOrFallback } from './parsing';
 import { apiPathFromUrl, blueprintPath, bundlePath, jobPath, launchProgressPath, modelPath, runPath } from './routes';
 import { createWorkflowProgressStreamer } from './streaming';
+import { normalizeWorkflowProgressPayload } from './workflowProgress';
 
 const InterfaceVersionSchema = z.number().optional().default(1) as unknown as z.ZodOptional<z.ZodNumber>;
 const isRecord = (value: unknown): value is Record<string, unknown> => (
@@ -485,9 +486,9 @@ export const WorkflowProgressStepSchema = z.object({
   agents: z.array(WorkflowProgressAgentSchema).optional().default([]),
 }).passthrough();
 
-export const WorkflowProgressSchema = z.object({
+const WorkflowProgressObjectSchema = z.object({
   version: InterfaceVersionSchema,
-  schema_version: z.number().optional().default(1),
+  schema_version: z.union([z.number(), z.string()]).optional().default(1),
   job_id: z.string().optional().default('unknown'),
   workflow_id: z.string().optional().default('blueprint'),
   name: z.string().optional().default('Blueprint'),
@@ -523,6 +524,8 @@ export const WorkflowProgressSchema = z.object({
   messages: z.array(z.string()).optional().default([]),
   recent_events: z.array(JobEventSchema).optional().default([]),
 }).passthrough();
+
+export const WorkflowProgressSchema = z.preprocess(normalizeWorkflowProgressPayload, WorkflowProgressObjectSchema);
 
 export type Agent = z.infer<typeof AgentSchema>;
 export type ErrorEnvelope = z.infer<typeof ErrorEnvelopeSchema>;

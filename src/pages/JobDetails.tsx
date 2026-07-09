@@ -134,6 +134,22 @@ const displayStatusFromSources = (
   return normalizedStatus(progress, job, graphStatus);
 };
 
+const inferredTerminalStatusFromProgress = (progress: WorkflowProgress | null | undefined): string | undefined => {
+  if (!progress) return undefined;
+  const status = normalizedStatus(progress.status);
+  if (status && isTerminalJobStatus(status)) return status;
+
+  const total = progress.agent_count?.total || 0;
+  const done = progress.agent_count?.done || 0;
+  const failed = progress.agent_count?.failed || 0;
+  const running = progress.agent_count?.running || 0;
+  if (!total || running > 0) return undefined;
+  if (failed > 0 && done + failed >= total) return 'failed';
+  const source = normalizedStatus(progress.progress_source);
+  if (progress.workflow_kind !== 'service' && done >= total && source === 'complete') return 'completed';
+  return undefined;
+};
+
 const formattedTimestamp = (...values: unknown[]): string | undefined => {
   const raw = knownStringValue(...values);
   if (!raw) return undefined;
@@ -241,6 +257,7 @@ export default function JobDetails() {
     if (!id) return;
     const controller = new AbortController();
     let cancelled = false;
+    let terminalObserved = false;
     let staleTimer: number | undefined;
     let disconnectedTimer: number | undefined;
     const clearHealthTimers = () => {
@@ -250,16 +267,19 @@ export default function JobDetails() {
       disconnectedTimer = undefined;
     };
     const markLive = () => {
-      if (cancelled) return;
+      if (cancelled || terminalObserved) return;
       setProgressStreamState('live');
       clearHealthTimers();
       staleTimer = window.setTimeout(() => setProgressStreamState('stale'), 15_000);
       disconnectedTimer = window.setTimeout(() => setProgressStreamState('disconnected'), 30_000);
     };
-    const connectTimer = window.setTimeout(() => setProgressStreamState('connecting'), 0);
+    const connectTimer = window.setTimeout(() => {
+      if (!cancelled && !terminalObserved) setProgressStreamState('connecting');
+    }, 0);
     streamWorkflowProgress(id, (snapshot) => {
       if (cancelled) return;
       if (isTerminalJobStatus(snapshot.status)) {
+        terminalObserved = true;
         clearHealthTimers();
         setProgressStreamState('closed');
       } else {
@@ -278,7 +298,7 @@ export default function JobDetails() {
     }).catch((err) => {
       if (!cancelled && err?.name !== 'AbortError') {
         clearHealthTimers();
-        setProgressStreamState('disconnected');
+        if (!terminalObserved) setProgressStreamState('disconnected');
         console.error('Workflow progress stream closed', err);
       }
     });
@@ -293,7 +313,8 @@ export default function JobDetails() {
   if (!details || !details.job) return <div className="p-5 text-sm text-neutral-500">Loading or Invalid Job...</div>;
   const webUi = blueprintWebUiInfo(details) || webUiInfoFromRecord(runWebUi);
   const jobId = knownStringValue(details.job.job_id, id) || id || 'job';
-  const displayStatus = displayStatusFromSources(actionStatus, workflowProgress?.status, details.job.status, graph?.status);
+  const progressTerminalStatus = inferredTerminalStatusFromProgress(workflowProgress);
+  const displayStatus = displayStatusFromSources(actionStatus, progressTerminalStatus || workflowProgress?.status, details.job.status, graph?.status);
   const graphId = knownStringValue(details.job.graph_id, workflowProgress?.workflow_id, graph?.graph_id);
   const submittedAt = formattedTimestamp(details.job.submitted_at, workflowProgress?.submitted_at);
   const displayWorkflowProgress = workflowProgress && displayStatus ? { ...workflowProgress, status: displayStatus } : workflowProgress;
@@ -309,12 +330,18 @@ export default function JobDetails() {
     .find((candidate) => Array.isArray(candidate)) as ObservabilityArtifactRef[] | undefined;
   const observabilitySummary = observabilitySummaryFrom(details, displayWorkflowProgress || null, summaryRecord);
   const traceId = traceIdFrom(details, displayWorkflowProgress || null, summaryRecord, observabilitySummary);
-  const liveAgentCount = displayWorkflowProgress
+  const runningAgentCount = displayWorkflowProgress
     ? displayWorkflowProgress.agent_count.running
     : displayGraph.nodes.filter((agent) => agent.status === 'running').length;
+  const doneAgentCount = displayWorkflowProgress
+    ? displayWorkflowProgress.agent_count.done
+    : displayGraph.nodes.filter((agent) => isTerminalJobStatus(agent.status)).length;
   const totalAgentCount = displayWorkflowProgress
     ? displayWorkflowProgress.agent_count.total
     : displayGraph.stats.agent_count;
+  const progressSummaryIsLive = displayWorkflowProgress?.workflow_kind === 'service';
+  const progressAgentValue = progressSummaryIsLive ? `${runningAgentCount}/${totalAgentCount}` : `${doneAgentCount}/${totalAgentCount}`;
+  const progressAgentLabel = progressSummaryIsLive ? 'Live Agents' : 'Progress';
   const eventCount = Math.max(
     displayWorkflowProgress?.recent_events?.length || 0,
     displayWorkflowProgress?.messages?.length || 0,
@@ -501,7 +528,7 @@ export default function JobDetails() {
         </div>
       </Card>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <SummaryCard icon={<Network className="h-3.5 w-3.5" />} value={`${liveAgentCount}/${totalAgentCount}`} label="Live Agents" />
+          <SummaryCard icon={<CheckCircle className="h-3.5 w-3.5" />} value={progressAgentValue} label={progressAgentLabel} />
           <SummaryCard icon={<FileText className="h-3.5 w-3.5" />} value={progressOutputs.length} label="Artifacts" />
           <SummaryCard icon={<MessageSquare className="h-3.5 w-3.5" />} value={eventCount} label="Events" />
           <SummaryCard icon={<Clock className="h-3.5 w-3.5" />} value={runtime} label="Runtime" />
