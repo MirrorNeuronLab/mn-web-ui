@@ -43,6 +43,10 @@ type LaunchProgressItem = {
   message: string;
 };
 
+type LaunchHandoff =
+  | { type: 'response'; response: Awaited<ReturnType<typeof launchBlueprintJob>> }
+  | { type: 'progress'; jobId: string };
+
 const LAUNCH_PROGRESS_POLL_MS = 1000;
 const LAUNCH_JOB_ID_TIMEOUT_MS = 90 * 60 * 1000;
 const FAILED_LAUNCH_STATUSES = new Set(['failed', 'error', 'cancelled', 'canceled']);
@@ -453,11 +457,22 @@ export default function RunJob() {
         }]);
         let activeProgressId = launchProgressId;
         try {
-          const res = await launchBlueprintJob(launchPayload(launchProgressId));
-          activeProgressId = stringValue(res.progress_id) || launchProgressId;
-          if (activeProgressId !== launchProgressId) setProgressId(activeProgressId);
-          const progress = await refreshLaunchProgress(activeProgressId);
-          const jobId = launchResponseJobId(res) || progressJobId(progress) || await waitForLaunchJobId(activeProgressId, progress);
+          const launchRequest = launchBlueprintJob(launchPayload(launchProgressId));
+          const handoff = await Promise.race<LaunchHandoff>([
+            launchRequest.then((response) => ({ type: 'response', response })),
+            waitForLaunchJobId(launchProgressId, null).then((jobId) => ({ type: 'progress', jobId })),
+          ]);
+          let jobId = '';
+          if (handoff.type === 'progress') {
+            jobId = handoff.jobId;
+            void launchRequest.catch(() => undefined);
+          } else {
+            const res = handoff.response;
+            activeProgressId = stringValue(res.progress_id) || launchProgressId;
+            if (activeProgressId !== launchProgressId) setProgressId(activeProgressId);
+            const progress = await refreshLaunchProgress(activeProgressId);
+            jobId = launchResponseJobId(res) || progressJobId(progress) || await waitForLaunchJobId(activeProgressId, progress);
+          }
           setRunning(false);
           navigate(`/jobs/${jobId}`);
           return jobId;

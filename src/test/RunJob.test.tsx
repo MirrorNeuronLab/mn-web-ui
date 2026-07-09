@@ -236,6 +236,47 @@ describe('RunJob Component', () => {
     });
   });
 
+  it('hands off to job progress when progress id resolves before the launch request returns', async () => {
+    vi.mocked(launchBlueprintJob).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(fetchLaunchProgress).mockResolvedValue({
+      progress_id: 'launch-from-ui',
+      run_id: 'run-progress-first-123',
+      job_id: 'job-progress-first-123',
+      status: 'completed',
+      current_phase: 'launch',
+      events: [
+        { phase: 'prepare_bundle', status: 'completed', message: 'Job bundle prepared.' },
+        { phase: 'launch', status: 'completed', message: 'Launch complete.', details: { job_id: 'job-progress-first-123' } },
+      ],
+      phases: [
+        { id: 'prepare_bundle', label: 'Package workflow', status: 'completed', message: 'Job bundle prepared.' },
+        { id: 'launch', label: 'Launch', status: 'completed', message: 'Launch complete.' },
+      ],
+      latest: { phase: 'launch', status: 'completed', message: 'Launch complete.', details: { job_id: 'job-progress-first-123' } },
+      completed: true,
+    });
+
+    renderRunJob();
+    await waitFor(() => {
+      expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    expect(await screen.findByText('Launch this job?')).toBeInTheDocument();
+    const launchButtons = screen.getAllByRole('button', { name: 'Launch' });
+    fireEvent.click(launchButtons[launchButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(launchBlueprintJob).toHaveBeenCalledWith(expect.objectContaining({
+        source: 'catalog',
+        blueprint_id: 'worker_one',
+      }));
+      const payload = vi.mocked(launchBlueprintJob).mock.calls[0][0] as Record<string, unknown>;
+      expect(fetchLaunchProgress).toHaveBeenCalledWith(payload.progress_id);
+      expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-progress-first-123');
+    });
+  });
+
   it('surfaces failed async launch progress and does not navigate', async () => {
     vi.mocked(launchBlueprintJob).mockResolvedValue({
       job_id: null,
