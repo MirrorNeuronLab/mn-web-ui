@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { Activity, Check, Circle, Clock3, ExternalLink, FileText, Loader2, MousePointer2, X } from 'lucide-react';
+import { Activity, Check, Circle, Clock3, Loader2, X } from 'lucide-react';
 import type { JobDetails, WorkflowActivity, WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
 import { displayAgentName } from '../utils/agentGraph';
 import { formatElapsed } from '../utils/workflowProgress';
-import { artifactsFromDetails, buildInputResources, buildOutputResources } from '../utils/workflowResources';
-import type { ProgressResource } from '../utils/workflowResources';
-import { openArtifactLocation } from '../utils/artifactReveal';
+import { artifactsFromDetails } from '../utils/workflowResources';
+// ProgressResource and openArtifactLocation were unused and removed
 import {
   activityCategory,
   activityDetailText,
@@ -21,12 +20,8 @@ type WorkflowProgressPanelProps = {
   progress: WorkflowProgress | null;
   status?: string;
   details?: JobDetails | null;
-  webUi?: {
-    url: string;
-    title: string;
-    status?: string;
-  } | null;
   showFailurePanel?: boolean;
+  webUi?: unknown;
 };
 
 const statusTone = (status: string | undefined) => {
@@ -162,34 +157,6 @@ const stepMatchesId = (step: WorkflowProgressStep, index: number, id: string | n
 
 const eventKey = (event: WorkflowActivity, index: number) => (
   `${event.timestamp || 'unknown'}-${event.type || 'event'}-${event.step_id || ''}-${event.agent_id || ''}-${index}`
-);
-
-const ResourceList = ({ resources, emptyText }: { resources: ProgressResource[]; emptyText: string }) => (
-  <div className="space-y-1">
-    {resources.length ? resources.slice(0, 8).map((resource) => {
-      const icon = resource.kind === 'url' ? <ExternalLink className="h-3.5 w-3.5 shrink-0" /> : <FileText className="h-3.5 w-3.5 shrink-0" />;
-      const content = (
-        <>
-          {icon}
-          <span className="min-w-0 truncate">{resource.label}</span>
-        </>
-      );
-      const className = "flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-neutral-900 hover:bg-neutral-100";
-      return resource.revealUrl ? (
-        <button key={resource.id} type="button" className={className} onClick={() => openArtifactLocation(resource.revealUrl, resource.label)} title={`Open ${resource.label} in local file system`}>
-          {content}
-        </button>
-      ) : resource.href ? (
-        <a key={resource.id} className={className} href={resource.href} target="_blank" rel="noreferrer" title={resource.value}>
-          {content}
-        </a>
-      ) : (
-        <div key={resource.id} className={className} title={resource.value}>
-          {content}
-        </div>
-      );
-    }) : <div className="px-2 py-1 text-xs text-neutral-500">{emptyText}</div>}
-  </div>
 );
 
 // ProgressResourcesColumn removed
@@ -393,7 +360,7 @@ const ActivityList = ({ activities, fallbackMessages }: { activities: WorkflowAc
   );
 };
 
-export function WorkflowProgressPanel({ progress, details, webUi, showFailurePanel = true }: WorkflowProgressPanelProps) {
+export function WorkflowProgressPanel({ progress, details, showFailurePanel = true }: WorkflowProgressPanelProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
 
   if (!progress) {
