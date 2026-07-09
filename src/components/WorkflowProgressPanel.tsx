@@ -192,47 +192,7 @@ const ResourceList = ({ resources, emptyText }: { resources: ProgressResource[];
   </div>
 );
 
-const ProgressResourcesColumn = ({ progress, details, webUi }: { progress: WorkflowProgress; details?: JobDetails | null; webUi?: WorkflowProgressPanelProps['webUi'] }) => {
-  const outputs = buildOutputResources(progress, details);
-  const inputs = buildInputResources(progress, details);
-  return (
-    <div className="mt-3 border-t border-neutral-200 pt-3">
-      <div className="space-y-4">
-        <section>
-          <div className="mb-2 text-xs font-semibold text-neutral-500">Outputs</div>
-          <ResourceList resources={outputs} emptyText="No outputs yet" />
-        </section>
-
-        <section className="border-t border-neutral-200 pt-4">
-          <div className="mb-2 text-xs font-semibold text-neutral-500">Browser</div>
-          {webUi?.url ? (
-            <a
-              className="flex h-7 items-center gap-2 rounded-md px-2 text-xs text-neutral-900 hover:bg-neutral-100"
-              href={webUi.url}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`Open dashboard in browser: ${webUi.title || webUi.url}`}
-              title={webUi.status ? `${webUi.title} (${webUi.status})` : webUi.title}
-            >
-              <MousePointer2 className="h-3.5 w-3.5 shrink-0" />
-              <span className="min-w-0 truncate">{webUi.title || webUi.url}</span>
-            </a>
-          ) : (
-            <div className="flex h-7 items-center gap-2 px-2 text-xs text-neutral-400">
-              <MousePointer2 className="h-3.5 w-3.5 shrink-0" />
-              <span>No dashboard yet</span>
-            </div>
-          )}
-        </section>
-
-        <section className="border-t border-neutral-200 pt-4">
-          <div className="mb-2 text-xs font-semibold text-neutral-500">Inputs</div>
-          <ResourceList resources={inputs} emptyText="No inputs reported yet" />
-        </section>
-      </div>
-    </div>
-  );
-};
+// ProgressResourcesColumn removed
 
 const StepRow = ({
   step,
@@ -524,7 +484,6 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
               />
             ))}
           </div>
-          <ProgressResourcesColumn progress={progress} details={details} webUi={webUi} />
         </aside>
 
         <section className="min-w-0 p-3 lg:min-h-0 lg:overflow-auto">
