@@ -11,6 +11,7 @@ import {
   isServiceJob,
   addClusterNode,
   benchmarkRuntimeModel,
+  fetchLaunchProgress,
   fetchRuntimeModels,
   launchBlueprintJob,
   removeClusterNode,
@@ -79,6 +80,28 @@ describe('api parsing helpers', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/jobs', {
       params: { include_terminal: false },
     });
+  });
+
+  it('accepts jobs from the backend jobs envelope', async () => {
+    mockApi.get.mockResolvedValue({
+      data: {
+        jobs: [
+          {
+            job_id: 'job-envelope-1',
+            graph_id: 'graph-envelope',
+            status: 'completed',
+          },
+        ],
+      },
+    });
+
+    await expect(fetchJobs()).resolves.toEqual([
+      expect.objectContaining({
+        job_id: 'job-envelope-1',
+        graph_id: 'graph-envelope',
+        status: 'completed',
+      }),
+    ]);
   });
 
   it('clears jobs through the slash cleanup endpoint', async () => {
@@ -358,6 +381,162 @@ describe('api parsing helpers', () => {
     expect(mockApi.post).toHaveBeenCalledWith('/models/gemma4%3Ae2b/benchmark', { version: 1, max_tokens: 32 });
   });
 
+  it('posts catalog blueprint launches to the encoded catalog run endpoint', async () => {
+    mockApi.post.mockResolvedValue({
+      data: {
+        job_id: 'job-vc-1',
+        id: 'job-vc-1',
+        run_id: 'run-vc-1',
+        status: 'pending',
+        progress_id: 'progress-vc-1',
+      },
+    });
+
+    await expect(launchBlueprintJob({
+      source: 'catalog',
+      blueprint_id: 'vc_assistant',
+      progress_id: 'progress-vc-1',
+      run_id: 'run-vc-1',
+      config_overrides: { llm: { model: 'local' } },
+      force: true,
+      fake_llm: false,
+      fake_skills: true,
+    })).resolves.toEqual(expect.objectContaining({
+      job_id: 'job-vc-1',
+      run_id: 'run-vc-1',
+      progress_id: 'progress-vc-1',
+    }));
+
+    expect(mockApi.post).toHaveBeenCalledWith('/blueprints/vc_assistant/runs', {
+      version: 1,
+      progress_id: 'progress-vc-1',
+      run_id: 'run-vc-1',
+      config_overrides: { llm: { model: 'local' } },
+      force: true,
+      fake_llm: false,
+      fake_skills: true,
+    });
+  });
+
+  it('keeps path and bundle launches on the generic launch endpoint', async () => {
+    mockApi.post
+      .mockResolvedValueOnce({
+        data: {
+          status: 'launching',
+          job_id: null,
+          run_id: 'run-path-1',
+          progress_id: 'progress-path-1',
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          status: 'launching',
+          job_id: null,
+          run_id: 'run-bundle-1',
+          progress_id: 'progress-bundle-1',
+        },
+      });
+
+    await expect(launchBlueprintJob({
+      source: 'path',
+      path: '/tmp/blueprints/vc_assistant',
+      progress_id: 'progress-path-1',
+    })).resolves.toEqual(expect.objectContaining({
+      status: 'launching',
+      job_id: null,
+      progress_id: 'progress-path-1',
+    }));
+
+    await expect(launchBlueprintJob({
+      source: 'bundle',
+      _bundle_path: '/tmp/bundle',
+      progress_id: 'progress-bundle-1',
+    })).resolves.toEqual(expect.objectContaining({
+      status: 'launching',
+      job_id: null,
+      progress_id: 'progress-bundle-1',
+    }));
+
+    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/blueprints/launch/runs', {
+      version: 1,
+      source: 'path',
+      path: '/tmp/blueprints/vc_assistant',
+      progress_id: 'progress-path-1',
+    });
+    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/blueprints/launch/runs', {
+      version: 1,
+      source: 'bundle',
+      _bundle_path: '/tmp/bundle',
+      progress_id: 'progress-bundle-1',
+    });
+  });
+
+  it('preserves accepted async launch responses without a job id', async () => {
+    mockApi.post.mockResolvedValue({
+      data: {
+        status: 'launching',
+        job_id: null,
+        id: null,
+        run_id: 'run-async-1',
+        progress_id: 'progress-async-1',
+        progress_url: '/api/v1/blueprints/launch/progress/progress-async-1',
+      },
+    });
+
+    await expect(launchBlueprintJob({
+      source: 'path',
+      path: '/tmp/blueprints/vc_assistant',
+      progress_id: 'progress-async-1',
+    })).resolves.toEqual(expect.objectContaining({
+      status: 'launching',
+      job_id: null,
+      id: null,
+      run_id: 'run-async-1',
+      progress_id: 'progress-async-1',
+      progress_url: '/api/v1/blueprints/launch/progress/progress-async-1',
+    }));
+    expect(console.error).not.toHaveBeenCalledWith(
+      'launchBlueprintJob validation failed:',
+      expect.anything(),
+    );
+  });
+
+  it('parses launch progress snapshots with phases and job metadata', async () => {
+    mockApi.get.mockResolvedValue({
+      data: {
+        progress_id: 'progress-async-1',
+        run_id: 'run-async-1',
+        job_id: 'job-async-1',
+        status: 'completed',
+        current_phase: 'submit',
+        phases: [
+          { id: 'resolve_source', label: 'Resolve blueprint source', status: 'completed' },
+          { id: 'submit', label: 'Submit job to runtime', status: 'completed', message: 'Job submitted.' },
+        ],
+        events: [
+          { phase: 'submit', status: 'completed', message: 'Job submitted.' },
+        ],
+        latest: { phase: 'submit', status: 'completed', message: 'Job submitted.' },
+        completed: true,
+      },
+    });
+
+    await expect(fetchLaunchProgress('progress-async-1')).resolves.toEqual(expect.objectContaining({
+      progress_id: 'progress-async-1',
+      run_id: 'run-async-1',
+      job_id: 'job-async-1',
+      status: 'completed',
+      current_phase: 'submit',
+      phases: [
+        expect.objectContaining({ id: 'resolve_source', status: 'completed' }),
+        expect.objectContaining({ id: 'submit', status: 'completed', message: 'Job submitted.' }),
+      ],
+      events: [
+        expect.objectContaining({ phase: 'submit', status: 'completed' }),
+      ],
+    }));
+  });
+
   it('normalizes malformed upload and launch responses', async () => {
     mockApi.post.mockResolvedValueOnce({
       data: {
@@ -380,7 +559,7 @@ describe('api parsing helpers', () => {
       },
     });
 
-    await expect(launchBlueprintJob({ source: 'catalog' })).resolves.toEqual({ version: 1, status: 'pending' });
+    await expect(launchBlueprintJob({ source: 'path', path: '/tmp/bad-blueprint' })).resolves.toEqual({ version: 1, status: 'pending' });
     expect(console.error).toHaveBeenCalledWith(
       'launchBlueprintJob validation failed:',
       expect.anything(),
@@ -483,6 +662,26 @@ describe('api parsing helpers', () => {
     });
 
     await expect(fetchJobEvents('job-1')).resolves.toEqual([]);
+  });
+
+  it('accepts job events from the backend events envelope', async () => {
+    mockApi.get.mockResolvedValue({
+      data: {
+        events: [
+          {
+            timestamp: '2026-04-16T12:00:00Z',
+            type: 'job_running',
+          },
+        ],
+      },
+    });
+
+    await expect(fetchJobEvents('job-1')).resolves.toEqual([
+      expect.objectContaining({
+        timestamp: '2026-04-16T12:00:00Z',
+        type: 'job_running',
+      }),
+    ]);
   });
 
   it('falls back to an empty agent graph when graph validation fails', async () => {

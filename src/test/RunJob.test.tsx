@@ -36,7 +36,9 @@ describe('RunJob Component', () => {
     toast.dismiss();
     vi.mocked(fetchLaunchProgress).mockResolvedValue({
       progress_id: 'launch-test',
+      status: 'pending',
       events: [],
+      phases: [],
       latest: null,
       completed: false,
     });
@@ -156,10 +158,12 @@ describe('RunJob Component', () => {
     }));
     vi.mocked(fetchLaunchProgress).mockResolvedValue({
       progress_id: 'launch-test',
+      status: 'running',
       events: [
         { phase: 'resolve_source', status: 'completed', message: 'Blueprint source resolved.' },
         { phase: 'model_install', status: 'running', message: 'Ensuring required runtime models are installed.' },
       ],
+      phases: [],
       latest: { phase: 'model_install', status: 'running', message: 'Ensuring required runtime models are installed.' },
       completed: false,
     });
@@ -184,6 +188,94 @@ describe('RunJob Component', () => {
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-progress-123');
     });
+  });
+
+  it('polls accepted async launch progress and navigates when a job id appears', async () => {
+    vi.mocked(launchBlueprintJob).mockResolvedValue({
+      job_id: null,
+      id: null,
+      run_id: 'run-async-123',
+      status: 'launching',
+      progress_id: 'progress-async-123',
+    });
+    vi.mocked(fetchLaunchProgress).mockResolvedValue({
+      progress_id: 'progress-async-123',
+      run_id: 'run-async-123',
+      job_id: 'job-async-123',
+      status: 'completed',
+      current_phase: 'submit',
+      events: [
+        { phase: 'resolve_source', status: 'completed', message: 'Blueprint source resolved.' },
+        { phase: 'submit', status: 'completed', message: 'Job submitted.' },
+      ],
+      phases: [
+        { id: 'resolve_source', label: 'Resolve blueprint source', status: 'completed', message: '' },
+        { id: 'submit', label: 'Submit job to runtime', status: 'completed', message: 'Job submitted.' },
+      ],
+      latest: { phase: 'submit', status: 'completed', message: 'Job submitted.' },
+      completed: true,
+    });
+
+    renderRunJob();
+    await waitFor(() => {
+      expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    expect(await screen.findByText('Launch this job?')).toBeInTheDocument();
+    const launchButtons = screen.getAllByRole('button', { name: 'Launch' });
+    fireEvent.click(launchButtons[launchButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(launchBlueprintJob).toHaveBeenCalledWith(expect.objectContaining({
+        source: 'catalog',
+        blueprint_id: 'worker_one',
+      }));
+      expect(fetchLaunchProgress).toHaveBeenCalledWith('progress-async-123');
+      expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-async-123');
+    });
+  });
+
+  it('surfaces failed async launch progress and does not navigate', async () => {
+    vi.mocked(launchBlueprintJob).mockResolvedValue({
+      job_id: null,
+      id: null,
+      run_id: 'run-failed-123',
+      status: 'launching',
+      progress_id: 'progress-failed-123',
+    });
+    vi.mocked(fetchLaunchProgress).mockResolvedValue({
+      progress_id: 'progress-failed-123',
+      run_id: 'run-failed-123',
+      job_id: null,
+      status: 'failed',
+      current_phase: 'validation',
+      events: [
+        { phase: 'validation', status: 'failed', message: 'Blueprint validation failed.' },
+      ],
+      phases: [
+        { id: 'resolve_source', label: 'Resolve blueprint source', status: 'completed', message: '' },
+        { id: 'validation', label: 'Validate blueprint and inputs', status: 'failed', message: 'Blueprint validation failed.' },
+      ],
+      latest: { phase: 'validation', status: 'failed', message: 'Blueprint validation failed.' },
+      completed: true,
+      error: 'Blueprint validation failed.',
+    });
+
+    renderRunJob();
+    await waitFor(() => {
+      expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    expect(await screen.findByText('Launch this job?')).toBeInTheDocument();
+    const launchButtons = screen.getAllByRole('button', { name: 'Launch' });
+    fireEvent.click(launchButtons[launchButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Blueprint validation failed.').length).toBeGreaterThan(0);
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('shows mn blueprint validate errors from launch', async () => {

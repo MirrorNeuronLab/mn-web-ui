@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchBlueprints, fetchLaunchProgress, launchBlueprintJob, uploadBundle } from '../api';
-import type { Blueprint, LaunchProgressEvent } from '../api';
+import type { Blueprint, LaunchProgressEvent, LaunchProgressPhase, LaunchProgressResponse } from '../api';
 import { CheckCircle, FileArchive, FolderInput, Loader2, Play, UploadCloud, Workflow, XCircle } from 'lucide-react';
 import { confirmActionToast } from '../components/ui/confirm-toast';
 import { Tooltip } from '../components/ui/tooltip';
@@ -33,38 +33,159 @@ const launchPhases = [
   { id: 'model_install', label: 'Install required runtime models' },
   { id: 'validation', label: 'Validate blueprint and inputs' },
   { id: 'submit', label: 'Submit job to runtime' },
-  { id: 'launch', label: 'Open job progress' },
+  { id: 'open_job_progress', label: 'Open job progress' },
 ] as const;
+
+type LaunchProgressItem = {
+  id: string;
+  label: string;
+  status: string;
+  message: string;
+};
+
+const LAUNCH_PROGRESS_POLL_MS = 1000;
+const LAUNCH_JOB_ID_TIMEOUT_MS = 90 * 60 * 1000;
+const FAILED_LAUNCH_STATUSES = new Set(['failed', 'error', 'cancelled', 'canceled']);
+const COMPLETED_LAUNCH_STATUSES = new Set(['completed', 'succeeded', 'success']);
 
 const makeProgressId = () => `launch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
+const stringValue = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+);
+const normalizedKey = (value: unknown) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '');
+
 const latestEventsByPhase = (events: LaunchProgressEvent[]) => events.reduce<Record<string, LaunchProgressEvent>>((acc, event) => {
-  if (event.phase) acc[event.phase] = event;
+  const key = normalizedKey(event.phase);
+  if (key && key !== 'launch') acc[key] = event;
   return acc;
 }, {});
 
 const normalizedStatus = (value: unknown) => String(value || 'pending').trim().toLowerCase();
 
+const progressJobId = (progress: LaunchProgressResponse | null | undefined) => (
+  stringValue(progress?.job_id)
+);
+
+const launchResponseJobId = (response: { job_id?: string | null; id?: string | null }) => (
+  stringValue(response.job_id) || stringValue(response.id)
+);
+
+const phaseId = (phase: LaunchProgressPhase) => (
+  normalizedKey(phase.id || phase.phase || phase.name || phase.label)
+);
+
+const labelFromPhase = (phase: LaunchProgressPhase, id: string) => (
+  stringValue(phase.label) || stringValue(phase.name) || id.replace(/_/g, ' ')
+);
+
+const messageFromProgressError = (error: unknown) => {
+  if (typeof error === 'string' && error.trim()) return error.trim();
+  if (!isRecord(error)) return null;
+  const detail = error.detail;
+  if (typeof detail === 'string' && detail.trim()) return detail.trim();
+  if (isRecord(detail)) return stringValue(detail.message) || stringValue(detail.error);
+  return stringValue(error.message) || stringValue(error.desc) || stringValue(error.error);
+};
+
+const launchProgressFailureMessage = (progress: LaunchProgressResponse | null | undefined) => {
+  if (!progress) return null;
+  const status = normalizedStatus(progress.status);
+  const latestStatus = normalizedStatus(progress.latest?.status);
+  if (!FAILED_LAUNCH_STATUSES.has(status) && !FAILED_LAUNCH_STATUSES.has(latestStatus)) return null;
+  return (
+    messageFromProgressError(progress.error) ||
+    stringValue(progress.latest?.message) ||
+    'Blueprint launch failed.'
+  );
+};
+
+const buildProgressItems = (
+  progress: LaunchProgressResponse | null,
+  events: LaunchProgressEvent[],
+): LaunchProgressItem[] => {
+  const byPhase = latestEventsByPhase(events);
+  const backendItems = (progress?.phases || [])
+    .map((phase) => {
+      const id = phaseId(phase);
+      if (!id || id === 'launch') return null;
+      const event = byPhase[id];
+      return {
+        id,
+        label: labelFromPhase(phase, id),
+        status: normalizedStatus(phase.status || event?.status),
+        message: stringValue(phase.message) || stringValue(phase.detail) || stringValue(event?.message) || '',
+      };
+    })
+    .filter((item): item is LaunchProgressItem => Boolean(item));
+
+  const jobIsReady = Boolean(progressJobId(progress));
+  if (backendItems.length > 0) {
+    return jobIsReady
+      ? [
+        ...backendItems,
+        { id: 'open_job_progress', label: 'Open job progress', status: 'completed', message: 'Runtime job is ready.' },
+      ]
+      : backendItems;
+  }
+
+  const progressStatus = normalizedStatus(progress?.status);
+  const hasConcreteEvent = Object.keys(byPhase).length > 0;
+  const showOverallLaunchActivity = Boolean(
+    progress &&
+    !jobIsReady &&
+    !progress.completed &&
+    !hasConcreteEvent &&
+    (progressStatus === 'launching' || progressStatus === 'running' || progressStatus === 'pending')
+  );
+
+  return launchPhases.map((phase) => {
+    if (phase.id === 'open_job_progress') {
+      return {
+        id: phase.id,
+        label: phase.label,
+        status: jobIsReady ? 'completed' : 'pending',
+        message: jobIsReady ? 'Runtime job is ready.' : '',
+      };
+    }
+    const event = byPhase[phase.id];
+    const useOverallStatus = phase.id === 'resolve_source' && showOverallLaunchActivity;
+    return {
+      id: phase.id,
+      label: phase.label,
+      status: useOverallStatus ? 'running' : normalizedStatus(event?.status),
+      message: stringValue(event?.message) || (useOverallStatus ? stringValue(progress?.latest?.message) || 'Resolving blueprint source.' : ''),
+    };
+  });
+};
+
 function LaunchProgressModal({
   events,
+  progress,
   open,
   running,
   onClose,
 }: {
   events: LaunchProgressEvent[];
+  progress: LaunchProgressResponse | null;
   open: boolean;
   running: boolean;
   onClose: () => void;
 }) {
-  const byPhase = latestEventsByPhase(events);
-  const completedCount = launchPhases.filter((phase) => {
-    const status = normalizedStatus(byPhase[phase.id]?.status);
-    return status === 'completed' || status === 'skipped';
+  const items = buildProgressItems(progress, events);
+  const completedCount = items.filter((item) => {
+    const status = normalizedStatus(item.status);
+    return COMPLETED_LAUNCH_STATUSES.has(status) || status === 'skipped';
   }).length;
-  const hasActivePhase = launchPhases.some((phase) => normalizedStatus(byPhase[phase.id]?.status) === 'running');
+  const hasActivePhase = items.some((item) => ['running', 'launching'].includes(normalizedStatus(item.status)));
   const progressValue = Math.min(
     100,
-    Math.round(((completedCount + (hasActivePhase ? 0.45 : 0)) / launchPhases.length) * 100),
+    Math.round(((completedCount + (hasActivePhase ? 0.45 : 0)) / Math.max(1, items.length)) * 100),
   );
 
   return (
@@ -83,12 +204,11 @@ function LaunchProgressModal({
         </DialogHeader>
         <Progress value={progressValue} aria-label="Launch progress" />
         <ol className="space-y-3">
-          {launchPhases.map((phase) => {
-            const event = byPhase[phase.id];
-            const status = normalizedStatus(event?.status);
-            const failed = status === 'failed';
-            const completed = status === 'completed';
-            const active = status === 'running';
+          {items.map((phase) => {
+            const status = normalizedStatus(phase.status);
+            const failed = FAILED_LAUNCH_STATUSES.has(status);
+            const completed = COMPLETED_LAUNCH_STATUSES.has(status);
+            const active = status === 'running' || status === 'launching';
             const skipped = status === 'skipped';
             const showMessage = active || failed;
             const labelTone = failed
@@ -111,8 +231,8 @@ function LaunchProgressModal({
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className={cn('text-sm font-medium leading-5', labelTone)}>{phase.label}</div>
-                  {showMessage && event?.message ? (
-                    <div className="mt-0.5 text-xs leading-5 text-neutral-500">{event.message}</div>
+                  {showMessage && phase.message ? (
+                    <div className="mt-0.5 text-xs leading-5 text-neutral-500">{phase.message}</div>
                   ) : null}
                 </div>
               </li>
@@ -142,6 +262,7 @@ export default function RunJob() {
   const [running, setRunning] = useState(false);
   const [progressId, setProgressId] = useState<string | null>(null);
   const [progressEvents, setProgressEvents] = useState<LaunchProgressEvent[]>([]);
+  const [launchProgress, setLaunchProgress] = useState<LaunchProgressResponse | null>(null);
   const [progressModalOpen, setProgressModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
@@ -177,6 +298,7 @@ export default function RunJob() {
   const refreshLaunchProgress = useCallback(async (id: string) => {
     try {
       const progress = await fetchLaunchProgress(id);
+      setLaunchProgress(progress);
       setProgressEvents(progress.events || []);
       return progress;
     } catch {
@@ -190,13 +312,16 @@ export default function RunJob() {
     const loadProgress = async () => {
       try {
         const progress = await fetchLaunchProgress(progressId);
-        if (!cancelled) setProgressEvents(progress.events || []);
+        if (!cancelled) {
+          setLaunchProgress(progress);
+          setProgressEvents(progress.events || []);
+        }
       } catch {
         // The launch request is still the source of truth; a missed progress poll is harmless.
       }
     };
     void loadProgress();
-    const timer = window.setInterval(loadProgress, 1000);
+    const timer = window.setInterval(loadProgress, LAUNCH_PROGRESS_POLL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -269,6 +394,28 @@ export default function RunJob() {
     return bundleData ? manifestLabel(bundleData.manifest, bundleData.bundle_path || 'uploaded bundle') : 'uploaded bundle';
   };
 
+  const waitForLaunchJobId = useCallback(async (id: string, initialProgress: LaunchProgressResponse | null) => {
+    let current = initialProgress;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt <= LAUNCH_JOB_ID_TIMEOUT_MS) {
+      if (!current) current = await refreshLaunchProgress(id);
+
+      const jobId = progressJobId(current);
+      if (jobId) return jobId;
+
+      const failureMessage = launchProgressFailureMessage(current);
+      if (failureMessage) throw new Error(failureMessage);
+
+      if (current?.completed) throw new Error('Launch completed but no job id was returned.');
+
+      await new Promise<void>((resolve) => window.setTimeout(resolve, LAUNCH_PROGRESS_POLL_MS));
+      current = await refreshLaunchProgress(id);
+    }
+
+    throw new Error('Launch is still waiting for a runtime job id. Check launch progress and try again.');
+  }, [refreshLaunchProgress]);
+
   const confirmLaunch = () => {
     if (!canLaunch) return;
 
@@ -296,6 +443,7 @@ export default function RunJob() {
         setRunning(true);
         setError(null);
         setProgressId(launchProgressId);
+        setLaunchProgress(null);
         setProgressModalOpen(true);
         setProgressEvents([{
           ts: new Date().toISOString(),
@@ -303,16 +451,18 @@ export default function RunJob() {
           status: 'running',
           message: 'Starting launch.',
         }]);
+        let activeProgressId = launchProgressId;
         try {
           const res = await launchBlueprintJob(launchPayload(launchProgressId));
-          await refreshLaunchProgress(res.progress_id || launchProgressId);
-          const jobId = res.job_id || res.id;
-          if (!jobId) throw new Error('Launch succeeded but no job id was returned.');
+          activeProgressId = stringValue(res.progress_id) || launchProgressId;
+          if (activeProgressId !== launchProgressId) setProgressId(activeProgressId);
+          const progress = await refreshLaunchProgress(activeProgressId);
+          const jobId = launchResponseJobId(res) || progressJobId(progress) || await waitForLaunchJobId(activeProgressId, progress);
           setRunning(false);
           navigate(`/jobs/${jobId}`);
           return jobId;
         } catch (err: unknown) {
-          await refreshLaunchProgress(launchProgressId);
+          await refreshLaunchProgress(activeProgressId);
           const message = apiErrorMessage(err, 'Failed to validate and launch job');
           setError(message);
           setRunning(false);
@@ -329,6 +479,7 @@ export default function RunJob() {
     setError(null);
     setProgressId(null);
     setProgressEvents([]);
+    setLaunchProgress(null);
     setProgressModalOpen(false);
   };
 
@@ -481,7 +632,8 @@ export default function RunJob() {
       </Card>
       <LaunchProgressModal
         events={progressEvents}
-        open={progressModalOpen && (running || progressEvents.length > 0)}
+        progress={launchProgress}
+        open={progressModalOpen && (running || progressEvents.length > 0 || Boolean(launchProgress))}
         running={running}
         onClose={() => setProgressModalOpen(false)}
       />

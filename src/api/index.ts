@@ -1,10 +1,24 @@
 import api from './client';
 import { z } from 'zod';
 import { parseArrayOrEmpty, parseOrFallback } from './parsing';
-import { apiPathFromUrl, bundlePath, jobPath, launchProgressPath, modelPath, runPath } from './routes';
+import { apiPathFromUrl, blueprintPath, bundlePath, jobPath, launchProgressPath, modelPath, runPath } from './routes';
 import { createWorkflowProgressStreamer } from './streaming';
 
 const InterfaceVersionSchema = z.number().optional().default(1) as unknown as z.ZodOptional<z.ZodNumber>;
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+);
+
+const arrayFromEnvelope = (data: unknown, keys: string[]) => {
+  if (Array.isArray(data)) return data;
+  if (!isRecord(data)) return [];
+  for (const key of keys) {
+    const value = data[key];
+    if (Array.isArray(value)) return value;
+  }
+  return [];
+};
+
 const withInterfaceVersion = <T>(payload: T): T | (Record<string, unknown> & { version: number }) => {
   if (
     !payload ||
@@ -297,8 +311,8 @@ export const BlueprintListResponseSchema = z.object({
 
 export const BlueprintLaunchResponseSchema = z.object({
   version: InterfaceVersionSchema,
-  id: z.string().optional(),
-  job_id: z.string().optional(),
+  id: z.string().nullable().optional(),
+  job_id: z.string().nullable().optional(),
   run_id: z.string().optional().nullable(),
   status: z.string().optional().default('pending'),
   source: z.string().optional(),
@@ -306,6 +320,7 @@ export const BlueprintLaunchResponseSchema = z.object({
   validation: z.record(z.string(), z.unknown()).optional(),
   model_install: z.record(z.string(), z.unknown()).optional(),
   progress_id: z.string().optional().nullable(),
+  progress_url: z.string().optional().nullable(),
   command: z.string().optional(),
 }).passthrough();
 
@@ -352,12 +367,31 @@ export const LaunchProgressEventSchema = z.object({
   details: z.record(z.string(), z.unknown()).optional(),
 }).passthrough();
 
+export const LaunchProgressPhaseSchema = z.object({
+  version: InterfaceVersionSchema,
+  id: z.string().optional(),
+  phase: z.string().optional(),
+  label: z.string().optional(),
+  name: z.string().optional(),
+  status: z.string().optional().default('pending'),
+  message: z.string().optional().default(''),
+  detail: z.string().optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
+  severity: z.string().optional(),
+}).passthrough();
+
 export const LaunchProgressResponseSchema = z.object({
   version: InterfaceVersionSchema,
   progress_id: z.string(),
+  run_id: z.string().nullable().optional(),
+  job_id: z.string().nullable().optional(),
+  status: z.string().optional().default('pending'),
+  current_phase: z.string().nullable().optional(),
   events: z.array(LaunchProgressEventSchema).optional().default([]),
+  phases: z.array(LaunchProgressPhaseSchema).optional().default([]),
   latest: LaunchProgressEventSchema.nullable().optional(),
   completed: z.boolean().optional().default(false),
+  error: z.unknown().optional(),
 }).passthrough();
 
 export const WorkflowActivitySchema = z.object({
@@ -516,6 +550,7 @@ export type ClearJobsResponse = z.infer<typeof ClearJobsResponseSchema>;
 export type ReloadBundleResponse = z.infer<typeof ReloadBundleResponseSchema>;
 export type RevealArtifactResponse = z.infer<typeof RevealArtifactResponseSchema>;
 export type LaunchProgressEvent = z.infer<typeof LaunchProgressEventSchema>;
+export type LaunchProgressPhase = z.infer<typeof LaunchProgressPhaseSchema>;
 export type LaunchProgressResponse = z.infer<typeof LaunchProgressResponseSchema>;
 export type WorkflowActivity = z.infer<typeof WorkflowActivitySchema>;
 export type WorkflowProgressAgent = z.infer<typeof WorkflowProgressAgentSchema>;
@@ -603,7 +638,7 @@ export const fetchJobs = async (options: FetchJobsOptions = {}) => {
       ? api.get('/jobs', { params: { include_terminal: options.includeTerminal } })
       : api.get('/jobs');
   const r = await request;
-  const data = r.data?.data || [];
+  const data = arrayFromEnvelope(r.data, ['data', 'jobs']);
   const jobs = parseArrayOrEmpty(JobSchema, data, 'fetchJobs');
   return Promise.all(jobs.map(refreshJobListStatus));
 };
@@ -613,7 +648,7 @@ export const fetchJobDetails = (id: string) => api.get(jobPath(id)).then(r => (
 ));
 
 export const fetchJobEvents = (id: string) => api.get(jobPath(id, '/events')).then(r => (
-  parseArrayOrEmpty(JobEventSchema, r.data?.data || [], `fetchJobEvents(${id})`)
+  parseArrayOrEmpty(JobEventSchema, arrayFromEnvelope(r.data, ['data', 'events']), `fetchJobEvents(${id})`)
 ));
 export const fetchJobAgentGraph = (id: string) => api.get(jobPath(id, '/agent-graph')).then(r => (
   parseOrFallback(AgentGraphSchema, r.data, { job_id: id, nodes: [], edges: [] }, `fetchJobAgentGraph(${id})`)
@@ -679,14 +714,33 @@ export const uploadBundle = (file: File) => {
   ));
 };
 export const createJob = (payload: unknown) => api.post('/jobs', withInterfaceVersion(payload)).then(r => r.data);
-export const launchBlueprintJob = (payload: unknown) => api.post('/blueprints/launch/runs', withInterfaceVersion(payload)).then(r => {
-  const result = BlueprintLaunchResponseSchema.safeParse(r.data);
+
+const parseLaunchResponse = (data: unknown) => {
+  const result = BlueprintLaunchResponseSchema.safeParse(data);
   if (!result.success) {
     console.error('launchBlueprintJob validation failed:', result.error);
     return BlueprintLaunchResponseSchema.parse({});
   }
   return result.data;
-});
+};
+
+export const launchBlueprintJob = (payload: unknown) => {
+  const record = isRecord(payload) ? payload : {};
+  if (record.source === 'catalog') {
+    const blueprintId = typeof record.blueprint_id === 'string' ? record.blueprint_id.trim() : '';
+    if (!blueprintId) return Promise.reject(new Error('Catalog blueprint launch requires a blueprint id.'));
+    const body = { ...record };
+    delete body.source;
+    delete body.blueprint_id;
+    return api.post(blueprintPath(blueprintId, '/runs'), withInterfaceVersion(body)).then(r => (
+      parseLaunchResponse(r.data)
+    ));
+  }
+
+  return api.post('/blueprints/launch/runs', withInterfaceVersion(payload)).then(r => (
+    parseLaunchResponse(r.data)
+  ));
+};
 
 export const fetchLaunchProgress = (progressId: string) => api.get(launchProgressPath(progressId)).then(r => {
   return parseOrFallback(LaunchProgressResponseSchema, r.data, { progress_id: progressId, events: [] }, `fetchLaunchProgress(${progressId})`);
