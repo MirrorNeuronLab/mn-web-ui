@@ -274,8 +274,8 @@ test('submits a bundle and controls the job from the real app shell', async ({ p
   await expect(page.getByRole('cell', { name: /cancelled/i })).toBeVisible();
 });
 
-test('launches a catalog blueprint through the catalog run endpoint', async ({ page }) => {
-  let catalogRunRequests = 0;
+test('launches a catalog blueprint through async launch progress', async ({ page }) => {
+  let catalogLaunchRequests = 0;
   let catalogProgressId = 'launch-catalog-e2e';
 
   await page.route('**/api/v1/blueprints', async (route) => {
@@ -295,21 +295,25 @@ test('launches a catalog blueprint through the catalog run endpoint', async ({ p
     });
   });
 
-  await page.route('**/api/v1/blueprints/browser_flow_graph/runs', async (route) => {
-    catalogRunRequests += 1;
+  await page.route('**/api/v1/blueprints/launch/runs', async (route) => {
+    catalogLaunchRequests += 1;
     const payload = await route.request().postDataJSON();
-    expect(payload.source).toBeUndefined();
-    expect(payload.blueprint_id).toBeUndefined();
+    expect(payload).toMatchObject({
+      source: 'catalog',
+      blueprint_id: 'browser_flow_graph',
+    });
     expect(String(payload.progress_id)).toMatch(/^launch-/);
     catalogProgressId = String(payload.progress_id);
     await route.fulfill({
+      status: 202,
       contentType: 'application/json',
       body: JSON.stringify({
-        id: 'catalog-job-1',
-        job_id: 'catalog-job-1',
+        id: null,
+        job_id: null,
         run_id: 'catalog-run-1',
-        status: 'pending',
+        status: 'launching',
         progress_id: catalogProgressId,
+        progress_url: `/api/v1/blueprints/launch/progress/${catalogProgressId}`,
       }),
     });
   });
@@ -445,6 +449,6 @@ test('launches a catalog blueprint through the catalog run endpoint', async ({ p
   await page.getByRole('button', { name: 'Launch' }).last().click();
 
   await expect(page).toHaveURL(/\/jobs\/catalog-job-1$/);
-  expect(catalogRunRequests).toBe(1);
+  expect(catalogLaunchRequests).toBe(1);
   await expect(page.getByRole('heading', { name: 'catalog-job-1' })).toBeVisible();
 });

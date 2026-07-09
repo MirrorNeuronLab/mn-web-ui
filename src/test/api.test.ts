@@ -381,14 +381,15 @@ describe('api parsing helpers', () => {
     expect(mockApi.post).toHaveBeenCalledWith('/models/gemma4%3Ae2b/benchmark', { version: 1, max_tokens: 32 });
   });
 
-  it('posts catalog blueprint launches to the encoded catalog run endpoint', async () => {
+  it('posts catalog blueprint launches to the async launch endpoint with a progress id', async () => {
     mockApi.post.mockResolvedValue({
       data: {
-        job_id: 'job-vc-1',
-        id: 'job-vc-1',
+        job_id: null,
+        id: null,
         run_id: 'run-vc-1',
-        status: 'pending',
+        status: 'launching',
         progress_id: 'progress-vc-1',
+        progress_url: '/api/v1/blueprints/launch/progress/progress-vc-1',
       },
     });
 
@@ -402,13 +403,15 @@ describe('api parsing helpers', () => {
       fake_llm: false,
       fake_skills: true,
     })).resolves.toEqual(expect.objectContaining({
-      job_id: 'job-vc-1',
+      job_id: null,
       run_id: 'run-vc-1',
       progress_id: 'progress-vc-1',
     }));
 
-    expect(mockApi.post).toHaveBeenCalledWith('/blueprints/vc_assistant/runs', {
+    expect(mockApi.post).toHaveBeenCalledWith('/blueprints/launch/runs', {
       version: 1,
+      source: 'catalog',
+      blueprint_id: 'vc_assistant',
       progress_id: 'progress-vc-1',
       run_id: 'run-vc-1',
       config_overrides: { llm: { model: 'local' } },

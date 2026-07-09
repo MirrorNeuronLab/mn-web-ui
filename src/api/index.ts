@@ -1,7 +1,7 @@
 import api from './client';
 import { z } from 'zod';
 import { parseArrayOrEmpty, parseOrFallback } from './parsing';
-import { apiPathFromUrl, blueprintPath, bundlePath, jobPath, launchProgressPath, modelPath, runPath } from './routes';
+import { apiPathFromUrl, bundlePath, jobPath, launchProgressPath, modelPath, runPath } from './routes';
 import { createWorkflowProgressStreamer } from './streaming';
 import { normalizeWorkflowProgressPayload } from './workflowProgress';
 
@@ -732,12 +732,6 @@ export const launchBlueprintJob = (payload: unknown) => {
   if (record.source === 'catalog') {
     const blueprintId = typeof record.blueprint_id === 'string' ? record.blueprint_id.trim() : '';
     if (!blueprintId) return Promise.reject(new Error('Catalog blueprint launch requires a blueprint id.'));
-    const body = { ...record };
-    delete body.source;
-    delete body.blueprint_id;
-    return api.post(blueprintPath(blueprintId, '/runs'), withInterfaceVersion(body)).then(r => (
-      parseLaunchResponse(r.data)
-    ));
   }
 
   return api.post('/blueprints/launch/runs', withInterfaceVersion(payload)).then(r => (
