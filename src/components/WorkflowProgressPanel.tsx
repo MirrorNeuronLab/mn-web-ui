@@ -15,6 +15,7 @@ import {
   type ActivityFilter,
 } from '../utils/workflowActivity';
 import FailurePanel, { ErrorSummary } from './FailurePanel';
+import WorkflowTopologyGraph from './WorkflowTopologyGraph';
 
 type WorkflowProgressPanelProps = {
   progress: WorkflowProgress | null;
@@ -160,56 +161,6 @@ const eventKey = (event: WorkflowActivity, index: number) => (
 );
 
 // ProgressResourcesColumn removed
-
-const StepRow = ({
-  step,
-  index,
-  workflowKind,
-  showLayer,
-  highlighted,
-  selected,
-  onSelect,
-}: {
-  step: WorkflowProgressStep;
-  index: number;
-  workflowKind: string;
-  showLayer: boolean;
-  highlighted: boolean;
-  selected: boolean;
-  onSelect: () => void;
-}) => {
-  const count = workflowKind === 'service' ? (step.ready_count || step.done_count || 0) : (step.done_count || 0);
-  const mutedText = highlighted ? 'text-neutral-300' : 'text-neutral-500';
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      aria-current={step.current ? 'step' : undefined}
-      onClick={onSelect}
-      className={`grid w-full grid-cols-[20px_1fr_auto] items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs outline-none transition focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 ${
-        highlighted
-          ? 'bg-neutral-950 text-white'
-          : step.current
-            ? 'bg-neutral-100 text-neutral-950 hover:bg-neutral-200'
-            : 'text-neutral-700 hover:bg-neutral-50'
-      }`}
-    >
-      <StatusGlyph status={step.status} current={step.current} />
-      <div className="min-w-0">
-        <div className="truncate font-medium">
-          {showLayer ? <span className={highlighted ? 'text-neutral-300' : 'text-neutral-400'}>L{(step.layer || 0) + 1} </span> : null}
-          {index + 1}. {step.label}
-        </div>
-        {step.activity_summary || step.goal ? (
-          <div className={`truncate text-xs ${mutedText}`}>{step.activity_summary || step.goal}</div>
-        ) : null}
-      </div>
-      <div className={`font-mono text-[11px] ${highlighted ? 'text-neutral-200' : 'text-neutral-500'}`}>
-        {count}/{step.total_count}
-      </div>
-    </button>
-  );
-};
 
 const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
   const progress = Math.max(0, Math.min(1, agent.progress || 0));
@@ -401,8 +352,6 @@ export function WorkflowProgressPanel({ progress, details, showFailurePanel = tr
       : !hasWorkflowAgentStepIds && selectedStepsAreActive
         ? workflowAgents
         : [];
-  const workflowKind = progress.workflow_kind || 'batch';
-  const showLayer = (progress.layers || []).length > 1 || progress.steps.some((step) => step.parents?.length || step.children?.length);
   const primaryStep = selectedStep || currentStep;
   const visibleFailure = progress.failure || primaryStep?.failure || agents.find((agent) => agent.failure)?.failure;
   const failureArtifacts = artifactsFromDetails(details);
@@ -433,27 +382,8 @@ export function WorkflowProgressPanel({ progress, details, showFailurePanel = tr
   const currentLabel = primaryStep?.label || progress.current_step_id || 'None';
 
   return (
-    <div className="absolute inset-0 overflow-auto bg-white font-sans lg:overflow-hidden">
-      <div className="grid min-h-[480px] grid-cols-1 lg:h-full lg:min-h-0 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="border-b border-neutral-200 p-3 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
-          <div className="mb-2 text-xs font-semibold text-neutral-950">Steps</div>
-          <div className="space-y-0.5">
-            {progress.steps.map((step, index) => (
-              <StepRow
-                key={step.id || index}
-                step={step}
-                index={index}
-                workflowKind={workflowKind}
-                showLayer={showLayer}
-                highlighted={effectiveSelectedStepId ? stepMatchesId(step, index, effectiveSelectedStepId) : Boolean(step.current)}
-                selected={stepMatchesId(step, index, effectiveSelectedStepId)}
-                onSelect={() => setSelectedStepId(stepAssociationIds(step, index)[0] || null)}
-              />
-            ))}
-          </div>
-        </aside>
-
-        <section className="min-w-0 p-3 lg:min-h-0 lg:overflow-auto">
+    <div className="absolute inset-0 overflow-auto bg-white font-sans">
+      <section className="min-w-0 p-3">
           <div className="mb-3 border-b border-neutral-200 pb-3">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0">
@@ -482,6 +412,11 @@ export function WorkflowProgressPanel({ progress, details, showFailurePanel = tr
               <FailurePanel failure={visibleFailure} title={progress.failure ? 'Job Failure' : 'Step Failure'} artifacts={failureArtifacts} />
             </div>
           ) : null}
+          <WorkflowTopologyGraph
+            progress={progress}
+            selectedStepId={effectiveSelectedStepId}
+            onSelectStep={setSelectedStepId}
+          />
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="truncate text-xs font-semibold text-neutral-950">
@@ -497,7 +432,7 @@ export function WorkflowProgressPanel({ progress, details, showFailurePanel = tr
                   className="inline-flex h-7 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2 text-[11px] font-medium text-neutral-700 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2"
                 >
                   <Activity className="h-3.5 w-3.5" />
-                  Active steps
+                  Show active steps
                 </button>
               ) : null}
               <div className={`text-[11px] font-medium capitalize ${statusTone(detailStatus)}`}>{detailStatus || 'unknown'}</div>
@@ -548,8 +483,7 @@ export function WorkflowProgressPanel({ progress, details, showFailurePanel = tr
           </div>
 
           <ActivityList activities={activityEvents} fallbackMessages={progress.messages || []} />
-        </section>
-      </div>
+      </section>
     </div>
   );
 }
