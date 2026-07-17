@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelJob, pauseJob, resumeJob } from '../api';
+import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, streamWorkflowProgress, cancelJob, pauseJob, resumeJob } from '../api';
 import type { AgentGraph, ErrorEnvelope, JobDetails as JobDetailsType, JobEvent, WebUiHandle, WorkflowProgress } from '../api';
 import { format } from 'date-fns';
 import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, MessageSquare, ExternalLink, List, Code2, FileText } from 'lucide-react';
@@ -192,36 +192,16 @@ export default function JobDetails() {
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [progressStreamState, setProgressStreamState] = useState<ProgressStreamState>('connecting');
   const terminalRefreshRef = useRef<string | null>(null);
+  const eventsLoadedForRef = useRef<string | null>(null);
+  const graphLoadedForRef = useRef<string | null>(null);
+  const renderedJobIdRef = useRef(id);
 
   const load = useCallback(async () => {
     if (!id) return;
     try {
-      const [d, e, g, p] = await Promise.all([
-        fetchJobDetails(id),
-        fetchJobEvents(id).catch((err) => {
-          console.error('Failed to load job events', err);
-          return [] as JobEvent[];
-        }),
-        fetchJobAgentGraph(id).catch((err) => {
-          console.error('Failed to load job agent graph', err);
-          return {
-            job_id: id,
-            graph_id: null,
-            status: 'unknown',
-            nodes: [],
-            edges: [],
-            stats: { agent_count: 0, edge_count: 0, message_count: 0, event_count: 0 },
-          } satisfies AgentGraph;
-        }),
-        fetchWorkflowProgress(id).catch((err) => {
-          console.error('Failed to load workflow progress', err);
-          return null;
-        }),
-      ]);
+      const d = await fetchJobDetails(id, { include: 'full' });
       setDetails(d);
-      setEvents(e);
-      setGraph(g);
-      setWorkflowProgress(p || buildFallbackWorkflowProgress(d, e, g));
+      setWorkflowProgress(current => current ?? buildFallbackWorkflowProgress(d, d.recent_events || [], null));
       const runId = stringValue(d.job?.run_id, isRecord(d.summary) ? d.summary.run_id : undefined);
       if (blueprintWebUiInfo(d) || !runId) {
         setRunWebUi(null);
@@ -246,12 +226,43 @@ export default function JobDetails() {
   }, [load]);
 
   useEffect(() => {
+    const previousJobId = renderedJobIdRef.current;
+    renderedJobIdRef.current = id;
+    terminalRefreshRef.current = null;
+    eventsLoadedForRef.current = null;
+    graphLoadedForRef.current = null;
+    if (previousJobId === id) return undefined;
     const timer = window.setTimeout(() => {
       setActionStatus(null);
-      terminalRefreshRef.current = null;
+      setEvents([]);
+      setGraph(null);
+      setWorkflowProgress(current => current?.job_id === id ? current : null);
+      setProgressStreamState('connecting');
     }, 0);
     return () => window.clearTimeout(timer);
   }, [id]);
+
+  useEffect(() => {
+    if (!id || activeTab !== 'logs' || eventsLoadedForRef.current === id) return;
+    eventsLoadedForRef.current = id;
+    void fetchJobEvents(id).then((nextEvents) => {
+      if (eventsLoadedForRef.current === id) setEvents(nextEvents);
+    }).catch((err) => {
+      console.error('Failed to load job events', err);
+      if (eventsLoadedForRef.current === id) setEvents([]);
+    });
+  }, [activeTab, id]);
+
+  useEffect(() => {
+    if (!id || activeTab !== 'agents' || graphLoadedForRef.current === id) return;
+    graphLoadedForRef.current = id;
+    void fetchJobAgentGraph(id).then((nextGraph) => {
+      if (graphLoadedForRef.current === id) setGraph(nextGraph);
+    }).catch((err) => {
+      console.error('Failed to load job agent graph', err);
+      if (graphLoadedForRef.current === id) setGraph(null);
+    });
+  }, [activeTab, id]);
 
   useEffect(() => {
     if (!id) return;

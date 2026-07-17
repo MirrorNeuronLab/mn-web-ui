@@ -2,13 +2,12 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 import Dashboard from '../pages/Dashboard';
-import { fetchJobs, fetchSystemSummary } from '../api';
+import { fetchSystemSummary } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
 
 vi.mock('../api', () => ({
   fetchSystemSummary: vi.fn(),
-  fetchJobs: vi.fn(),
 }));
 
 const renderDashboard = () => render(
@@ -27,7 +26,6 @@ describe('Dashboard Component', () => {
   it('renders skeleton loading state initially', () => {
     // Return a promise that doesn't resolve immediately to keep it in loading state
     vi.mocked(fetchSystemSummary).mockReturnValue(new Promise(() => {}));
-    vi.mocked(fetchJobs).mockReturnValue(new Promise(() => {}));
     
     const { container } = renderDashboard();
     
@@ -73,10 +71,6 @@ describe('Dashboard Component', () => {
     };
 
     vi.mocked(fetchSystemSummary).mockResolvedValue(mockData);
-    vi.mocked(fetchJobs).mockResolvedValue([
-      { job_id: 'job1', graph_id: 'graph-1', status: 'running', active_executors: 1, executor_count: 2 },
-      { job_id: 'job2', graph_id: 'graph-2', status: 'pending', active_executors: 0, executor_count: 1 },
-    ]);
 
     renderDashboard();
 
@@ -135,8 +129,6 @@ describe('Dashboard Component', () => {
       ],
       jobs: [],
     });
-    vi.mocked(fetchJobs).mockResolvedValue([]);
-
     renderDashboard();
 
     await waitFor(() => expect(screen.getByText('mirror_neuron@mac.local')).toBeInTheDocument());
@@ -148,7 +140,7 @@ describe('Dashboard Component', () => {
     expect(screen.getAllByText('32 / 32 GB').length).toBeGreaterThan(1);
   });
 
-  it('uses an empty jobs response instead of stale summary jobs for metrics', async () => {
+  it('uses SDK system-summary jobs for metrics', async () => {
     vi.mocked(fetchSystemSummary).mockResolvedValue({
       nodes: [
         {
@@ -161,10 +153,9 @@ describe('Dashboard Component', () => {
         }
       ],
       jobs: [
-        { job_id: 'stale-job', status: 'completed' }
+        { job_id: 'summary-job', status: 'completed' }
       ]
     });
-    vi.mocked(fetchJobs).mockResolvedValue([]);
 
     renderDashboard();
 
@@ -172,8 +163,8 @@ describe('Dashboard Component', () => {
 
     const totalJobsCard = screen.getByText('Total Jobs').parentElement?.parentElement;
     expect(totalJobsCard).not.toBeNull();
-    expect(within(totalJobsCard as HTMLElement).getByText('0')).toBeInTheDocument();
-    expect(screen.getByText('0 terminal or idle jobs')).toBeInTheDocument();
+    expect(within(totalJobsCard as HTMLElement).getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('1 terminal or idle jobs')).toBeInTheDocument();
     expect(screen.getByText('1 cluster node connected')).toBeInTheDocument();
   });
 
@@ -192,7 +183,6 @@ describe('Dashboard Component', () => {
     };
 
     vi.mocked(fetchSystemSummary).mockResolvedValue({ nodes: [localNode, remoteNode], jobs: [] });
-    vi.mocked(fetchJobs).mockResolvedValue([]);
 
     renderDashboard();
 

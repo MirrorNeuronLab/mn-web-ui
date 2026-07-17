@@ -113,7 +113,13 @@ describe('JobDetails Component', () => {
       messages: ['Running: streaming live job events...'],
       recent_events: [],
     });
-    vi.mocked(streamWorkflowProgress).mockResolvedValue(undefined);
+    vi.mocked(streamWorkflowProgress).mockImplementation(async (jobId, onSnapshot) => {
+      try {
+        onSnapshot(await fetchWorkflowProgress(jobId));
+      } catch {
+        // Tests that exercise the fallback intentionally reject the snapshot.
+      }
+    });
     vi.mocked(revealArtifact).mockResolvedValue({ ok: true });
     // mock window.location to ensure useParams picks it up
     window.history.pushState({}, 'Test page', '/jobs/test-job-1');
@@ -178,6 +184,7 @@ describe('JobDetails Component', () => {
     await waitFor(() => {
       expect(screen.getByText('test-job-1')).toBeInTheDocument();
     });
+    expect(fetchJobDetails).toHaveBeenCalledWith('test-job-1', { include: 'full' });
     expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute('href', 'http://localhost:61000/');
     expect(screen.getByRole('link', { name: 'Web UI' })).toHaveAttribute('href', 'http://localhost:61000/');
     expect(screen.queryByText(/Executors:/i)).not.toBeInTheDocument();
@@ -207,7 +214,7 @@ describe('JobDetails Component', () => {
 
     // Switch to Logs tab
     fireEvent.click(screen.getByText('Communication Logs'));
-    expect(screen.getByText('[agent_started]')).toBeInTheDocument();
+    expect(await screen.findByText('[agent_started]')).toBeInTheDocument();
   });
 
   it('renders observability summary with trace and artifact links', async () => {
@@ -652,7 +659,7 @@ describe('JobDetails Component', () => {
     });
 
     fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
-    expect(screen.getByText('video_monitor')).toBeInTheDocument();
+    expect(await screen.findByText('video_monitor')).toBeInTheDocument();
     expect(screen.queryByText('Raw Planner')).not.toBeInTheDocument();
     expect(screen.getByText('executor / worker')).toBeInTheDocument();
     expect(screen.getByText('node-a')).toBeInTheDocument();
@@ -737,7 +744,7 @@ describe('JobDetails Component', () => {
     });
     fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
 
-    expect(screen.getByText('video_monitor')).toBeInTheDocument();
+    expect(await screen.findByText('video_monitor')).toBeInTheDocument();
     expect(screen.queryByText('Workflow Manifest Executor')).not.toBeInTheDocument();
     expect(screen.queryByText('Web Ui Dashboard')).not.toBeInTheDocument();
     expect(screen.getByText('node-a')).toBeInTheDocument();
@@ -1087,6 +1094,7 @@ describe('JobDetails Component', () => {
       expect(screen.getByText('test-job-1')).toBeInTheDocument();
     });
     await waitFor(() => expect(emitSnapshot).not.toBeNull());
+    act(() => emitSnapshot?.(progress));
     expect(screen.getByText(/2 active steps/)).toBeInTheDocument();
     expect(screen.getByText('income_agent')).toBeInTheDocument();
 

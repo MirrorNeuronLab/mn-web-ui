@@ -20,19 +20,26 @@ export function usePollingEffect(
     if (!enabled) return undefined;
 
     let cancelled = false;
-    const run = () => {
-      if (!cancelled) void callback();
+    let refreshTimer: number | undefined;
+    const run = async () => {
+      if (cancelled) return;
+      try {
+        await callback();
+      } finally {
+        if (!cancelled) {
+          refreshTimer = window.setTimeout(() => void run(), intervalMs);
+        }
+      }
     };
     const initialTimer = window.setTimeout(() => {
       onInitialPoll?.();
-      run();
+      void run();
     }, initialDelayMs);
-    const refreshTimer = window.setInterval(run, intervalMs);
 
     return () => {
       cancelled = true;
       window.clearTimeout(initialTimer);
-      window.clearInterval(refreshTimer);
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
     };
   }, [callback, enabled, initialDelayMs, intervalMs, onInitialPoll]);
 }

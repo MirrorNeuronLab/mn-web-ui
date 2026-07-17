@@ -93,8 +93,8 @@ export const JobSchema = z.object({
   trace_id: z.string().nullable().optional(),
   executor_count: z.number().optional(),
   active_executors: z.number().optional(),
-  type: z.string().optional(),
-  job_type: z.string().optional(),
+  type: z.string().nullable().optional(),
+  job_type: z.string().nullable().optional(),
   live: z.boolean().optional(),
   'live?': z.boolean().optional(),
   recovery_status: z.string().nullable().optional(),
@@ -563,45 +563,6 @@ export const isServiceJob = (job: Partial<Job> | null | undefined, summary?: { t
     || [summaryStreamMode, policyStreamMode].some((value) => value.toLowerCase() === 'live');
 };
 
-const normalizedText = (value: unknown): string => (
-  typeof value === 'string' ? value.trim().toLowerCase() : ''
-);
-
-const LIST_STATUS_REFRESH_STATUSES = new Set([
-  'pending',
-  'planned',
-  'validated',
-  'scheduled',
-  'queued',
-  'starting',
-  'preparing',
-  'running',
-  'paused',
-]);
-
-const shouldRefreshListStatus = (job: Job): boolean => {
-  const status = normalizedText(job.status).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-  return Boolean(job.job_id && job.job_id !== 'unknown' && LIST_STATUS_REFRESH_STATUSES.has(status));
-};
-
-const listStatusFromProgress = (progress: WorkflowProgress): string | null => {
-  const status = normalizedText(progress.status);
-  return status && status !== 'unknown' ? status : null;
-};
-
-const refreshJobListStatus = async (job: Job): Promise<Job> => {
-  if (!shouldRefreshListStatus(job) || !job.job_id || job.job_id === 'unknown') return job;
-  try {
-    const response = await api.get(jobPath(job.job_id, '/workflow-progress'));
-    const parsed = WorkflowProgressSchema.safeParse(response.data);
-    if (!parsed.success) return job;
-    const status = listStatusFromProgress(parsed.data);
-    return status ? { ...job, status } : job;
-  } catch {
-    return job;
-  }
-};
-
 export const fetchSystemSummary = () => api.get('/system/summary').then(r => (
   parseOrFallback(SystemSummarySchema, r.data, {}, 'SystemSummary')
 ));
@@ -635,13 +596,21 @@ export const fetchJobs = async (options: FetchJobsOptions = {}) => {
       : api.get('/jobs');
   const r = await request;
   const data = arrayFromEnvelope(r.data, ['data', 'jobs']);
-  const jobs = parseArrayOrEmpty(JobSchema, data, 'fetchJobs');
-  return Promise.all(jobs.map(refreshJobListStatus));
+  return parseArrayOrEmpty(JobSchema, data, 'fetchJobs', true);
 };
 
-export const fetchJobDetails = (id: string) => api.get(jobPath(id)).then(r => (
-  parseOrFallback(JobDetailsSchema, r.data, { job: { job_id: id, status: 'unknown' } }, `fetchJobDetails(${id})`)
-));
+export type FetchJobDetailsOptions = {
+  include?: 'compact' | 'full';
+};
+
+export const fetchJobDetails = (id: string, options: FetchJobDetailsOptions = {}) => {
+  const request = options.include
+    ? api.get(jobPath(id), { params: { include: options.include } })
+    : api.get(jobPath(id));
+  return request.then(r => (
+    parseOrFallback(JobDetailsSchema, r.data, { job: { job_id: id, status: 'unknown' } }, `fetchJobDetails(${id})`)
+  ));
+};
 
 export const fetchJobEvents = (id: string) => api.get(jobPath(id, '/events')).then(r => (
   parseArrayOrEmpty(JobEventSchema, arrayFromEnvelope(r.data, ['data', 'events']), `fetchJobEvents(${id})`)

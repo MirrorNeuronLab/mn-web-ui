@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { fetchJobs, fetchSystemSummary } from '../api';
-import type { Job, SystemSummary } from '../api';
+import { fetchSystemSummary } from '../api';
+import type { SystemSummary } from '../api';
 import { Activity, BriefcaseBusiness, CircuitBoard, Cpu, MemoryStick, Server } from 'lucide-react';
 import { Tooltip } from '../components/ui/tooltip';
 import { Card, CardContent } from '../components/ui/card';
@@ -20,35 +20,21 @@ import {
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<SystemSummary | null>(null);
-  const [jobs, setJobs] = useState<Job[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadDashboard = useCallback(async () => {
-    const [summaryResult, jobsResult] = await Promise.allSettled([
-      fetchSystemSummary(),
-      fetchJobs(),
-    ]);
-
-    if (summaryResult.status === 'fulfilled') {
-      setSummary(summaryResult.value);
-    } else {
-      console.error('Failed to load system summary', summaryResult.reason);
+    try {
+      setSummary(await fetchSystemSummary());
+    } catch (error) {
+      console.error('Failed to load system summary', error);
       setSummary({ nodes: [], jobs: [] });
     }
-
-    if (jobsResult.status === 'fulfilled') {
-      setJobs(jobsResult.value);
-    } else {
-      console.error('Failed to load jobs', jobsResult.reason);
-      setJobs(null);
-    }
-
     setLoading(false);
   }, []);
 
   usePollingEffect(loadDashboard, { intervalMs: 5000 });
 
-  const metricJobs = useMemo<Partial<Job>[]>(() => jobs ?? summary?.jobs ?? [], [jobs, summary]);
+  const metricJobs = summary?.jobs ?? [];
 
   const resources = useMemo(() => summarizeRuntimeResources(summary), [summary]);
 

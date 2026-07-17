@@ -104,6 +104,47 @@ describe('api parsing helpers', () => {
     ]);
   });
 
+  it('accepts legacy jobs with a null job type', async () => {
+    mockApi.get.mockResolvedValue({
+      data: {
+        data: [
+          {
+            job_id: 'legacy-job-1',
+            graph_id: 'legacy-workflow',
+            status: 'paused',
+            job_type: null,
+          },
+        ],
+      },
+    });
+
+    await expect(fetchJobs()).resolves.toEqual([
+      expect.objectContaining({
+        job_id: 'legacy-job-1',
+        job_type: null,
+      }),
+    ]);
+  });
+
+  it('keeps valid jobs when another row is malformed', async () => {
+    mockApi.get.mockResolvedValue({
+      data: {
+        data: [
+          { job_id: 'valid-job', status: 'running' },
+          { job_id: 123, status: 'running' },
+        ],
+      },
+    });
+
+    await expect(fetchJobs()).resolves.toEqual([
+      expect.objectContaining({ job_id: 'valid-job', status: 'running' }),
+    ]);
+    expect(console.error).toHaveBeenCalledWith(
+      'fetchJobs[1] validation failed:',
+      expect.anything(),
+    );
+  });
+
   it('clears jobs through the slash cleanup endpoint', async () => {
     mockApi.post.mockResolvedValue({ data: { cleared_count: 2 } });
 
@@ -142,6 +183,15 @@ describe('api parsing helpers', () => {
     await fetchJobDetails('job/with space');
     expect(mockApi.get).toHaveBeenLastCalledWith('/jobs/job%2Fwith%20space');
 
+    mockApi.get.mockResolvedValueOnce({
+      data: { job: { job_id: 'job/with space', status: 'running' } },
+    });
+    await fetchJobDetails('job/with space', { include: 'full' });
+    expect(mockApi.get).toHaveBeenLastCalledWith(
+      '/jobs/job%2Fwith%20space',
+      { params: { include: 'full' } },
+    );
+
     mockApi.get.mockResolvedValueOnce({ data: { data: [] } });
     await fetchJobEvents('job/with space');
     expect(mockApi.get).toHaveBeenLastCalledWith('/jobs/job%2Fwith%20space/events');
@@ -157,111 +207,24 @@ describe('api parsing helpers', () => {
     expect(mockApi.post).toHaveBeenLastCalledWith('/jobs/job%2Fwith%20space/pause');
   });
 
-  it('reconciles stale paused service rows with live workflow progress', async () => {
-    mockApi.get
-      .mockResolvedValueOnce({
-        data: {
-          data: [
-            {
-              job_id: 'service-job-1',
-              graph_id: 'video_watch_assistant_v1',
-              status: 'paused',
-              job_type: 'service',
-              'live?': true,
-              recovery_status: 'paused_for_review',
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          schema_version: 1,
-          job_id: 'service-job-1',
-          workflow_id: 'video_watch_assistant_v1',
-          name: 'Video Watch Assistant',
-          status: 'running',
-          workflow_kind: 'service',
-        },
-      });
+  it('uses the list endpoint as the authoritative source for row status', async () => {
+    mockApi.get.mockResolvedValue({
+      data: {
+        data: [
+          {
+            job_id: 'job-1',
+            graph_id: 'workflow_v1',
+            status: 'running',
+          },
+        ],
+      },
+    });
 
     await expect(fetchJobs()).resolves.toEqual([
-      expect.objectContaining({
-        job_id: 'service-job-1',
-        status: 'running',
-      }),
+      expect.objectContaining({ job_id: 'job-1', status: 'running' }),
     ]);
-    expect(mockApi.get).toHaveBeenNthCalledWith(1, '/jobs');
-    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/jobs/service-job-1/workflow-progress');
-  });
-
-  it('reconciles stale paused batch rows with live workflow progress', async () => {
-    mockApi.get
-      .mockResolvedValueOnce({
-        data: {
-          data: [
-            {
-              job_id: 'batch-job-1',
-              graph_id: 'personal_income_tax_expert_v1',
-              status: 'paused',
-              job_type: 'batch',
-              recovery_status: 'paused_for_review',
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          schema_version: 1,
-          job_id: 'batch-job-1',
-          workflow_id: 'personal_income_tax_expert_v1',
-          name: 'Personal Income Tax Expert',
-          status: 'running',
-          workflow_kind: 'batch',
-        },
-      });
-
-    await expect(fetchJobs()).resolves.toEqual([
-      expect.objectContaining({
-        job_id: 'batch-job-1',
-        status: 'running',
-      }),
-    ]);
-    expect(mockApi.get).toHaveBeenNthCalledWith(1, '/jobs');
-    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/jobs/batch-job-1/workflow-progress');
-  });
-
-  it('refreshes active list row statuses from live workflow progress', async () => {
-    mockApi.get
-      .mockResolvedValueOnce({
-        data: {
-          data: [
-            {
-              job_id: 'job-1',
-              graph_id: 'workflow_v1',
-              status: 'running',
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          schema_version: 1,
-          job_id: 'job-1',
-          workflow_id: 'workflow_v1',
-          name: 'Workflow',
-          status: 'completed',
-          workflow_kind: 'batch',
-        },
-      });
-
-    await expect(fetchJobs()).resolves.toEqual([
-      expect.objectContaining({
-        job_id: 'job-1',
-        status: 'completed',
-      }),
-    ]);
-    expect(mockApi.get).toHaveBeenNthCalledWith(1, '/jobs');
-    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/jobs/job-1/workflow-progress');
+    expect(mockApi.get).toHaveBeenCalledOnce();
+    expect(mockApi.get).toHaveBeenCalledWith('/jobs');
   });
 
   it('falls back to an empty job list when the API shape is malformed', async () => {
@@ -271,7 +234,7 @@ describe('api parsing helpers', () => {
 
     await expect(fetchJobs()).resolves.toEqual([]);
     expect(console.error).toHaveBeenCalledWith(
-      'fetchJobs validation failed:',
+      'fetchJobs[0] validation failed:',
       expect.anything(),
     );
   });
