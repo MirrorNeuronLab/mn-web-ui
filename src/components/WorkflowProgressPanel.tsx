@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Activity, Check, Circle, Clock3, Loader2, X } from 'lucide-react';
 import type { JobDetails, WorkflowActivity, WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
 import { displayAgentName } from '../utils/agentGraph';
-import { formatElapsed } from '../utils/workflowProgress';
+import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
 import { artifactsFromDetails } from '../utils/workflowResources';
 // ProgressResource and openArtifactLocation were unused and removed
 import {
@@ -368,10 +368,12 @@ export function WorkflowProgressPanel({ progress, details, showFailurePanel = tr
       ? activeSteps.map((step) => step.label).join(' / ')
       : (currentStep?.goal || currentStep?.activity_summary || '');
   const detailStatus = selectedStep?.status || currentStep?.status || progress.status;
-  const workflowTotal = progress.agent_count.total || progress.steps.reduce((total, step) => total + (step.total_count || 0), 0) || progress.steps.length || agents.length;
-  const workflowDone = progress.agent_count.done || progress.steps.reduce((total, step) => total + (step.done_count || 0), 0);
-  const workflowRunning = progress.agent_count.running || progress.steps.reduce((total, step) => total + (step.running_count || 0), 0);
-  const workflowFailed = progress.agent_count.failed || progress.steps.reduce((total, step) => total + (step.failed_count || 0), 0);
+  const stepCounts = workflowStepCounts(progress);
+  const serviceWorkflow = progress.workflow_kind === 'service';
+  const workflowTotal = serviceWorkflow ? progress.agent_count.total : stepCounts.total;
+  const workflowDone = serviceWorkflow ? progress.agent_count.done : stepCounts.done;
+  const workflowRunning = serviceWorkflow ? progress.agent_count.running : stepCounts.running;
+  const workflowFailed = serviceWorkflow ? progress.agent_count.failed : stepCounts.failed;
   const monitorActivity = primaryStep?.activity_summary
     || primaryStep?.status_reason
     || agents.find((agent) => agent.activity_summary)?.activity_summary

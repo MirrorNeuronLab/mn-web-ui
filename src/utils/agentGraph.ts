@@ -95,7 +95,11 @@ const buildProgressGraph = (
 const shouldUseProgressGraph = (graph: AgentGraph | null, progressGraph: AgentGraph | null): boolean => {
   if (!progressGraph) return false;
   if (!graph?.nodes?.length) return true;
-  return graph.nodes.every((node) => INFRASTRUCTURE_AGENT_IDS.has(node.id));
+  if (graph.nodes.every((node) => INFRASTRUCTURE_AGENT_IDS.has(node.id))) return true;
+  // The runtime registry can be sparse while later workflow phases have not
+  // started. The public workflow snapshot already contains every declared
+  // agent, so prefer it whenever it is more complete than the live registry.
+  return progressGraph.nodes.length > graph.nodes.length;
 };
 
 export const buildDisplayGraph = (

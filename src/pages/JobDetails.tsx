@@ -25,7 +25,7 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { cn } from '../lib/utils';
-import { formatElapsed } from '../utils/workflowProgress';
+import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
 import { buildOutputResources } from '../utils/workflowResources';
 import { blueprintWebUiInfo, buildFallbackWorkflowProgress, webUiInfoFromRecord } from '../utils/jobDetailsView';
 import { isTerminalJobStatus, jobStatusBadgeClass } from '../utils/jobStatus';
@@ -333,15 +333,15 @@ export default function JobDetails() {
   const runningAgentCount = displayWorkflowProgress
     ? displayWorkflowProgress.agent_count.running
     : displayGraph.nodes.filter((agent) => agent.status === 'running').length;
-  const doneAgentCount = displayWorkflowProgress
-    ? displayWorkflowProgress.agent_count.done
-    : displayGraph.nodes.filter((agent) => isTerminalJobStatus(agent.status)).length;
   const totalAgentCount = displayWorkflowProgress
     ? displayWorkflowProgress.agent_count.total
     : displayGraph.stats.agent_count;
   const progressSummaryIsLive = displayWorkflowProgress?.workflow_kind === 'service';
-  const progressAgentValue = progressSummaryIsLive ? `${runningAgentCount}/${totalAgentCount}` : `${doneAgentCount}/${totalAgentCount}`;
-  const progressAgentLabel = progressSummaryIsLive ? 'Live Agents' : 'Progress';
+  const stepCounts = workflowStepCounts(displayWorkflowProgress);
+  const progressAgentValue = progressSummaryIsLive
+    ? `${runningAgentCount}/${totalAgentCount}`
+    : `${stepCounts.done}/${stepCounts.total}`;
+  const progressAgentLabel = progressSummaryIsLive ? 'Live Agents' : 'Steps';
   const eventCount = Math.max(
     displayWorkflowProgress?.recent_events?.length || 0,
     displayWorkflowProgress?.messages?.length || 0,
