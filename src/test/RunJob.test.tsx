@@ -86,6 +86,59 @@ describe('RunJob Component', () => {
     });
   });
 
+  it('sends mn-cli-compatible run configuration overrides', async () => {
+    vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-config-123', id: 'job-config-123', status: 'pending' });
+    renderRunJob();
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
+    });
+    fireEvent.click(screen.getByText('Run configuration'));
+    fireEvent.change(screen.getByLabelText('Configuration overrides'), {
+      target: {
+        value: [
+          'llm.configs.primary.context_size=8192',
+          'features.research=true',
+          'service.url=https://example.test/query?a=b',
+        ].join('\n'),
+      },
+    });
+    expect(screen.getByText('Run configuration (3 overrides)')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    expect(await screen.findByText('Launch this job?')).toBeInTheDocument();
+    const launchButtons = screen.getAllByRole('button', { name: 'Launch' });
+    fireEvent.click(launchButtons[launchButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(launchBlueprintJob).toHaveBeenCalledWith(expect.objectContaining({
+        source: 'catalog',
+        blueprint_id: 'worker_one',
+        config_overrides: {
+          llm: { configs: { primary: { context_size: 8192 } } },
+          features: { research: true },
+          service: { url: 'https://example.test/query?a=b' },
+        },
+      }));
+    });
+  });
+
+  it('blocks launch and explains malformed run configuration overrides', async () => {
+    renderRunJob();
+    await waitFor(() => {
+      expect(screen.getAllByText('Worker One').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByText('Run configuration'));
+    fireEvent.change(screen.getByLabelText('Configuration overrides'), {
+      target: { value: 'llm..model=default' },
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Line 1: expected non-empty dotted path segments.');
+    expect(screen.getByRole('button', { name: 'Launch' })).toBeDisabled();
+    expect(launchBlueprintJob).not.toHaveBeenCalled();
+  });
+
   it('launches a manually entered filesystem path', async () => {
     vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-path-123', id: 'job-path-123', status: 'pending' });
     renderRunJob();
@@ -163,7 +216,14 @@ describe('RunJob Component', () => {
         { phase: 'resolve_source', status: 'completed', message: 'Blueprint source resolved.' },
         { phase: 'model_install', status: 'running', message: 'Ensuring required runtime models are installed.' },
       ],
-      phases: [],
+      phases: [{
+        id: 'model_install',
+        label: 'Install required runtime models',
+        status: 'running',
+        message: 'Ensuring required runtime models are installed.',
+        detail: 'Checking Docker Model Runner services.',
+        expectation: 'The first launch may take several minutes.',
+      }],
       latest: { phase: 'model_install', status: 'running', message: 'Ensuring required runtime models are installed.' },
       completed: false,
     });
@@ -182,6 +242,8 @@ describe('RunJob Component', () => {
     await waitFor(() => {
       expect(within(progressDialog).getByText('Install required runtime models')).toBeInTheDocument();
       expect(within(progressDialog).getByText('Ensuring required runtime models are installed.')).toBeInTheDocument();
+      expect(within(progressDialog).getByText('Checking Docker Model Runner services.')).toBeInTheDocument();
+      expect(within(progressDialog).getByText('The first launch may take several minutes.')).toBeInTheDocument();
     });
 
     resolveLaunch({ job_id: 'job-progress-123', id: 'job-progress-123', status: 'pending' });

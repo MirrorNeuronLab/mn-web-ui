@@ -1,7 +1,7 @@
 import api from './client';
 import { z } from 'zod';
 import { parseArrayOrEmpty, parseOrFallback } from './parsing';
-import { apiPathFromUrl, bundlePath, jobPath, launchProgressPath, modelPath, runPath } from './routes';
+import { apiPathFromUrl, jobPath, launchProgressPath, modelPath, runPath } from './routes';
 import { createWorkflowProgressStreamer } from './streaming';
 import { normalizeWorkflowProgressPayload } from './workflowProgress';
 
@@ -344,13 +344,6 @@ export const ClearJobsResponseSchema = z.object({
   cleared_count: z.number().optional().default(0),
 }).passthrough();
 
-export const ReloadBundleResponseSchema = z.object({
-  version: InterfaceVersionSchema,
-  ok: z.boolean().optional(),
-  status: z.string().optional(),
-  message: z.string().optional(),
-}).passthrough();
-
 export const RevealArtifactResponseSchema = z.object({
   version: InterfaceVersionSchema,
   ok: z.boolean().optional(),
@@ -377,6 +370,7 @@ export const LaunchProgressPhaseSchema = z.object({
   status: z.string().optional().default('pending'),
   message: z.string().optional().default(''),
   detail: z.string().optional(),
+  expectation: z.string().optional(),
   details: z.record(z.string(), z.unknown()).optional(),
   severity: z.string().optional(),
 }).passthrough();
@@ -550,7 +544,6 @@ export type BlueprintLaunchResponse = z.infer<typeof BlueprintLaunchResponseSche
 export type UploadedBundle = z.infer<typeof UploadedBundleSchema>;
 export type JobActionResponse = z.infer<typeof JobActionResponseSchema>;
 export type ClearJobsResponse = z.infer<typeof ClearJobsResponseSchema>;
-export type ReloadBundleResponse = z.infer<typeof ReloadBundleResponseSchema>;
 export type RevealArtifactResponse = z.infer<typeof RevealArtifactResponseSchema>;
 export type LaunchProgressEvent = z.infer<typeof LaunchProgressEventSchema>;
 export type LaunchProgressPhase = z.infer<typeof LaunchProgressPhaseSchema>;
@@ -697,10 +690,6 @@ export const clearJobs = () => api.post('/jobs/cleanup').then(r => (
 export const cancelJob = (id: string) => api.post(jobPath(id, '/cancel')).then(r => (
   parseOrFallback(JobActionResponseSchema, r.data, { job_id: id, status: 'cancelled' }, `cancelJob(${id})`)
 ));
-export const reloadBundle = (bundle_id: string) => api.post(bundlePath(bundle_id, '/reload')).then(r => (
-  parseOrFallback(ReloadBundleResponseSchema, r.data, {}, `reloadBundle(${bundle_id})`)
-));
-
 export const pauseJob = (id: string) => api.post(jobPath(id, '/pause')).then(r => (
   parseOrFallback(JobActionResponseSchema, r.data, { job_id: id, status: 'paused' }, `pauseJob(${id})`)
 ));

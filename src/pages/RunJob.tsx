@@ -13,6 +13,7 @@ import { Progress } from '../components/ui/progress';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { cn } from '../lib/utils';
 import { apiErrorMessage } from '../utils/apiErrors';
+import { parseConfigOverrideAssignments } from '../utils/configOverrides';
 
 type LaunchMode = 'blueprint' | 'path' | 'bundle';
 
@@ -41,6 +42,8 @@ type LaunchProgressItem = {
   label: string;
   status: string;
   message: string;
+  detail: string | undefined;
+  expectation: string | undefined;
 };
 
 type LaunchHandoff =
@@ -124,6 +127,8 @@ const buildProgressItems = (
         label: labelFromPhase(phase, id),
         status: normalizedStatus(phase.status || event?.status),
         message: stringValue(phase.message) || stringValue(phase.detail) || stringValue(event?.message) || '',
+        detail: stringValue(phase.detail) || undefined,
+        expectation: stringValue(phase.expectation) || undefined,
       };
     })
     .filter((item): item is LaunchProgressItem => Boolean(item));
@@ -133,7 +138,14 @@ const buildProgressItems = (
     return jobIsReady
       ? [
         ...backendItems,
-        { id: 'open_job_progress', label: 'Open job progress', status: 'completed', message: 'Runtime job is ready.' },
+        {
+          id: 'open_job_progress',
+          label: 'Open job progress',
+          status: 'completed',
+          message: 'Runtime job is ready.',
+          detail: undefined,
+          expectation: undefined,
+        },
       ]
       : backendItems;
   }
@@ -155,6 +167,8 @@ const buildProgressItems = (
         label: phase.label,
         status: jobIsReady ? 'completed' : 'pending',
         message: jobIsReady ? 'Runtime job is ready.' : '',
+        detail: undefined,
+        expectation: undefined,
       };
     }
     const event = byPhase[phase.id];
@@ -164,6 +178,8 @@ const buildProgressItems = (
       label: phase.label,
       status: useOverallStatus ? 'running' : normalizedStatus(event?.status),
       message: stringValue(event?.message) || (useOverallStatus ? stringValue(progress?.latest?.message) || 'Resolving blueprint source.' : ''),
+      detail: undefined,
+      expectation: undefined,
     };
   });
 };
@@ -238,6 +254,12 @@ function LaunchProgressModal({
                   {showMessage && phase.message ? (
                     <div className="mt-0.5 text-xs leading-5 text-neutral-500">{phase.message}</div>
                   ) : null}
+                  {showMessage && phase.detail && phase.detail !== phase.message ? (
+                    <div className="text-xs leading-5 text-neutral-500">{phase.detail}</div>
+                  ) : null}
+                  {showMessage && phase.expectation ? (
+                    <div className="text-xs leading-5 text-neutral-500">{phase.expectation}</div>
+                  ) : null}
                 </div>
               </li>
             );
@@ -260,6 +282,7 @@ export default function RunJob() {
   const [selectedBlueprintId, setSelectedBlueprintId] = useState('');
   const [pathValue, setPathValue] = useState('');
   const [bundleData, setBundleData] = useState<UploadedBundle | null>(null);
+  const [configAssignments, setConfigAssignments] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loadingBlueprints, setLoadingBlueprints] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -299,6 +322,11 @@ export default function RunJob() {
     [blueprints, selectedBlueprintId],
   );
 
+  const parsedConfigOverrides = useMemo(
+    () => parseConfigOverrideAssignments(configAssignments),
+    [configAssignments],
+  );
+
   const refreshLaunchProgress = useCallback(async (id: string) => {
     try {
       const progress = await fetchLaunchProgress(id);
@@ -334,6 +362,7 @@ export default function RunJob() {
 
   const canLaunch =
     !running &&
+    parsedConfigOverrides.ok &&
     ((mode === 'blueprint' && Boolean(selectedBlueprintId)) ||
       (mode === 'path' && Boolean(pathValue.trim())) ||
       (mode === 'bundle' && Boolean(bundleData?.bundle_path)));
@@ -387,9 +416,12 @@ export default function RunJob() {
   };
 
   const launchPayload = (launchProgressId: string) => {
-    if (mode === 'blueprint') return { source: 'catalog', blueprint_id: selectedBlueprintId, progress_id: launchProgressId };
-    if (mode === 'path') return { source: 'path', path: pathValue.trim(), progress_id: launchProgressId };
-    return { source: 'bundle', _bundle_path: bundleData?.bundle_path, progress_id: launchProgressId };
+    const config_overrides = parsedConfigOverrides.ok && parsedConfigOverrides.count
+      ? parsedConfigOverrides.value
+      : undefined;
+    if (mode === 'blueprint') return { source: 'catalog', blueprint_id: selectedBlueprintId, progress_id: launchProgressId, config_overrides };
+    if (mode === 'path') return { source: 'path', path: pathValue.trim(), progress_id: launchProgressId, config_overrides };
+    return { source: 'bundle', _bundle_path: bundleData?.bundle_path, progress_id: launchProgressId, config_overrides };
   };
 
   const launchSummary = () => {
@@ -610,6 +642,33 @@ export default function RunJob() {
                   )}
                 </div>
               ) : null}
+
+              <details className="rounded-md border border-neutral-200 bg-neutral-50">
+                <summary className="cursor-pointer select-none px-3 py-2.5 text-xs font-medium text-neutral-700">
+                  Run configuration{parsedConfigOverrides.ok && parsedConfigOverrides.count ? ` (${parsedConfigOverrides.count} override${parsedConfigOverrides.count === 1 ? '' : 's'})` : ''}
+                </summary>
+                <div className="space-y-2 border-t border-neutral-200 p-3">
+                  <label className="block text-xs font-medium text-neutral-700" htmlFor="config-overrides">
+                    Configuration overrides
+                  </label>
+                  <textarea
+                    id="config-overrides"
+                    value={configAssignments}
+                    onChange={(event) => setConfigAssignments(event.target.value)}
+                    placeholder={'llm.configs.primary.context_size=8192\ninputs.payload.document_folder="/path/to/files"'}
+                    className="min-h-24 w-full resize-y rounded-md border border-neutral-300 bg-white px-3 py-2 font-mono text-xs text-neutral-950 shadow-sm focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={running}
+                    aria-invalid={!parsedConfigOverrides.ok}
+                    aria-describedby="config-overrides-help"
+                  />
+                  <p id="config-overrides-help" className="text-xs leading-5 text-neutral-500">
+                    One <span className="font-mono">dotted.path=value</span> per line. JSON values become booleans, numbers, arrays, or objects; other values stay strings. These overrides apply only to this run.
+                  </p>
+                  {!parsedConfigOverrides.ok ? (
+                    <p role="alert" className="text-xs text-red-700">{parsedConfigOverrides.error}</p>
+                  ) : null}
+                </div>
+              </details>
 
               {error ? (
                 <div className="whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-800">
