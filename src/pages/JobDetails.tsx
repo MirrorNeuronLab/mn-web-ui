@@ -9,7 +9,7 @@ import { WorkflowAgentGraph } from '../components/WorkflowAgentGraph';
 import { WorkflowProgressPanel } from '../components/WorkflowProgressPanel';
 import FailurePanel from '../components/FailurePanel';
 import ObservabilitySummaryPanel, { type ObservabilityArtifactRef } from '../components/ObservabilitySummaryPanel';
-import { confirmActionToast } from '../components/ui/confirm-toast';
+import { confirmActionDialog } from '../components/ui/confirm-action';
 import { Tooltip } from '../components/ui/tooltip';
 import { buildDisplayGraph } from '../utils/agentGraph';
 import { Badge } from '../components/ui/badge';
@@ -351,7 +351,8 @@ export default function JobDetails() {
   const runtime = formatElapsed(displayWorkflowProgress?.elapsed_seconds || 0);
 
   const confirmCancel = () => {
-    confirmActionToast({
+    confirmActionDialog({
+      tone: 'danger',
       id: `job-cancel-${jobId}`,
       title: 'Cancel this job?',
       description: 'This action stops the job and interrupts running agents attached to it.',
@@ -385,7 +386,7 @@ export default function JobDetails() {
   };
 
   const confirmPause = () => {
-    confirmActionToast({
+    confirmActionDialog({
       id: `job-pause-${jobId}`,
       title: 'Pause this job?',
       description: 'The job will stop accepting work until it is resumed.',
@@ -420,7 +421,7 @@ export default function JobDetails() {
   };
 
   const confirmResume = () => {
-    confirmActionToast({
+    confirmActionDialog({
       id: `job-resume-${jobId}`,
       title: 'Resume this job?',
       description: 'The job will continue accepting work and processing queued agents.',
@@ -461,10 +462,10 @@ export default function JobDetails() {
   return (
     <div className="flex h-full flex-col space-y-4 font-sans">
       <div className="grid shrink-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_560px]">
-        <Card className="flex items-start justify-between p-4">
-        <div>
-          <div className="mb-2 flex items-center space-x-3">
-            <h2 className="text-lg font-bold leading-6 text-neutral-950">{jobId}</h2>
+        <Card className="flex flex-col items-start justify-between gap-4 p-4 sm:flex-row">
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap items-center gap-2.5">
+            <h2 className="break-all text-lg font-bold leading-6 text-neutral-950">{jobId}</h2>
             {displayStatus ? (
               <Badge variant="outline" className={cn('gap-1.5 capitalize', jobStatusBadgeClass(displayStatus))}>
                 <StatusIcon status={displayStatus} />
@@ -489,7 +490,7 @@ export default function JobDetails() {
             ) : null}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
           {webUi ? (
             <Tooltip content={webUi.status ? `${webUi.title} (${webUi.status})` : webUi.title}>
               <Button asChild size="sm">
@@ -519,7 +520,14 @@ export default function JobDetails() {
           {(displayStatus === 'running' || displayStatus === 'pending' || displayStatus === 'paused') ? (
             <Tooltip content="Cancel this job after confirmation. Running agents will stop.">
               <span className="inline-flex">
-                <Button type="button" variant="outline" size="sm" disabled={isCancelling} onClick={confirmCancel}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                  disabled={isCancelling}
+                  onClick={confirmCancel}
+                >
                   {isCancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />} Cancel
                 </Button>
               </span>

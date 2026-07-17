@@ -10,6 +10,7 @@ type DisplayRecord = {
 };
 
 const INFRASTRUCTURE_AGENT_IDS = new Set(['runtime', 'workflow_manifest_executor', 'web_ui_dashboard']);
+const LOWERED_AGENT_TYPES = new Set(['step_source', 'step_sink', 'step_join', 'router', 'aggregator']);
 
 const knownText = (...values: unknown[]): string | undefined => {
   for (const value of values) {
@@ -96,6 +97,11 @@ const shouldUseProgressGraph = (graph: AgentGraph | null, progressGraph: AgentGr
   if (!progressGraph) return false;
   if (!graph?.nodes?.length) return true;
   if (graph.nodes.every((node) => INFRASTRUCTURE_AGENT_IDS.has(node.id))) return true;
+  if (graph.nodes.some((node) => (
+    LOWERED_AGENT_TYPES.has(String(node.agent_type || '').toLowerCase())
+    || /__(?:start|end|fork(?:_\d+)?|join(?:_\d+)?)$/.test(node.id)
+    || node.id === 'workflow__terminal'
+  ))) return true;
   // The runtime registry can be sparse while later workflow phases have not
   // started. The public workflow snapshot already contains every declared
   // agent, so prefer it whenever it is more complete than the live registry.

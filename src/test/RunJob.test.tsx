@@ -6,6 +6,7 @@ import RunJob from '../pages/RunJob';
 import { fetchBlueprints, fetchLaunchProgress, launchBlueprintJob, uploadBundle } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
+import { ConfirmActionDialogHost } from '../components/ui/confirm-action-dialog';
 
 vi.mock('../api', () => ({
   fetchBlueprints: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock('react-router-dom', async () => {
 const renderRunJob = () => render(
   <TooltipProvider>
     <BrowserRouter><RunJob /></BrowserRouter>
+    <ConfirmActionDialogHost />
     <Toaster />
   </TooltipProvider>
 );

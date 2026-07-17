@@ -7,6 +7,7 @@ import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchW
 import type { WorkflowProgress } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
+import { ConfirmActionDialogHost } from '../components/ui/confirm-action-dialog';
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>();
@@ -45,6 +46,7 @@ const renderWithRouter = (ui: React.ReactElement) => {
           <Route path="/jobs/:id" element={ui} />
         </Routes>
       </BrowserRouter>
+      <ConfirmActionDialogHost />
       <Toaster />
     </TooltipProvider>
   );

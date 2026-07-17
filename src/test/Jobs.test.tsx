@@ -6,6 +6,7 @@ import Jobs from '../pages/Jobs';
 import { cancelJob, clearJobs, fetchJobs, pauseJob } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
+import { ConfirmActionDialogHost } from '../components/ui/confirm-action-dialog';
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>();
@@ -22,6 +23,7 @@ const renderWithRouter = (ui: React.ReactElement) => {
   return render(
     <TooltipProvider>
       <BrowserRouter>{ui}</BrowserRouter>
+      <ConfirmActionDialogHost />
       <Toaster />
     </TooltipProvider>
   );

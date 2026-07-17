@@ -8,6 +8,7 @@ import RunJob from './pages/RunJob';
 import RunUi from './pages/RunUi';
 import { Toaster } from './components/ui/sonner';
 import { TooltipProvider } from './components/ui/tooltip';
+import { ConfirmActionDialogHost } from './components/ui/confirm-action-dialog';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
           <Route path="run" element={<RunJob />} />
         </Route>
       </Routes>
+      <ConfirmActionDialogHost />
       <Toaster />
     </TooltipProvider>
   );

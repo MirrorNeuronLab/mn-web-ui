@@ -9,11 +9,15 @@ describe('buildDisplayGraph', () => {
       graph_id: 'vc-assistant',
       status: 'running',
       nodes: [
-        { id: 'watcher', label: 'Watcher', status: 'done' },
-        { id: 'grouper', label: 'Grouper', status: 'done' },
+        { id: 'detect__start', label: 'Detect Start', agent_type: 'step_source', status: 'ready' },
+        { id: 'detect__watcher', label: 'Watcher', agent_type: 'executor', status: 'done' },
+        { id: 'detect__end', label: 'Detect End', agent_type: 'step_sink', status: 'ready' },
+        { id: 'assemble__start', label: 'Assemble Start', agent_type: 'step_source', status: 'ready' },
+        { id: 'assemble__grouper', label: 'Grouper', agent_type: 'executor', status: 'done' },
+        { id: 'assemble__end', label: 'Assemble End', agent_type: 'step_sink', status: 'ready' },
       ],
       edges: [],
-      stats: { agent_count: 2, edge_count: 0, message_count: 0, event_count: 0 },
+      stats: { agent_count: 6, edge_count: 0, message_count: 0, event_count: 0 },
     } as unknown as AgentGraph;
     const progress = {
       job_id: 'job-vc',

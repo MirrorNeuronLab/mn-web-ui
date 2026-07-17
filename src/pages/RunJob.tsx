@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchBlueprints, fetchLaunchProgress, launchBlueprintJob, uploadBundle } from '../api';
 import type { Blueprint, LaunchProgressEvent, LaunchProgressPhase, LaunchProgressResponse } from '../api';
 import { CheckCircle, FileArchive, FolderInput, Loader2, Play, UploadCloud, Workflow, XCircle } from 'lucide-react';
-import { confirmActionToast } from '../components/ui/confirm-toast';
+import { confirmActionDialog } from '../components/ui/confirm-action';
 import { Tooltip } from '../components/ui/tooltip';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
@@ -375,7 +375,7 @@ export default function RunJob() {
     if (!e.target.files || !e.target.files[0]) return;
     const selectedFile = e.target.files[0];
 
-    confirmActionToast({
+    confirmActionDialog({
       id: `bundle-upload-${selectedFile.name}`,
       title: 'Upload this ZIP bundle?',
       description: `${selectedFile.name} will be uploaded and validated as a MirrorNeuron bundle source.`,
@@ -457,7 +457,7 @@ export default function RunJob() {
 
     const summary = launchSummary();
     const launchProgressId = makeProgressId();
-    confirmActionToast({
+    confirmActionDialog({
       id: `launch-${mode}-${summary}`,
       title: 'Launch this job?',
       description: `Source: ${summary}`,
@@ -676,29 +676,34 @@ export default function RunJob() {
                 </div>
               ) : null}
 
-              <div className="flex justify-end gap-2 border-t border-neutral-200 pt-4">
-                {mode === 'bundle' && bundleData ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setBundleData(null);
-                      setError(null);
-                    }}
-                    disabled={running}
-                  >
-                    Choose another ZIP
-                  </Button>
-                ) : null}
-                <Tooltip content="Confirm the selected source before validation and launch.">
-                  <span className="inline-flex">
-                    <Button type="button" onClick={confirmLaunch} disabled={!canLaunch}>
-                      {running ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === 'bundle' ? <FileArchive className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                      {running ? 'Launching...' : 'Launch'}
+              <div className="flex flex-col gap-3 border-t border-neutral-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs leading-5 text-neutral-500">
+                  Review the selected source before validation and launch.
+                </p>
+                <div className="flex flex-wrap justify-end gap-2">
+                  {mode === 'bundle' && bundleData ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setBundleData(null);
+                        setError(null);
+                      }}
+                      disabled={running}
+                    >
+                      Choose another ZIP
                     </Button>
-                  </span>
-                </Tooltip>
+                  ) : null}
+                  <Tooltip content="Confirm the selected source before validation and launch.">
+                    <span className="inline-flex">
+                      <Button type="button" onClick={confirmLaunch} disabled={!canLaunch}>
+                        {running ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === 'bundle' ? <FileArchive className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                        {running ? 'Launching...' : 'Launch'}
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </div>
               </div>
             </div>
           </Tabs>

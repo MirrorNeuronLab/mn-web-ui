@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { AlertCircle, Ban, CheckCircle, Clock, Eye, Loader2, PauseCircle, PlayCircle, Trash2, XCircle } from 'lucide-react';
 import { cancelJob, clearJobs, fetchJobs, isServiceJob, pauseJob } from '../api';
 import type { Job } from '../api';
-import { confirmActionToast } from '../components/ui/confirm-toast';
+import { confirmActionDialog } from '../components/ui/confirm-action';
 import { Tooltip } from '../components/ui/tooltip';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -98,7 +98,8 @@ export default function Jobs() {
     const loadingLabel = action === 'pause' ? 'Pausing' : 'Cancelling';
     const runner = action === 'pause' ? pauseJob : cancelJob;
 
-    confirmActionToast({
+    confirmActionDialog({
+      tone: action === 'cancel' ? 'danger' : 'default',
       id: `jobs-bulk-${action}`,
       title: `${actionLabel} ${jobIds.length} selected job${jobIds.length === 1 ? '' : 's'}?`,
       description: action === 'pause'
@@ -135,7 +136,8 @@ export default function Jobs() {
   };
 
   const confirmClearJobs = () => {
-    confirmActionToast({
+    confirmActionDialog({
+      tone: 'danger',
       id: 'jobs-clear',
       title: 'Clear non-running jobs?',
       description: 'Completed, failed, and cancelled jobs will be removed from this list. Running jobs stay visible.',
@@ -176,8 +178,15 @@ export default function Jobs() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-end gap-3 space-y-0 border-b border-neutral-200 px-5 py-4">
-        <div className="flex items-center gap-2">
+      <CardHeader className="flex flex-col items-stretch gap-3 space-y-0 border-b border-neutral-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-xs font-medium text-neutral-500" aria-live="polite">
+          {loading
+            ? 'Loading jobs…'
+            : selectedCount > 0
+            ? `${selectedCount} job${selectedCount === 1 ? '' : 's'} selected`
+            : `${jobs.length} job${jobs.length === 1 ? '' : 's'}`}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <button
             type="button"
             role="switch"
@@ -217,6 +226,7 @@ export default function Jobs() {
               <Button
                 type="button"
                 variant="outline"
+                className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
                 size="sm"
                 disabled={!hasSelection || bulkAction !== null}
                 onClick={() => confirmBulkAction('cancel')}
@@ -231,6 +241,7 @@ export default function Jobs() {
               <Button
                 type="button"
                 variant="outline"
+                className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
                 size="sm"
                 disabled={isClearing || bulkAction !== null}
                 onClick={confirmClearJobs}
