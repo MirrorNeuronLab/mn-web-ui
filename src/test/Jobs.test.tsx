@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { toast } from 'sonner';
 import Jobs from '../pages/Jobs';
-import { cancelJob, clearJobs, fetchJobs, pauseJob } from '../api';
+import { cancelAllJobs, cancelJob, clearJobs, fetchJobs, pauseJob } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
 import { ConfirmActionDialogHost } from '../components/ui/confirm-action-dialog';
@@ -14,6 +14,7 @@ vi.mock('../api', async (importOriginal) => {
     ...actual,
     fetchJobs: vi.fn(),
     pauseJob: vi.fn(),
+    cancelAllJobs: vi.fn(),
     cancelJob: vi.fn(),
     clearJobs: vi.fn(),
   };
@@ -213,6 +214,71 @@ describe('Jobs Component', () => {
       expect(cancelJob).toHaveBeenCalledWith('job-1');
       expect(cancelJob).toHaveBeenCalledWith('job-2');
     });
+  });
+
+  it('cancels every active job through the cancel-all API', async () => {
+    const mockJobs = [
+      {
+        job_id: 'job-1',
+        graph_id: 'graph-1',
+        status: 'running',
+        submitted_at: '2026-04-16T12:00:00Z',
+        active_executors: 1,
+        executor_count: 2,
+      },
+    ];
+
+    vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
+    vi.mocked(cancelAllJobs).mockResolvedValue({
+      status: 'cancelled',
+      active_count: 1,
+      cancelled_count: 1,
+      cancelled_job_ids: ['job-1'],
+    });
+
+    renderWithRouter(<Jobs />);
+
+    await waitFor(() => {
+      expect(screen.getByText('job-1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel all' }));
+    expect(await screen.findByText('Cancel all active jobs?')).toBeInTheDocument();
+    expect(cancelAllJobs).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel all' }));
+
+    await waitFor(() => {
+      expect(cancelAllJobs).toHaveBeenCalledOnce();
+    });
+    expect(cancelJob).not.toHaveBeenCalled();
+  });
+
+  it('does not cancel all jobs when the confirmation is dismissed', async () => {
+    vi.mocked(fetchJobs).mockResolvedValue([{
+      job_id: 'job-1',
+      graph_id: 'graph-1',
+      status: 'running',
+      submitted_at: '2026-04-16T12:00:00Z',
+      active_executors: 1,
+      executor_count: 2,
+    }]);
+
+    renderWithRouter(<Jobs />);
+
+    await waitFor(() => {
+      expect(screen.getByText('job-1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel all' }));
+    expect(await screen.findByText('Cancel all active jobs?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep jobs' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Cancel all active jobs?')).not.toBeInTheDocument();
+    });
+    expect(cancelAllJobs).not.toHaveBeenCalled();
   });
 
   it('does not cancel selected jobs when the confirmation is dismissed', async () => {

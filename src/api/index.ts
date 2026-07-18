@@ -344,6 +344,14 @@ export const ClearJobsResponseSchema = z.object({
   cleared_count: z.number().optional().default(0),
 }).passthrough();
 
+export const CancelAllJobsResponseSchema = z.object({
+  version: InterfaceVersionSchema,
+  status: z.string().optional().default('unknown'),
+  active_count: z.number().optional().default(0),
+  cancelled_count: z.number().optional().default(0),
+  cancelled_job_ids: z.array(z.string()).optional().default([]),
+}).passthrough();
+
 export const RevealArtifactResponseSchema = z.object({
   version: InterfaceVersionSchema,
   ok: z.boolean().optional(),
@@ -544,6 +552,7 @@ export type BlueprintLaunchResponse = z.infer<typeof BlueprintLaunchResponseSche
 export type UploadedBundle = z.infer<typeof UploadedBundleSchema>;
 export type JobActionResponse = z.infer<typeof JobActionResponseSchema>;
 export type ClearJobsResponse = z.infer<typeof ClearJobsResponseSchema>;
+export type CancelAllJobsResponse = z.infer<typeof CancelAllJobsResponseSchema>;
 export type RevealArtifactResponse = z.infer<typeof RevealArtifactResponseSchema>;
 export type LaunchProgressEvent = z.infer<typeof LaunchProgressEventSchema>;
 export type LaunchProgressPhase = z.infer<typeof LaunchProgressPhaseSchema>;
@@ -655,6 +664,9 @@ export const streamWorkflowProgress = createWorkflowProgressStreamer({
 });
 export const clearJobs = () => api.post('/jobs/cleanup').then(r => (
   parseOrFallback(ClearJobsResponseSchema, r.data, {}, 'clearJobs')
+));
+export const cancelAllJobs = () => api.post('/jobs:cancel-all').then(r => (
+  parseOrFallback(CancelAllJobsResponseSchema, r.data, { status: 'no_active_jobs' }, 'cancelAllJobs')
 ));
 export const cancelJob = (id: string) => api.post(jobPath(id, '/cancel')).then(r => (
   parseOrFallback(JobActionResponseSchema, r.data, { job_id: id, status: 'cancelled' }, `cancelJob(${id})`)

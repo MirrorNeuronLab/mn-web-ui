@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { AlertCircle, Ban, CheckCircle, Clock, Eye, Loader2, PauseCircle, PlayCircle, Trash2, XCircle } from 'lucide-react';
-import { cancelJob, clearJobs, fetchJobs, isServiceJob, pauseJob } from '../api';
+import { cancelAllJobs, cancelJob, clearJobs, fetchJobs, isServiceJob, pauseJob } from '../api';
 import type { Job } from '../api';
 import { confirmActionDialog } from '../components/ui/confirm-action';
 import { Tooltip } from '../components/ui/tooltip';
@@ -38,6 +38,7 @@ export default function Jobs() {
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<'pause' | 'cancel' | null>(null);
   const [isClearing, setIsClearing] = useState(false);
+  const [isCancellingAll, setIsCancellingAll] = useState(false);
   const [activeOnly, setActiveOnly] = useState(false);
 
   const applyJobs = useCallback((data: Job[]) => {
@@ -115,10 +116,10 @@ export default function Jobs() {
         title: `${completedLabel} jobs`,
         description: `${completedLabel} ${jobIds.length} job${jobIds.length === 1 ? '' : 's'}.`,
       },
-      error: {
+      error: (error) => ({
         title: `${actionLabel} failed`,
-        description: `Failed to ${action} selected jobs.`,
-      },
+        description: apiErrorMessage(error, `Failed to ${action} selected jobs.`),
+      }),
       onConfirm: async () => {
         try {
           setBulkAction(action);
@@ -130,6 +131,47 @@ export default function Jobs() {
           throw e;
         } finally {
           setBulkAction(null);
+        }
+      },
+    });
+  };
+
+  const confirmCancelAllJobs = () => {
+    if (jobs.length === 0) return;
+
+    confirmActionDialog({
+      tone: 'danger',
+      id: 'jobs-cancel-all',
+      title: 'Cancel all active jobs?',
+      description: 'All pending, scheduled, running, and paused jobs will be stopped. Running agents attached to those jobs will be interrupted.',
+      confirmLabel: 'Cancel all',
+      cancelLabel: 'Keep jobs',
+      loading: {
+        title: 'Cancelling all jobs',
+        description: 'Stopping every active job and its running agents.',
+      },
+      success: (result: { cancelled_count: number }) => ({
+        title: result.cancelled_count > 0 ? 'Jobs cancelled' : 'No active jobs',
+        description: result.cancelled_count > 0
+          ? `Cancelled ${result.cancelled_count} active job${result.cancelled_count === 1 ? '' : 's'}.`
+          : 'There were no active jobs to cancel.',
+      }),
+      error: (error) => ({
+        title: 'Cancel all failed',
+        description: apiErrorMessage(error, 'Failed to cancel all active jobs.'),
+      }),
+      onConfirm: async () => {
+        try {
+          setIsCancellingAll(true);
+          const result = await cancelAllJobs();
+          setSelectedJobIds(new Set());
+          await refreshJobs();
+          return result;
+        } catch (e) {
+          console.error('Failed to cancel all active jobs', e);
+          throw e;
+        } finally {
+          setIsCancellingAll(false);
         }
       },
     });
@@ -213,7 +255,7 @@ export default function Jobs() {
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={!hasSelection || bulkAction !== null}
+                disabled={!hasSelection || isCancellingAll || bulkAction !== null}
                 onClick={() => confirmBulkAction('pause')}
               >
                 {bulkAction === 'pause' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PauseCircle className="h-3.5 w-3.5" />}
@@ -228,11 +270,26 @@ export default function Jobs() {
                 variant="outline"
                 className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
                 size="sm"
-                disabled={!hasSelection || bulkAction !== null}
+                disabled={!hasSelection || isCancellingAll || bulkAction !== null}
                 onClick={() => confirmBulkAction('cancel')}
               >
                 {bulkAction === 'cancel' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
                 {bulkAction === 'cancel' ? 'Cancelling...' : `Cancel${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip content="Cancel every active job after confirmation. Running agents will stop.">
+            <span className="inline-flex">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                size="sm"
+                disabled={jobs.length === 0 || isCancellingAll || bulkAction !== null}
+                onClick={confirmCancelAllJobs}
+              >
+                {isCancellingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                {isCancellingAll ? 'Cancelling all...' : 'Cancel all'}
               </Button>
             </span>
           </Tooltip>
@@ -243,7 +300,7 @@ export default function Jobs() {
                 variant="outline"
                 className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
                 size="sm"
-                disabled={isClearing || bulkAction !== null}
+                disabled={isClearing || isCancellingAll || bulkAction !== null}
                 onClick={confirmClearJobs}
               >
                 {isClearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}

@@ -7,6 +7,7 @@ import {
   fetchWorkflowProgress,
   fetchSystemSummary,
   clearJobs,
+  cancelAllJobs,
   cancelJob,
   isServiceJob,
   addClusterNode,
@@ -151,6 +152,26 @@ describe('api parsing helpers', () => {
     await expect(clearJobs()).resolves.toEqual({ version: 1, cleared_count: 2 });
 
     expect(mockApi.post).toHaveBeenCalledWith('/jobs/cleanup');
+  });
+
+  it('cancels all active jobs through the canonical cancel-all endpoint', async () => {
+    mockApi.post.mockResolvedValue({
+      data: {
+        status: 'cancelled',
+        active_count: 2,
+        cancelled_count: 2,
+        cancelled_job_ids: ['job-1', 'job-2'],
+      },
+    });
+
+    await expect(cancelAllJobs()).resolves.toEqual({
+      version: 1,
+      status: 'cancelled',
+      active_count: 2,
+      cancelled_count: 2,
+      cancelled_job_ids: ['job-1', 'job-2'],
+    });
+    expect(mockApi.post).toHaveBeenCalledWith('/jobs:cancel-all');
   });
 
   it('uses safe fallbacks for malformed mutation responses', async () => {
