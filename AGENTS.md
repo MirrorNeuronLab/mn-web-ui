@@ -1,106 +1,95 @@
-# UI Principles for Agents
+# AGENTS.md
 
-These principles should guide the UI development across the application, especially for interactions involving agents and asynchronous tasks.
+Instructions for coding agents working in this repository. These instructions
+apply only to `mn-web-ui`.
 
-## Issue Fixing Policy
+## Start Here
 
-- Unless the user explicitly asks for a temporary workaround, fix the root cause in the intended layer or contract.
-- Avoid adding fallback paths, compatibility shims, feature flags, or temp solutions that mask a broken primary path.
-- If fallback behavior is already product-specified, keep it narrow, documented, and tested; do not use it to avoid fixing the primary path.
+Read `SPEC.md`, `README.md`, `package.json`, the affected page/API utility, and
+its tests. Check `git status` and preserve unrelated changes.
 
-## 1. Immediate Feedback (Responsiveness)
-**Principle:** Every user action should produce a visible response.
-- Click button -> something happens right away
-- Loading spinner
-- Button animation
-- Progress bar
-- Even if the real work takes time, the UI should acknowledge instantly
-**Why it matters:** Without feedback, users think the system is broken or they double-click.
+This repository is the React/Vite browser client for `mn-api`. It owns browser
+presentation and interaction, not runtime, API, SDK, or blueprint behavior.
 
-## 2. Clear Cause-Effect Mapping
-**Principle:** Users should understand what their action will do.
-- Button label: "Submit", not "Go"
-- Hover/pressed states show interactivity
-- After click -> result clearly tied to the action
-**Good UI feels like:** "I clicked X, so Y happened."
+## Repository Map
 
-## 3. Visibility of System Status
-**Principle:** Always show what the system is doing.
-- Loading -> show skeleton UI / spinner
-- Processing -> "Uploading file..."
-- Done -> success confirmation
-This idea comes from classic usability heuristics (like Jakob Nielsen).
-**Users should never ask:** "Is it working?"
+- `src/App.tsx`: route composition.
+- `src/pages/`: Dashboard, jobs, job details, models, run submission, and
+  per-run UI pages.
+- `src/api/`: Axios client, endpoint calls, schemas/parsing, streams, and
+  workflow-progress adaptation.
+- `src/components/`: reusable application panels, graphs, layout, and dialogs.
+- `src/utils/`: pure projections for job status, topology, progress, resources,
+  artifacts, and errors.
+- `src/hooks/`: reusable lifecycle/polling behavior.
+- `config/definitions.ts`: configuration schema and safe defaults.
+- `config/node.ts`: environment-file precedence for build/server contexts.
+- `src/config/browser.ts`: validated browser configuration exposure.
+- `src/test/`: Vitest/Testing Library tests.
+- `e2e/`: Playwright browser flows.
 
-## 4. Predictability & Consistency
-**Principle:** Same actions behave the same way everywhere.
-- All buttons look like buttons
-- Same color = same meaning (e.g., red = delete)
-- Navigation patterns don't change randomly
-**This reduces cognitive load:** Users don't need to relearn your app.
+## Data and API Rules
 
-## 5. Affordance (Obvious Interactions)
-**Principle:** UI elements should suggest how they are used.
-- Buttons look clickable
-- Sliders look draggable
-- Links look like links
-**If users have to guess, the design failed.**
+- Treat every API, stream, route parameter, config value, and stored browser
+  value as untrusted.
+- Keep the `API -> schema/parser -> UI model -> component` direction. Validate
+  external payloads with Zod or focused adapters before rendering.
+- Components handle missing, partial, malformed, loading, empty, and error
+  states without blanking the whole view.
+- Keep API base URL and bearer-token behavior centralized. Do not scatter Axios
+  instances or token handling through components.
+- Clean up polling, event streams, and async effects on unmount. Use bounded
+  retry/backoff and prevent stale responses from overwriting newer state.
+- Never log the API token, authorization headers, raw manifests, sensitive
+  artifact contents, or unredacted server payloads.
+- Preserve server contract field names in the API layer; map to view models in
+  adapters/utilities rather than teaching components transport details.
 
-## 6. Error Prevention & Recovery
-**Principle:** Help users avoid mistakes—and recover easily.
-- Disable button if input invalid
-- Confirm destructive actions ("Delete?")
-- Undo option when possible
-**Great UI assumes:** Users will make mistakes.
+## UX Principles
 
-## 7. Minimize User Effort
-**Principle:** Reduce steps, typing, and thinking.
-- Autofill
-- Defaults
-- Smart suggestions
-**The best UI often feels like:** "It did half the work for me."
+Every action follows this loop:
 
-## 8. Progressive Disclosure
-**Principle:** Show only what's needed, reveal more when necessary.
-- Simple UI first
-- Advanced options hidden behind "More"
-**Keeps UI clean without limiting power users.**
+```text
+User intent -> immediate feedback -> visible processing -> clear result -> next action
+```
 
-## 9. Latency Masking (Perceived Performance)
-**Principle:** Make slow systems feel fast.
-- Skeleton screens instead of blank pages
-- Optimistic UI (show result before backend confirms)
-**This is huge in modern apps (e.g., chat, feeds).**
+- Acknowledge actions immediately and show system status during latency.
+- Use precise action labels and consistent controls/status colors.
+- Prevent invalid/destructive actions; confirm destructive work and offer
+  recovery when the backend supports it.
+- Prefer skeletons/progress for meaningful waits and avoid layout shifts.
+- Use progressive disclosure for raw manifests, IDs, diagnostics, and advanced
+  runtime details.
+- Agent workflows expose current step/activity, evidence/failure context, and
+  the available human control; do not present a black box.
+- Optimistic UI is allowed only when rollback/error reconciliation is explicit.
+- Maintain keyboard access, focus management, labels, contrast, and semantics.
+  Tests should query by role/name rather than CSS structure.
 
-## 10. Feedback Loop (Human-like Interaction)
-**Principle:** UI behaves like a conversation.
-- Action -> response -> next possible action
-- Clear next steps
-**Especially important in AI / agent interfaces:** User intent -> system reasoning -> visible output -> refine
+## Implementation Rules
 
-## 11. Robust Data Handling & API Safety
-**Principle:** Treat API responses as untrusted input.
-- **Runtime Validation:** Use tools like Zod, JSON Schema, or io-ts to validate API payloads at runtime before they reach the UI components.
-- **Pipeline Architecture:** Establish a clear `API -> Adapter -> UI Model` pipeline to map and sanitize external data into predictable internal structures.
-- **Graceful Failure:** Design UI components to handle missing, null, or malformed data gracefully (e.g., fallback texts, disabled states) without crashing the entire page.
-- **Tracking:** Track schema violations with logging and alerts to catch silent API contract breaks early.
-**Why it matters:** Backend systems change and fail. A resilient UI protects the user from seeing blank screens or cryptic crash errors.
+- Keep view-independent transformations in `src/utils` and test them directly.
+- Avoid duplicating server state across unrelated component state. Derive values
+  during render where possible.
+- Do not change API behavior to solve a presentation-only request.
+- New public configuration belongs in `config/definitions.ts`, browser exposure
+  when safe, `.env.example`, README, tests, and `SPEC.md` when contractual.
+- Do not commit `dist`, Playwright output, local `.env*`, or generated artifacts.
 
-## Simple Mental Model
-You can compress all of this into one loop:
-**User Intent -> Action -> Immediate Feedback -> System Processing -> Clear Result -> Next Action**
-If any part breaks, UX feels bad.
+## Verification
 
-## Example (Good vs Bad)
-**Bad:** Click button -> nothing happens for 3 seconds -> suddenly page changes
-**Good:** Click button -> button animates instantly -> Spinner appears ("Processing...") -> Result appears with confirmation
+```bash
+npm run lint
+npm test -- --run
+npm run build
+```
 
-## Tie to Agent Systems
-For agent-based systems:
-- "Click" becomes intent
-- "Response" becomes multi-step reasoning
-UI must expose:
-- What the agent is doing
-- Which tools it's using
-- Partial progress
-Otherwise it feels like a black box.
+Run `npm run test:e2e` for routing, API integration, polling/streaming, or major
+interaction changes when the required browser environment is available.
+
+## Issue-Fixing Policy
+
+- Fix the root cause in the owning UI/API-adapter layer.
+- Do not add silent fallback data that hides an API contract failure. Explicit,
+  labeled empty/error states are acceptable.
+- Keep intentional compatibility handling narrow, observable, and tested.
