@@ -258,7 +258,7 @@ export const RunUiComponentSchema = z.object({
 export const RunUiDefinitionSchema = z.object({
   version: InterfaceVersionSchema,
   schema_version: z.number().optional().default(1),
-  adapter: z.string().optional().default('gradio'),
+  adapter: z.string().optional().default('json-render'),
   kind: z.string().optional().default('output'),
   title: z.string().optional().default('Blueprint Run'),
   run_id: z.string().optional(),
@@ -271,7 +271,7 @@ export const RunUiDefinitionSchema = z.object({
 
 export const WebUiHandleSchema = z.object({
   version: InterfaceVersionSchema,
-  adapter: z.string().optional().default('gradio'),
+  adapter: z.string().optional().default('json-render'),
   kind: z.string().optional().default('output'),
   url: z.string().optional().default(''),
   title: z.string().optional().default('Blueprint Run'),

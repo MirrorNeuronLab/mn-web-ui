@@ -121,9 +121,6 @@ describe('node config loader', () => {
     expect(() => createAppConfig({ MN_ENABLE_DEBUG_PANEL: 'maybe' })).toThrow(
       /Invalid boolean for MN_ENABLE_DEBUG_PANEL/,
     );
-    expect(() => createAppConfig({ MN_GRADIO_UI_BASE_URL: 'not a url' })).toThrow(
-      /Invalid URL for MN_GRADIO_UI_BASE_URL/,
-    );
   });
 
   it('does not expose secret values in loggable config output', () => {

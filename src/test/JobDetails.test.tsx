@@ -65,8 +65,8 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchRunUi).mockResolvedValue({
       run_id: 'test-job-1',
-      ui: { schema_version: 1, adapter: 'gradio', kind: 'output', title: 'Blueprint Run', refresh_seconds: 2, components: [], metadata: {} },
-      web_ui: { adapter: 'gradio', kind: 'output', url: '', title: 'Blueprint Run', status: 'unknown', metadata: {} },
+      ui: { schema_version: 1, adapter: 'json-render', kind: 'output', title: 'Blueprint Run', refresh_seconds: 2, components: [], metadata: {} },
+      web_ui: { adapter: 'json-render', kind: 'output', url: '', title: 'Blueprint Run', status: 'unknown', metadata: {} },
       job: {},
       run: {},
       events: [],
@@ -684,10 +684,9 @@ describe('JobDetails Component', () => {
       nodes: [
         { id: 'runtime', label: 'System Runtime', agent_type: 'system', type: 'runtime', assigned_node: 'system/runtime', status: 'observed', processed_messages: 0, mailbox_depth: 0 },
         { id: 'workflow_manifest_executor', label: 'Workflow Manifest Executor', agent_type: 'executor', type: 'worker', assigned_node: 'node-a', status: 'paused', processed_messages: 0, mailbox_depth: 1 },
-        { id: 'web_ui_dashboard', label: 'Web Ui Dashboard', agent_type: 'executor', type: 'worker', assigned_node: 'node-a', status: 'paused', processed_messages: 0, mailbox_depth: 1 },
       ],
       edges: [],
-      stats: { agent_count: 3, edge_count: 0, message_count: 0, event_count: 0 },
+      stats: { agent_count: 2, edge_count: 0, message_count: 0, event_count: 0 },
     });
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 1,
@@ -1250,9 +1249,9 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchRunUi).mockResolvedValue({
       run_id: 'blueprint-run-1',
-      ui: { schema_version: 1, adapter: 'gradio', kind: 'output', title: 'Blueprint Run', refresh_seconds: 2, components: [], metadata: {} },
+      ui: { schema_version: 1, adapter: 'json-render', kind: 'output', title: 'Blueprint Run', refresh_seconds: 2, components: [], metadata: {} },
       web_ui: {
-        adapter: 'gradio',
+        adapter: 'json-render',
         kind: 'output',
         url: 'http://localhost:61000',
         title: 'Blueprint Dashboard',

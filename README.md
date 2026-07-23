@@ -40,6 +40,7 @@ http://localhost:55173
 - Start `mn-api` before using live runtime screens.
 - The default API base URL is `/api/v1`.
 - Set `MN_WEB_API_TOKEN` when connecting to a protected API instance.
+- Blueprint-owned run interfaces use the `json-render` adapter.
 
 ## Configuration
 

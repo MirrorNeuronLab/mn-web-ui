@@ -28,6 +28,8 @@ direct-linkable and survive refresh with the same route parameters.
 The browser calls the configured API base (safe default `/api/v1`) through the
 central API client. When `MN_WEB_API_TOKEN` is set, requests send it as a bearer
 token. The token is sensitive and is never printed or included in diagnostics.
+Run-specific UI definitions use the `json-render` adapter; Gradio adapters and
+configuration are not supported.
 
 API and streaming payloads are unknown input until parsed. Zod schemas and
 focused adapters convert them into stable UI models. Invalid collections may

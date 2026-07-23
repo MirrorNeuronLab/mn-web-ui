@@ -27,7 +27,6 @@ export type AppConfig = {
   webUiPort: number;
   webApiBaseUrl: string;
   webApiToken: string;
-  gradioUiBaseUrl: string;
   enableDebugPanel: boolean;
   allowedOrigins: string[];
   publicAppUrl: string;
@@ -82,11 +81,6 @@ export const CONFIG_KEYS: ConfigDefinitions = {
     defaultValue: '',
     sensitive: true,
   },
-  gradioUiBaseUrl: {
-    env: 'MN_GRADIO_UI_BASE_URL',
-    type: 'url',
-    defaultValue: 'http://localhost:7860',
-  },
   enableDebugPanel: {
     env: 'MN_ENABLE_DEBUG_PANEL',
     type: 'bool',
@@ -110,7 +104,6 @@ export const BROWSER_CONFIG_ENV_NAMES = [
   CONFIG_KEYS.logLevel.env,
   CONFIG_KEYS.webApiBaseUrl.env,
   CONFIG_KEYS.webApiToken.env,
-  CONFIG_KEYS.gradioUiBaseUrl.env,
   CONFIG_KEYS.enableDebugPanel.env,
   CONFIG_KEYS.publicAppUrl.env,
 ];

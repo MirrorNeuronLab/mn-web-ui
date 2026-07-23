@@ -36,7 +36,7 @@ describe('RunUi', () => {
       run_id: 'run-1',
       ui: {
         schema_version: 1,
-        adapter: 'gradio',
+        adapter: 'json-render',
         kind: 'output',
         title: 'Blueprint Run',
         refresh_seconds: 2,
@@ -44,7 +44,7 @@ describe('RunUi', () => {
         metadata: {},
       },
       web_ui: {
-        adapter: 'gradio',
+        adapter: 'json-render',
         kind: 'output',
         url: 'http://127.0.0.1:61000/dashboard',
         title: 'Blueprint Dashboard',
@@ -73,7 +73,7 @@ describe('RunUi', () => {
       run_id: 'run-1',
       ui: {
         schema_version: 1,
-        adapter: 'gradio',
+        adapter: 'json-render',
         kind: 'output',
         title: 'Blueprint Run',
         refresh_seconds: 2,
@@ -81,7 +81,7 @@ describe('RunUi', () => {
         metadata: {},
       },
       web_ui: {
-        adapter: 'gradio',
+        adapter: 'json-render',
         kind: 'output',
         url: '',
         title: 'Blueprint Dashboard',

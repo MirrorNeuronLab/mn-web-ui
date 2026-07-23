@@ -9,7 +9,7 @@ type DisplayRecord = {
   role?: string | null;
 };
 
-const INFRASTRUCTURE_AGENT_IDS = new Set(['runtime', 'workflow_manifest_executor', 'web_ui_dashboard']);
+const INFRASTRUCTURE_AGENT_IDS = new Set(['runtime', 'workflow_manifest_executor']);
 const LOWERED_AGENT_TYPES = new Set(['step_source', 'step_sink', 'step_join', 'router', 'aggregator']);
 
 const knownText = (...values: unknown[]): string | undefined => {

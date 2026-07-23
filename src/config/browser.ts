@@ -9,7 +9,3 @@ export const config = createAppConfig(injectedConfig);
 export function apiBaseUrl() {
   return config.webApiBaseUrl.replace(/\/+$/, '');
 }
-
-export function gradioBaseUrl() {
-  return config.gradioUiBaseUrl.replace(/\/+$/, '');
-}
