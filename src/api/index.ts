@@ -498,6 +498,7 @@ const WorkflowProgressObjectSchema = z.object({
   status: z.string().optional().default('unknown'),
   trace_id: z.string().nullable().optional(),
   sequence: z.number().optional(),
+  graph_revision: z.number().optional(),
   workflow_kind: z.enum(['batch', 'service']).optional().default('batch'),
   progress_source: z.string().optional(),
   failure: ErrorEnvelopeSchema.nullable().optional(),

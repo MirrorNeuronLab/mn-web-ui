@@ -402,6 +402,7 @@ export const normalizeWorkflowProgressPayload = (value: unknown): unknown => {
     description: firstString(record.description, record.summary),
     status: normalizeWorkflowStatus(record.status || record.state, 'unknown'),
     sequence: firstNumber(record.sequence, record.version_number, record.versionNumber),
+    graph_revision: firstNumber(record.graph_revision, record.graphRevision) || 0,
     workflow_kind: normalizeWorkflowKind(record.workflow_kind || record.workflowKind || record.kind || record.type),
     progress_source: firstString(record.progress_source, record.progressSource, record.source),
     generated_at: generatedAt || undefined,

@@ -25,4 +25,45 @@ describe('buildWorkflowTopology', () => {
       ],
     });
   });
+
+  it('keeps runtime-inserted steps and revised links visible', () => {
+    const progress = {
+      graph_revision: 1,
+      steps: [
+        { id: 'inspect_context', children: ['followup_research_1'] },
+        {
+          id: 'followup_research_1',
+          template_id: 'followup_research',
+          region_id: 'research_followups',
+          parents: ['inspect_context'],
+          children: ['write_report'],
+        },
+        { id: 'write_report', parents: ['followup_research_1'] },
+      ],
+      edges: [
+        {
+          id: 'inspect_to_followup',
+          from: 'inspect_context',
+          to: 'followup_research_1',
+        },
+        {
+          id: 'followup_to_report',
+          from: 'followup_research_1',
+          to: 'write_report',
+        },
+      ],
+    } as unknown as WorkflowProgress;
+
+    const topology = buildWorkflowTopology(progress);
+
+    expect(topology.steps.map((step) => step.id)).toEqual([
+      'inspect_context',
+      'followup_research_1',
+      'write_report',
+    ]);
+    expect(topology.edges.map((edge) => [edge.source, edge.target])).toEqual([
+      ['inspect_context', 'followup_research_1'],
+      ['followup_research_1', 'write_report'],
+    ]);
+  });
 });
