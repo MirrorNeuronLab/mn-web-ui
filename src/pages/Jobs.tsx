@@ -182,12 +182,12 @@ export default function Jobs() {
       tone: 'danger',
       id: 'jobs-clear',
       title: 'Clear non-running jobs?',
-      description: 'Completed, failed, and cancelled jobs will be removed from this list. Running jobs stay visible.',
+      description: 'Completed, failed, cancelled, and cancellation-pending jobs will be removed from this list. Cleanup queued for an offline node finishes when that node rejoins. Running jobs stay visible.',
       confirmLabel: 'Clear jobs',
       cancelLabel: 'Keep jobs',
       loading: {
         title: 'Clearing jobs',
-        description: 'Removing completed, failed, and cancelled jobs.',
+        description: 'Removing terminal and cancellation-pending jobs.',
       },
       success: (result: { cleared_count: number }) => ({
         title: 'Jobs cleared',
@@ -293,7 +293,7 @@ export default function Jobs() {
               </Button>
             </span>
           </Tooltip>
-          <Tooltip content="Clear completed, failed, and cancelled jobs after confirmation.">
+          <Tooltip content="Clear terminal and cancellation-pending jobs after confirmation. Offline cleanup resumes when the node rejoins.">
             <span className="inline-flex">
               <Button
                 type="button"

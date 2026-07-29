@@ -339,6 +339,9 @@ describe('Jobs Component', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
     expect(await screen.findByText('Clear non-running jobs?')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Cleanup queued for an offline node finishes when that node rejoins/)
+    ).toBeInTheDocument();
     expect(clearJobs).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear jobs' }));
