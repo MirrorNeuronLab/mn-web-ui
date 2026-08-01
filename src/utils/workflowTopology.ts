@@ -10,6 +10,7 @@ export type WorkflowTopologyEdge = {
 export type WorkflowTopology = {
   steps: WorkflowProgressStep[];
   edges: WorkflowTopologyEdge[];
+  layers: string[][];
 };
 
 const text = (value: unknown): string | undefined => (
@@ -43,17 +44,20 @@ const relationEdges = (steps: WorkflowProgressStep[]): WorkflowTopologyEdge[] =>
 export const buildWorkflowTopology = (progress: WorkflowProgress): WorkflowTopology => {
   const steps = progress.steps.filter((step) => Boolean(text(step.id)));
   const knownStepIds = new Set(steps.map((step) => step.id));
-  const seen = new Set<string>();
   const edges: WorkflowTopologyEdge[] = [];
+  const edgeIndexByPair = new Map<string, number>();
 
   const addEdge = (edge: WorkflowTopologyEdge) => {
     if (!knownStepIds.has(edge.source) || !knownStepIds.has(edge.target) || edge.source === edge.target) return;
-    // The monitor can provide both a labeled edge and the matching step
-    // relationship. They describe one connection, so keep the explicit edge
-    // (and its event label) rather than rendering a duplicate parallel line.
     const key = `${edge.source}\u0000${edge.target}`;
-    if (seen.has(key)) return;
-    seen.add(key);
+    const existingIndex = edgeIndexByPair.get(key);
+    if (existingIndex !== undefined) {
+      const existing = edges[existingIndex];
+      const events = new Set([existing.event, edge.event].filter(Boolean));
+      if (events.size) edges[existingIndex] = { ...existing, event: [...events].join(' · ') };
+      return;
+    }
+    edgeIndexByPair.set(key, edges.length);
     edges.push(edge);
   };
 
@@ -71,5 +75,23 @@ export const buildWorkflowTopology = (progress: WorkflowProgress): WorkflowTopol
 
   for (const edge of relationEdges(steps)) addEdge(edge);
 
-  return { steps, edges };
+  const hasDeclaredLayers = Boolean(progress.layers?.length) || steps.some((step) => typeof step.layer === 'number');
+  if (!hasDeclaredLayers) return { steps, edges, layers: [] };
+
+  const seenLayerSteps = new Set<string>();
+  const layers = (progress.layers || []).map((layer) => layer.filter((stepId) => {
+    if (!knownStepIds.has(stepId) || seenLayerSteps.has(stepId)) return false;
+    seenLayerSteps.add(stepId);
+    return true;
+  })).filter((layer) => layer.length > 0);
+
+  for (const step of steps) {
+    if (seenLayerSteps.has(step.id)) continue;
+    const layerIndex = typeof step.layer === 'number' && step.layer >= 0 ? step.layer : layers.length;
+    while (layers.length <= layerIndex) layers.push([]);
+    layers[layerIndex].push(step.id);
+    seenLayerSteps.add(step.id);
+  }
+
+  return { steps, edges, layers: layers.filter((layer) => layer.length > 0) };
 };

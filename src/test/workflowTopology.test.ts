@@ -23,6 +23,32 @@ describe('buildWorkflowTopology', () => {
         { id: 'intake->review', source: 'intake', target: 'review' },
         { id: 'research->review', source: 'research', target: 'review' },
       ],
+      layers: [],
+    });
+  });
+
+  it('preserves all public event labels for a dependency and honors API layers', () => {
+    const progress = {
+      steps: [
+        { id: 'plan', layer: 0 },
+        { id: 'research_a', layer: 1 },
+        { id: 'research_b', layer: 1 },
+      ],
+      edges: [
+        { id: 'plan_ready', from: 'plan', to: 'research_a', event: 'plan_ready' },
+        { id: 'plan_updated', from: 'plan', to: 'research_a', event: 'plan_updated' },
+        { id: 'plan_to_b', from: 'plan', to: 'research_b', event: 'plan_ready' },
+      ],
+      layers: [['plan'], ['research_a', 'research_b']],
+    } as unknown as WorkflowProgress;
+
+    expect(buildWorkflowTopology(progress)).toEqual({
+      steps: progress.steps,
+      edges: [
+        { id: 'plan_ready', source: 'plan', target: 'research_a', event: 'plan_ready · plan_updated' },
+        { id: 'plan_to_b', source: 'plan', target: 'research_b', event: 'plan_ready' },
+      ],
+      layers: [['plan'], ['research_a', 'research_b']],
     });
   });
 

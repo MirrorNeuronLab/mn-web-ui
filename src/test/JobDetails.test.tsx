@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { toast } from 'sonner';
 import JobDetails from '../pages/JobDetails';
-import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelJob, pauseJob, resumeJob, revealArtifact } from '../api';
+import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelRun, pauseRun, resumeRun, revealArtifact } from '../api';
 import type { WorkflowProgress } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
@@ -19,9 +19,9 @@ vi.mock('../api', async (importOriginal) => {
     fetchRunUi: vi.fn(),
     fetchWorkflowProgress: vi.fn(),
     streamWorkflowProgress: vi.fn(),
-    cancelJob: vi.fn(),
-    pauseJob: vi.fn(),
-    resumeJob: vi.fn(),
+    cancelRun: vi.fn(),
+    pauseRun: vi.fn(),
+    resumeRun: vi.fn(),
     revealArtifact: vi.fn(),
   };
 });
@@ -43,7 +43,7 @@ const renderWithRouter = (ui: React.ReactElement) => {
     <TooltipProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/jobs/:id" element={ui} />
+          <Route path="/runs/:id" element={ui} />
         </Routes>
       </BrowserRouter>
       <ConfirmActionDialogHost />
@@ -122,7 +122,7 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(revealArtifact).mockResolvedValue({ ok: true });
     // mock window.location to ensure useParams picks it up
-    window.history.pushState({}, 'Test page', '/jobs/test-job-1');
+    window.history.pushState({}, 'Test page', '/runs/test-job-1');
   });
 
   it('renders loading state initially', () => {
@@ -406,7 +406,7 @@ describe('JobDetails Component', () => {
       expect(screen.getByText('test-job-1')).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText(/Job Failure/i)).toHaveLength(1);
+    expect(screen.getAllByText(/Run failure/i)).toHaveLength(1);
     expect(screen.getByText('Fewer than 2 healthy connected runtime nodes observed')).toBeInTheDocument();
   });
 
@@ -1271,7 +1271,7 @@ describe('JobDetails Component', () => {
     expect(fetchRunUi).toHaveBeenCalledWith('blueprint-run-1');
   });
 
-  it('pauses a running job', async () => {
+  it('pauses a running execution through the v2 run control', async () => {
     const mockDetails = {
       job: {
         job_id: 'test-job-1',
@@ -1286,7 +1286,7 @@ describe('JobDetails Component', () => {
 
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
-    vi.mocked(pauseJob).mockResolvedValue({ status: 'paused', job_id: 'test-job-1' });
+    vi.mocked(pauseRun).mockResolvedValue({ status: 'paused', run_id: 'test-job-1' });
 
     renderWithRouter(<JobDetails />);
 
@@ -1296,19 +1296,19 @@ describe('JobDetails Component', () => {
 
     const pauseButton = screen.getByText('Pause');
     fireEvent.click(pauseButton);
-    expect(await screen.findByText('Pause this job?')).toBeInTheDocument();
-    expect(pauseJob).not.toHaveBeenCalled();
+    expect(await screen.findByText('Pause this run?')).toBeInTheDocument();
+    expect(pauseRun).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Pause job' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pause run' }));
 
-    await waitFor(() => expect(pauseJob).toHaveBeenCalledWith('test-job-1'));
+    await waitFor(() => expect(pauseRun).toHaveBeenCalledWith('test-job-1'));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
     });
     expect(screen.getAllByText('paused').length).toBeGreaterThan(0);
   });
 
-  it('resumes a paused job', async () => {
+  it('resumes a paused execution through the v2 run control', async () => {
     const mockDetails = {
       job: {
         job_id: 'test-job-1',
@@ -1324,7 +1324,7 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockRejectedValue(new Error('Not Found'));
-    vi.mocked(resumeJob).mockResolvedValue({ status: 'resumed', job_id: 'test-job-1' });
+    vi.mocked(resumeRun).mockResolvedValue({ status: 'running', run_id: 'test-job-1' });
 
     renderWithRouter(<JobDetails />);
 
@@ -1334,18 +1334,18 @@ describe('JobDetails Component', () => {
 
     const resumeButton = screen.getByText('Resume');
     fireEvent.click(resumeButton);
-    expect(await screen.findByText('Resume this job?')).toBeInTheDocument();
-    expect(resumeJob).not.toHaveBeenCalled();
+    expect(await screen.findByText('Resume this run?')).toBeInTheDocument();
+    expect(resumeRun).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Resume job' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resume run' }));
 
-    await waitFor(() => expect(resumeJob).toHaveBeenCalledWith('test-job-1'));
+    await waitFor(() => expect(resumeRun).toHaveBeenCalledWith('test-job-1'));
     await waitFor(() => {
       expect(fetchJobDetails).toHaveBeenCalled(); // Ensure it was called
     });
   });
 
-  it('cancels a job', async () => {
+  it('cancels an execution through the v2 run control', async () => {
     const mockDetails = {
       job: {
         job_id: 'test-job-1',
@@ -1360,7 +1360,7 @@ describe('JobDetails Component', () => {
 
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
-    vi.mocked(cancelJob).mockResolvedValue({ status: 'cancelled', job_id: 'test-job-1' });
+    vi.mocked(cancelRun).mockResolvedValue({ status: 'cancelled', run_id: 'test-job-1' });
 
     renderWithRouter(<JobDetails />);
 
@@ -1371,11 +1371,11 @@ describe('JobDetails Component', () => {
     const cancelButton = screen.getByText('Cancel');
     fireEvent.click(cancelButton);
 
-    expect(await screen.findByText('Cancel this job?')).toBeInTheDocument();
-    expect(cancelJob).not.toHaveBeenCalled();
+    expect(await screen.findByText('Cancel this run?')).toBeInTheDocument();
+    expect(cancelRun).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel job' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
 
-    await waitFor(() => expect(cancelJob).toHaveBeenCalledWith('test-job-1'));
+    await waitFor(() => expect(cancelRun).toHaveBeenCalledWith('test-job-1'));
   });
 });

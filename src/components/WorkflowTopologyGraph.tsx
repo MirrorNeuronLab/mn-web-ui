@@ -83,7 +83,31 @@ const WorkflowStepNode = ({ data }: NodeProps<Node<WorkflowStepNodeData>>) => {
 
 const nodeTypes = { workflowStep: WorkflowStepNode };
 
-const layoutTopology = (nodes: Node<WorkflowStepNodeData>[], edges: Edge[]): WorkflowTopologyNode[] => {
+const layoutTopology = (nodes: Node<WorkflowStepNodeData>[], edges: Edge[], layers: string[][]): WorkflowTopologyNode[] => {
+  if (layers.length > 0) {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const maxLayerSize = Math.max(...layers.map((layer) => layer.length), 1);
+    const verticalStride = NODE_HEIGHT + 44;
+    const totalHeight = (maxLayerSize - 1) * verticalStride;
+    return layers.flatMap((layer, layerIndex) => {
+      const layerHeight = (layer.length - 1) * verticalStride;
+      const topOffset = (totalHeight - layerHeight) / 2;
+      return layer.flatMap((nodeId, rowIndex) => {
+        const node = nodeById.get(nodeId);
+        if (!node) return [];
+        return [{
+          ...node,
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
+          position: {
+            x: 32 + layerIndex * (NODE_WIDTH + 104),
+            y: 32 + topOffset + rowIndex * verticalStride,
+          },
+        }];
+      });
+    });
+  }
+
   const graph = new dagre.graphlib.Graph();
   graph.setDefaultEdgeLabel(() => ({}));
   graph.setGraph({
@@ -158,7 +182,7 @@ export function WorkflowTopologyGraph({ progress, selectedStepId, onSelectStep }
     });
 
     return {
-      nodes: layoutTopology(rawNodes, rawEdges),
+      nodes: layoutTopology(rawNodes, rawEdges, topology.layers),
       edges: rawEdges,
       structureKey: `${rawNodes.map((node) => node.id).join('|')}#${rawEdges.map((edge) => edge.id).join('|')}`,
     };

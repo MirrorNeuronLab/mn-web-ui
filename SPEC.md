@@ -14,8 +14,10 @@ runtime remain authoritative for data and mutation semantics.
 The application routes currently include:
 
 - `/`: runtime dashboard;
-- `/jobs`: job inventory;
-- `/jobs/:id`: job activity, topology, progress, artifacts, and controls;
+- `/jobs`: persistent job definitions;
+- `/jobs/:jobId`: job configuration, shared data lifecycle, schedules, and run history;
+- `/runs`: execution inventory;
+- `/runs/:id`: run activity, topology, progress, artifacts, and controls;
 - `/models`: model inventory and state;
 - `/run`: manifest/job submission; and
 - `/runs/:runId/ui`: run-specific generated/operator UI.
@@ -26,8 +28,10 @@ direct-linkable and survive refresh with the same route parameters.
 ## API Boundary
 
 The browser calls the configured API base (safe default `/api/v1`) through the
-central API client. When `MN_WEB_API_TOKEN` is set, requests send it as a bearer
-token. The token is sensitive and is never printed or included in diagnostics.
+central API client. Persistent jobs and their execution controls use `/api/v2`;
+runtime observability and compatibility views use `/api/v1`. When
+`MN_WEB_API_TOKEN` is set, requests send it as a bearer token. The token is
+sensitive and is never printed or included in diagnostics.
 Run-specific UI definitions use the `json-render` adapter; Gradio adapters and
 configuration are not supported.
 

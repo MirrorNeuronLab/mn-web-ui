@@ -2,8 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { toast } from 'sonner';
-import Jobs from '../pages/Jobs';
-import { cancelAllJobs, cancelJob, clearJobs, fetchJobs, pauseJob } from '../api';
+import Runs from '../pages/Jobs';
+import { cancelAllJobs, cancelRun, clearJobs, fetchJobs, pauseRun } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
 import { ConfirmActionDialogHost } from '../components/ui/confirm-action-dialog';
@@ -13,9 +13,9 @@ vi.mock('../api', async (importOriginal) => {
   return {
     ...actual,
     fetchJobs: vi.fn(),
-    pauseJob: vi.fn(),
+    pauseRun: vi.fn(),
     cancelAllJobs: vi.fn(),
-    cancelJob: vi.fn(),
+    cancelRun: vi.fn(),
     clearJobs: vi.fn(),
   };
 });
@@ -30,7 +30,7 @@ const renderWithRouter = (ui: React.ReactElement) => {
   );
 };
 
-describe('Jobs Component', () => {
+describe('Runs Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     toast.dismiss();
@@ -39,18 +39,18 @@ describe('Jobs Component', () => {
   it('renders skeleton loading state initially', () => {
     vi.mocked(fetchJobs).mockReturnValue(new Promise(() => {}));
     
-    const { container } = renderWithRouter(<Jobs />);
+    const { container } = renderWithRouter(<Runs />);
     
     expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
   });
 
-  it('renders "No jobs found" when data is empty', async () => {
+  it('renders an empty execution history', async () => {
     vi.mocked(fetchJobs).mockResolvedValue([]);
 
-    renderWithRouter(<Jobs />);
+    renderWithRouter(<Runs />);
 
     await waitFor(() => {
-      expect(screen.getByText('No jobs found.')).toBeInTheDocument();
+      expect(screen.getByText('No execution runs found.')).toBeInTheDocument();
     });
   });
 
@@ -68,7 +68,7 @@ describe('Jobs Component', () => {
 
     vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
 
-    renderWithRouter(<Jobs />);
+    renderWithRouter(<Runs />);
 
     await waitFor(() => {
       expect(screen.getByText('test-job-123')).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe('Jobs Component', () => {
     expect(screen.getByText('simple-graph')).toBeInTheDocument();
     expect(screen.getByText('running')).toBeInTheDocument();
     expect(screen.getByText('0 / 2')).toBeInTheDocument();
-    expect(screen.getByLabelText('View details for test-job-123')).toHaveAttribute('href', '/jobs/test-job-123');
+    expect(screen.getByLabelText('View run test-job-123')).toHaveAttribute('href', '/runs/test-job-123');
     expect(fetchJobs).toHaveBeenCalledWith({ includeTerminal: true });
   });
 
@@ -104,7 +104,7 @@ describe('Jobs Component', () => {
         },
       ]);
 
-    renderWithRouter(<Jobs />);
+    renderWithRouter(<Runs />);
 
     await waitFor(() => {
       expect(screen.getByText('done-job-1')).toBeInTheDocument();
@@ -142,9 +142,9 @@ describe('Jobs Component', () => {
     ];
 
     vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
-    vi.mocked(pauseJob).mockResolvedValue({ status: 'paused' });
+    vi.mocked(pauseRun).mockResolvedValue({ run_id: 'job-1', status: 'paused' });
 
-    renderWithRouter(<Jobs />);
+    renderWithRouter(<Runs />);
 
     await waitFor(() => {
       expect(screen.getByText('job-1')).toBeInTheDocument();
@@ -155,21 +155,21 @@ describe('Jobs Component', () => {
     expect(pauseButton).toBeDisabled();
     expect(cancelButton).toBeDisabled();
 
-    fireEvent.click(screen.getByLabelText('Select job job-1'));
-    fireEvent.click(screen.getByLabelText('Select job job-2'));
+    fireEvent.click(screen.getByLabelText('Select run job-1'));
+    fireEvent.click(screen.getByLabelText('Select run job-2'));
 
     expect(screen.getByRole('button', { name: 'Pause (2)' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Cancel (2)' })).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Pause (2)' }));
-    expect(await screen.findByText('Pause 2 selected jobs?')).toBeInTheDocument();
-    expect(pauseJob).not.toHaveBeenCalled();
+    expect(await screen.findByText('Pause 2 selected runs?')).toBeInTheDocument();
+    expect(pauseRun).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
 
     await waitFor(() => {
-      expect(pauseJob).toHaveBeenCalledWith('job-1');
-      expect(pauseJob).toHaveBeenCalledWith('job-2');
+      expect(pauseRun).toHaveBeenCalledWith('job-1');
+      expect(pauseRun).toHaveBeenCalledWith('job-2');
     });
   });
 
@@ -194,25 +194,25 @@ describe('Jobs Component', () => {
     ];
 
     vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
-    vi.mocked(cancelJob).mockResolvedValue({ status: 'cancelled' });
+    vi.mocked(cancelRun).mockResolvedValue({ run_id: 'job-1', status: 'cancelled' });
 
-    renderWithRouter(<Jobs />);
+    renderWithRouter(<Runs />);
 
     await waitFor(() => {
       expect(screen.getByText('job-1')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Select job job-1'));
-    fireEvent.click(screen.getByLabelText('Select job job-2'));
+    fireEvent.click(screen.getByLabelText('Select run job-1'));
+    fireEvent.click(screen.getByLabelText('Select run job-2'));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel (2)' }));
-    expect(await screen.findByText('Cancel 2 selected jobs?')).toBeInTheDocument();
-    expect(cancelJob).not.toHaveBeenCalled();
+    expect(await screen.findByText('Cancel 2 selected runs?')).toBeInTheDocument();
+    expect(cancelRun).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() => {
-      expect(cancelJob).toHaveBeenCalledWith('job-1');
-      expect(cancelJob).toHaveBeenCalledWith('job-2');
+      expect(cancelRun).toHaveBeenCalledWith('job-1');
+      expect(cancelRun).toHaveBeenCalledWith('job-2');
     });
   });
 
@@ -230,20 +230,20 @@ describe('Jobs Component', () => {
 
     vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
     vi.mocked(cancelAllJobs).mockResolvedValue({
-      status: 'cancelled',
-      active_count: 1,
-      cancelled_count: 1,
-      cancelled_job_ids: ['job-1'],
+      operation_id: 'op-cancel-1',
+      kind: 'cancel_all_jobs',
+      status: 'running',
+      counters: { total: 1, started: 1, finished: 0, succeeded: 0, failed: 0, deferred: 0 },
     });
 
-    renderWithRouter(<Jobs />);
+    renderWithRouter(<Runs />);
 
     await waitFor(() => {
       expect(screen.getByText('job-1')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel all' }));
-    expect(await screen.findByText('Cancel all active jobs?')).toBeInTheDocument();
+    expect(await screen.findByText('Cancel all active runs?')).toBeInTheDocument();
     expect(cancelAllJobs).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel all' }));
@@ -251,7 +251,7 @@ describe('Jobs Component', () => {
     await waitFor(() => {
       expect(cancelAllJobs).toHaveBeenCalledOnce();
     });
-    expect(cancelJob).not.toHaveBeenCalled();
+    expect(cancelRun).not.toHaveBeenCalled();
   });
 
   it('does not cancel all jobs when the confirmation is dismissed', async () => {
@@ -264,19 +264,19 @@ describe('Jobs Component', () => {
       executor_count: 2,
     }]);
 
-    renderWithRouter(<Jobs />);
+    renderWithRouter(<Runs />);
 
     await waitFor(() => {
       expect(screen.getByText('job-1')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel all' }));
-    expect(await screen.findByText('Cancel all active jobs?')).toBeInTheDocument();
+    expect(await screen.findByText('Cancel all active runs?')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Keep jobs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep runs' }));
 
     await waitFor(() => {
-      expect(screen.queryByText('Cancel all active jobs?')).not.toBeInTheDocument();
+      expect(screen.queryByText('Cancel all active runs?')).not.toBeInTheDocument();
     });
     expect(cancelAllJobs).not.toHaveBeenCalled();
   });
@@ -294,24 +294,24 @@ describe('Jobs Component', () => {
     ];
 
     vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
-    vi.mocked(cancelJob).mockResolvedValue({ status: 'cancelled' });
+    vi.mocked(cancelRun).mockResolvedValue({ run_id: 'job-1', status: 'cancelled' });
 
-    renderWithRouter(<Jobs />);
+    renderWithRouter(<Runs />);
 
     await waitFor(() => {
       expect(screen.getByText('job-1')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Select job job-1'));
+    fireEvent.click(screen.getByLabelText('Select run job-1'));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel (1)' }));
-    expect(await screen.findByText('Cancel 1 selected job?')).toBeInTheDocument();
+    expect(await screen.findByText('Cancel 1 selected run?')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Keep jobs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep runs' }));
 
     await waitFor(() => {
       expect(screen.queryByText('Cancel 1 selected job?')).not.toBeInTheDocument();
     });
-    expect(cancelJob).not.toHaveBeenCalled();
+    expect(cancelRun).not.toHaveBeenCalled();
   });
 
   it('clears non-running jobs and refreshes the list', async () => {
@@ -329,29 +329,34 @@ describe('Jobs Component', () => {
     vi.mocked(fetchJobs)
       .mockResolvedValueOnce(mockJobs)
       .mockResolvedValueOnce([]);
-    vi.mocked(clearJobs).mockResolvedValue({ cleared_count: 1 });
+    vi.mocked(clearJobs).mockResolvedValue({
+      operation_id: 'op-clean-1',
+      kind: 'clear_jobs',
+      status: 'running',
+      counters: { total: 1, started: 1, finished: 0, succeeded: 0, failed: 0, deferred: 0 },
+    });
 
-    renderWithRouter(<Jobs />);
+    renderWithRouter(<Runs />);
 
     await waitFor(() => {
       expect(screen.getByText('job-1')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
-    expect(await screen.findByText('Clear non-running jobs?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clean up' }));
+    expect(await screen.findByText('Clean execution history?')).toBeInTheDocument();
     expect(
-      screen.getByText(/Cleanup queued for an offline node finishes when that node rejoins/)
+      screen.getByText(/Offline cleanup continues when a node rejoins/)
     ).toBeInTheDocument();
     expect(clearJobs).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear jobs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start cleanup' }));
 
     await waitFor(() => {
       expect(clearJobs).toHaveBeenCalledOnce();
-      expect(screen.getByText('No jobs found.')).toBeInTheDocument();
+      expect(screen.getByText('No execution runs found.')).toBeInTheDocument();
     });
 
-    const clearedToast = await screen.findByText('Cleared 1 job.');
+    const clearedToast = await screen.findByText('Operation op-clean-1 will continue in the background.');
     const toastElement = clearedToast.closest('[data-sonner-toast]');
     expect(screen.queryByText('Clearing non-running jobs...')).not.toBeInTheDocument();
     expect(toastElement).toHaveAttribute('data-type', 'default');
@@ -380,19 +385,19 @@ describe('Jobs Component', () => {
       },
     });
 
-    renderWithRouter(<Jobs />);
+    renderWithRouter(<Runs />);
 
     await waitFor(() => {
       expect(screen.getByText('job-1')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
-    expect(await screen.findByText('Clear non-running jobs?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clean up' }));
+    expect(await screen.findByText('Clean execution history?')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear jobs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start cleanup' }));
 
     expect(await screen.findByText('ClearJobs requires MN_GRPC_ADMIN_TOKEN')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Clear jobs' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Keep jobs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start cleanup' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Keep history' })).not.toBeInTheDocument();
   });
 });

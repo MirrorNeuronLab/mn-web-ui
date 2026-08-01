@@ -1,7 +1,7 @@
-import api from './client';
+import api, { apiVersionBaseUrl } from './client';
 import { z } from 'zod';
 import { parseArrayOrEmpty, parseOrFallback } from './parsing';
-import { apiPathFromUrl, jobPath, launchProgressPath, modelPath, runPath } from './routes';
+import { apiPathFromUrl, jobPath, launchProgressPath, modelPath, operationPath, runPath } from './routes';
 import { createWorkflowProgressStreamer } from './streaming';
 import { normalizeWorkflowProgressPayload } from './workflowProgress';
 
@@ -101,6 +101,51 @@ export const JobSchema = z.object({
   recovery_requires_review: z.boolean().optional(),
   recovery: z.record(z.string(), z.unknown()).optional(),
   failure: ErrorEnvelopeSchema.optional(),
+}).passthrough();
+
+const V2InterfaceVersionSchema = z.number().optional().default(2) as unknown as z.ZodOptional<z.ZodNumber>;
+
+export const StableJobSchema = z.object({
+  version: V2InterfaceVersionSchema,
+  job_id: z.string(),
+  blueprint_id: z.string().nullable().optional(),
+  graph_id: z.string().nullable().optional(),
+  job_name: z.string().nullable().optional(),
+  owner_node: z.string().nullable().optional(),
+  status: z.string().optional().default('active'),
+  data_generation: z.number().optional().default(1),
+  latest_run_id: z.string().nullable().optional(),
+  run_count: z.number().optional().default(0),
+  schedule_count: z.number().optional().default(0),
+  created_at: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+  resolved_configuration: z.record(z.string(), z.unknown()).optional().default({}),
+  schedules: z.array(z.unknown()).optional().default([]),
+  schedule_ids: z.array(z.string()).optional().default([]),
+  storage: z.record(z.string(), z.unknown()).optional().default({}),
+  bundle_ref: z.record(z.string(), z.unknown()).optional(),
+}).passthrough();
+
+export const StableRunSchema = z.object({
+  version: V2InterfaceVersionSchema,
+  run_id: z.string(),
+  job_id: z.string().nullable().optional(),
+  graph_id: z.string().nullable().optional(),
+  job_name: z.string().nullable().optional(),
+  workflow_id: z.string().nullable().optional(),
+  status: z.string().optional().default('unknown'),
+  type: z.string().nullable().optional(),
+  job_type: z.string().nullable().optional(),
+  attempt: z.number().optional().default(1),
+  attempt_id: z.string().nullable().optional(),
+  data_generation: z.number().optional(),
+  job_data_access: z.string().nullable().optional(),
+  owner_node: z.string().nullable().optional(),
+  submitted_at: z.string().nullable().optional(),
+  started_at: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+  completed_at: z.string().nullable().optional(),
+  cancelled_at: z.string().nullable().optional(),
 }).passthrough();
 
 export const JobDetailsSchema = z.object({
@@ -339,17 +384,42 @@ export const JobActionResponseSchema = z.object({
   message: z.string().optional(),
 }).passthrough();
 
-export const ClearJobsResponseSchema = z.object({
-  version: InterfaceVersionSchema,
-  cleared_count: z.number().optional().default(0),
+export const OperationCountersSchema = z.object({
+  total: z.number().optional().default(0),
+  started: z.number().optional().default(0),
+  finished: z.number().optional().default(0),
+  succeeded: z.number().optional().default(0),
+  failed: z.number().optional().default(0),
+  deferred: z.number().optional().default(0),
 }).passthrough();
 
-export const CancelAllJobsResponseSchema = z.object({
+export const OperationSchema = z.object({
   version: InterfaceVersionSchema,
+  operation_id: z.string(),
+  kind: z.string().optional().default('operation'),
+  status: z.string().optional().default('running'),
+  counters: OperationCountersSchema.optional().default({
+    total: 0,
+    started: 0,
+    finished: 0,
+    succeeded: 0,
+    failed: 0,
+    deferred: 0,
+  }),
+}).passthrough();
+
+export const StableJobActionResponseSchema = z.object({
+  version: V2InterfaceVersionSchema,
+  job_id: z.string(),
+  status: z.string().optional().default('active'),
+  data_generation: z.number().optional(),
+}).passthrough();
+
+export const StableRunActionResponseSchema = z.object({
+  version: V2InterfaceVersionSchema,
+  run_id: z.string(),
+  job_id: z.string().nullable().optional(),
   status: z.string().optional().default('unknown'),
-  active_count: z.number().optional().default(0),
-  cancelled_count: z.number().optional().default(0),
-  cancelled_job_ids: z.array(z.string()).optional().default([]),
 }).passthrough();
 
 export const RevealArtifactResponseSchema = z.object({
@@ -535,6 +605,8 @@ export type ErrorEnvelope = z.infer<typeof ErrorEnvelopeSchema>;
 export type ObservabilitySummary = z.infer<typeof ObservabilitySummarySchema>;
 export type JobEvent = z.infer<typeof JobEventSchema>;
 export type Job = z.infer<typeof JobSchema>;
+export type StableJob = z.infer<typeof StableJobSchema>;
+export type StableRun = z.infer<typeof StableRunSchema>;
 export type JobDetails = z.infer<typeof JobDetailsSchema>;
 export type AgentGraph = z.infer<typeof AgentGraphSchema>;
 export type SystemSummary = z.infer<typeof SystemSummarySchema>;
@@ -552,8 +624,9 @@ export type BlueprintListResponse = z.infer<typeof BlueprintListResponseSchema>;
 export type BlueprintLaunchResponse = z.infer<typeof BlueprintLaunchResponseSchema>;
 export type UploadedBundle = z.infer<typeof UploadedBundleSchema>;
 export type JobActionResponse = z.infer<typeof JobActionResponseSchema>;
-export type ClearJobsResponse = z.infer<typeof ClearJobsResponseSchema>;
-export type CancelAllJobsResponse = z.infer<typeof CancelAllJobsResponseSchema>;
+export type Operation = z.infer<typeof OperationSchema>;
+export type StableJobActionResponse = z.infer<typeof StableJobActionResponseSchema>;
+export type StableRunActionResponse = z.infer<typeof StableRunActionResponseSchema>;
 export type RevealArtifactResponse = z.infer<typeof RevealArtifactResponseSchema>;
 export type LaunchProgressEvent = z.infer<typeof LaunchProgressEventSchema>;
 export type LaunchProgressPhase = z.infer<typeof LaunchProgressPhaseSchema>;
@@ -609,6 +682,78 @@ export const fetchJobs = async (options: FetchJobsOptions = {}) => {
   return parseArrayOrEmpty(JobSchema, data, 'fetchJobs', true);
 };
 
+const v2RequestConfig = () => ({ baseURL: apiVersionBaseUrl(2) });
+
+export type FetchStableJobsOptions = {
+  includeArchived?: boolean;
+};
+
+export const fetchStableJobs = async (options: FetchStableJobsOptions = {}) => {
+  const response = await api.get('/jobs', {
+    ...v2RequestConfig(),
+    params: { include_archived: options.includeArchived ?? false },
+  });
+  return parseArrayOrEmpty(
+    StableJobSchema,
+    arrayFromEnvelope(response.data, ['data', 'jobs']),
+    'fetchStableJobs',
+    true,
+  );
+};
+
+export const fetchStableJob = (id: string) => api.get(jobPath(id), v2RequestConfig()).then((response) => (
+  StableJobSchema.parse(response.data)
+));
+
+export const fetchStableJobRuns = (id: string) => api.get(jobPath(id, '/runs'), v2RequestConfig()).then((response) => (
+  parseArrayOrEmpty(
+    StableRunSchema,
+    arrayFromEnvelope(response.data, ['data', 'runs']),
+    `fetchStableJobRuns(${id})`,
+    true,
+  )
+));
+
+export const startStableJobRun = (id: string, inputs: Record<string, unknown> = {}) => (
+  api.post(jobPath(id, '/runs'), { version: 2, inputs }, v2RequestConfig()).then((response) => StableRunActionResponseSchema.parse(response.data))
+);
+
+export const archiveStableJob = (id: string) => api.post(jobPath(id, '/archive'), undefined, v2RequestConfig()).then((response) => (
+  StableJobActionResponseSchema.parse(response.data)
+));
+
+export const resetStableJobData = (id: string) => api.post(jobPath(id, '/data:reset'), undefined, v2RequestConfig()).then((response) => (
+  StableJobActionResponseSchema.parse(response.data)
+));
+
+export const deleteStableJob = (id: string) => api.delete(jobPath(id), {
+  ...v2RequestConfig(),
+  data: { version: 2, confirmed: true },
+}).then((response) => (
+  StableJobActionResponseSchema.parse(response.data)
+));
+
+export const fetchStableRun = (id: string) => api.get(runPath(id), v2RequestConfig()).then((response) => (
+  StableRunSchema.parse(response.data)
+));
+
+const runAction = (id: string, action: 'pause' | 'resume' | 'cancel') => (
+  api.post(runPath(id, `/${action}`), undefined, v2RequestConfig()).then((response) => (
+    StableRunActionResponseSchema.parse(response.data)
+  ))
+);
+
+export const pauseRun = (id: string) => runAction(id, 'pause');
+export const resumeRun = (id: string) => runAction(id, 'resume');
+export const cancelRun = (id: string) => runAction(id, 'cancel');
+
+export const deleteRun = (id: string) => api.delete(runPath(id), {
+  ...v2RequestConfig(),
+  data: { version: 2, confirmed: true },
+}).then((response) => (
+  StableRunActionResponseSchema.parse(response.data)
+));
+
 export type FetchJobDetailsOptions = {
   include?: 'compact' | 'full';
 };
@@ -663,11 +808,14 @@ export const streamWorkflowProgress = createWorkflowProgressStreamer({
   authHeader,
   validationLabel: (id) => `streamWorkflowProgress(${id})`,
 });
+export const fetchOperation = (id: string) => api.get(operationPath(id)).then(r => (
+  OperationSchema.parse(r.data)
+));
 export const clearJobs = () => api.post('/jobs/cleanup').then(r => (
-  parseOrFallback(ClearJobsResponseSchema, r.data, {}, 'clearJobs')
+  OperationSchema.parse(r.data)
 ));
 export const cancelAllJobs = () => api.post('/jobs:cancel-all').then(r => (
-  parseOrFallback(CancelAllJobsResponseSchema, r.data, { status: 'no_active_jobs' }, 'cancelAllJobs')
+  OperationSchema.parse(r.data)
 ));
 export const cancelJob = (id: string) => api.post(jobPath(id, '/cancel')).then(r => (
   parseOrFallback(JobActionResponseSchema, r.data, { job_id: id, status: 'cancelled' }, `cancelJob(${id})`)

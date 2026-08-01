@@ -66,7 +66,7 @@ describe('RunJob Component', () => {
   });
 
   it('launches a selected blueprint through the launch endpoint', async () => {
-    vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-blueprint-123', id: 'job-blueprint-123', status: 'pending' });
+    vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-blueprint-123', id: 'run-blueprint-123', run_id: 'run-blueprint-123', status: 'pending' });
     renderRunJob();
 
     await waitFor(() => {
@@ -84,12 +84,12 @@ describe('RunJob Component', () => {
       expect(launchBlueprintJob).toHaveBeenCalledWith(expect.objectContaining({ source: 'catalog', blueprint_id: 'worker_one' }));
       const payload = vi.mocked(launchBlueprintJob).mock.calls[0][0] as Record<string, unknown>;
       expect(String(payload.progress_id)).toMatch(/^launch-/);
-      expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-blueprint-123');
+      expect(mockNavigate).toHaveBeenCalledWith('/runs/run-blueprint-123');
     });
   });
 
   it('sends mn-cli-compatible run configuration overrides', async () => {
-    vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-config-123', id: 'job-config-123', status: 'pending' });
+    vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-config-123', id: 'run-config-123', run_id: 'run-config-123', status: 'pending' });
     renderRunJob();
 
     await waitFor(() => {
@@ -142,7 +142,7 @@ describe('RunJob Component', () => {
   });
 
   it('launches a manually entered filesystem path', async () => {
-    vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-path-123', id: 'job-path-123', status: 'pending' });
+    vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-path-123', id: 'run-path-123', run_id: 'run-path-123', status: 'pending' });
     renderRunJob();
 
     fireEvent.click(screen.getByRole('tab', { name: 'File system path' }));
@@ -163,7 +163,7 @@ describe('RunJob Component', () => {
       }));
       const payload = vi.mocked(launchBlueprintJob).mock.calls[0][0] as Record<string, unknown>;
       expect(String(payload.progress_id)).toMatch(/^launch-/);
-      expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-path-123');
+      expect(mockNavigate).toHaveBeenCalledWith('/runs/run-path-123');
     });
   });
 
@@ -172,7 +172,7 @@ describe('RunJob Component', () => {
       bundle_path: '/tmp/test_bundle',
       manifest: { graph_id: 'test_graph' },
     });
-    vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-zip-123', id: 'job-zip-123', status: 'pending' });
+    vi.mocked(launchBlueprintJob).mockResolvedValue({ job_id: 'job-zip-123', id: 'run-zip-123', run_id: 'run-zip-123', status: 'pending' });
 
     renderRunJob();
     fireEvent.click(screen.getByRole('tab', { name: 'ZIP bundle' }));
@@ -202,12 +202,12 @@ describe('RunJob Component', () => {
       expect(launchBlueprintJob).toHaveBeenCalledWith(expect.objectContaining({ source: 'bundle', _bundle_path: '/tmp/test_bundle' }));
       const payload = vi.mocked(launchBlueprintJob).mock.calls[0][0] as Record<string, unknown>;
       expect(String(payload.progress_id)).toMatch(/^launch-/);
-      expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-zip-123');
+      expect(mockNavigate).toHaveBeenCalledWith('/runs/run-zip-123');
     });
   });
 
   it('shows launch progress while a blueprint launch is running', async () => {
-    let resolveLaunch: (value: { job_id: string; id: string; status: string }) => void = () => {};
+    let resolveLaunch: (value: { job_id: string; id: string; run_id: string; status: string }) => void = () => {};
     vi.mocked(launchBlueprintJob).mockImplementation(() => new Promise((resolve) => {
       resolveLaunch = resolve;
     }));
@@ -216,17 +216,17 @@ describe('RunJob Component', () => {
       status: 'running',
       events: [
         { phase: 'resolve_source', status: 'completed', message: 'Blueprint source resolved.' },
-        { phase: 'model_install', status: 'running', message: 'Ensuring required runtime models are installed.' },
+        { phase: 'model_install', status: 'running', message: 'Validating runtime model declarations.' },
       ],
       phases: [{
         id: 'model_install',
-        label: 'Install required runtime models',
+        label: 'Validate runtime model declarations',
         status: 'running',
-        message: 'Ensuring required runtime models are installed.',
-        detail: 'Checking Docker Model Runner services.',
-        expectation: 'The first launch may take several minutes.',
+        message: 'Validating runtime model declarations.',
+        detail: 'Install and routing are deferred to first model use inside the run.',
+        expectation: 'No eager model installation is performed during launch.',
       }],
-      latest: { phase: 'model_install', status: 'running', message: 'Ensuring required runtime models are installed.' },
+      latest: { phase: 'model_install', status: 'running', message: 'Validating runtime model declarations.' },
       completed: false,
     });
 
@@ -242,19 +242,19 @@ describe('RunJob Component', () => {
 
     const progressDialog = await screen.findByRole('dialog', { name: 'Progress' });
     await waitFor(() => {
-      expect(within(progressDialog).getByText('Install required runtime models')).toBeInTheDocument();
-      expect(within(progressDialog).getByText('Ensuring required runtime models are installed.')).toBeInTheDocument();
-      expect(within(progressDialog).getByText('Checking Docker Model Runner services.')).toBeInTheDocument();
-      expect(within(progressDialog).getByText('The first launch may take several minutes.')).toBeInTheDocument();
+      expect(within(progressDialog).getByText('Validate runtime model declarations')).toBeInTheDocument();
+      expect(within(progressDialog).getByText('Validating runtime model declarations.')).toBeInTheDocument();
+      expect(within(progressDialog).getByText('Install and routing are deferred to first model use inside the run.')).toBeInTheDocument();
+      expect(within(progressDialog).getByText('No eager model installation is performed during launch.')).toBeInTheDocument();
     });
 
-    resolveLaunch({ job_id: 'job-progress-123', id: 'job-progress-123', status: 'pending' });
+    resolveLaunch({ job_id: 'job-progress-123', id: 'run-progress-123', run_id: 'run-progress-123', status: 'pending' });
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-progress-123');
+      expect(mockNavigate).toHaveBeenCalledWith('/runs/run-progress-123');
     });
   });
 
-  it('polls accepted async launch progress and navigates when a job id appears', async () => {
+  it('polls accepted async launch progress and navigates with the execution run id', async () => {
     vi.mocked(launchBlueprintJob).mockResolvedValue({
       job_id: null,
       id: null,
@@ -296,11 +296,11 @@ describe('RunJob Component', () => {
         blueprint_id: 'worker_one',
       }));
       expect(fetchLaunchProgress).toHaveBeenCalledWith('progress-async-123');
-      expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-async-123');
+      expect(mockNavigate).toHaveBeenCalledWith('/runs/run-async-123');
     });
   });
 
-  it('hands off to job progress when progress id resolves before the launch request returns', async () => {
+  it('hands off to run progress when progress resolves before the launch request returns', async () => {
     vi.mocked(launchBlueprintJob).mockImplementation(() => new Promise(() => {}));
     vi.mocked(fetchLaunchProgress).mockResolvedValue({
       progress_id: 'launch-from-ui',
@@ -337,7 +337,7 @@ describe('RunJob Component', () => {
       }));
       const payload = vi.mocked(launchBlueprintJob).mock.calls[0][0] as Record<string, unknown>;
       expect(fetchLaunchProgress).toHaveBeenCalledWith(payload.progress_id);
-      expect(mockNavigate).toHaveBeenCalledWith('/jobs/job-progress-first-123');
+      expect(mockNavigate).toHaveBeenCalledWith('/runs/run-progress-first-123');
     });
   });
 

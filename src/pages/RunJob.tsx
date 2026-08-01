@@ -31,10 +31,10 @@ const modeTabs: Array<{ id: LaunchMode; label: string; description: string }> = 
 const launchPhases = [
   { id: 'resolve_source', label: 'Resolve blueprint source' },
   { id: 'requirements', label: 'Check runtime requirements' },
-  { id: 'model_install', label: 'Install required runtime models' },
+  { id: 'model_install', label: 'Validate runtime model declarations' },
   { id: 'validation', label: 'Validate blueprint and inputs' },
   { id: 'submit', label: 'Submit job to runtime' },
-  { id: 'open_job_progress', label: 'Open job progress' },
+  { id: 'open_job_progress', label: 'Open run progress' },
 ] as const;
 
 type LaunchProgressItem = {
@@ -48,7 +48,7 @@ type LaunchProgressItem = {
 
 type LaunchHandoff =
   | { type: 'response'; response: Awaited<ReturnType<typeof launchBlueprintJob>> }
-  | { type: 'progress'; jobId: string };
+  | { type: 'progress'; runId: string };
 
 const LAUNCH_PROGRESS_POLL_MS = 1000;
 const LAUNCH_JOB_ID_TIMEOUT_MS = 90 * 60 * 1000;
@@ -75,12 +75,12 @@ const latestEventsByPhase = (events: LaunchProgressEvent[]) => events.reduce<Rec
 
 const normalizedStatus = (value: unknown) => String(value || 'pending').trim().toLowerCase();
 
-const progressJobId = (progress: LaunchProgressResponse | null | undefined) => (
-  stringValue(progress?.job_id)
+const progressRunId = (progress: LaunchProgressResponse | null | undefined) => (
+  stringValue(progress?.run_id)
 );
 
-const launchResponseJobId = (response: { job_id?: string | null; id?: string | null }) => (
-  stringValue(response.job_id) || stringValue(response.id)
+const launchResponseRunId = (response: { run_id?: string | null; id?: string | null }) => (
+  stringValue(response.run_id) || stringValue(response.id)
 );
 
 const phaseId = (phase: LaunchProgressPhase) => (
@@ -133,16 +133,16 @@ const buildProgressItems = (
     })
     .filter((item): item is LaunchProgressItem => Boolean(item));
 
-  const jobIsReady = Boolean(progressJobId(progress));
+  const runIsReady = Boolean(progressRunId(progress));
   if (backendItems.length > 0) {
-    return jobIsReady
+    return runIsReady
       ? [
         ...backendItems,
         {
           id: 'open_job_progress',
-          label: 'Open job progress',
+          label: 'Open run progress',
           status: 'completed',
-          message: 'Runtime job is ready.',
+          message: 'Execution run is ready.',
           detail: undefined,
           expectation: undefined,
         },
@@ -154,7 +154,7 @@ const buildProgressItems = (
   const hasConcreteEvent = Object.keys(byPhase).length > 0;
   const showOverallLaunchActivity = Boolean(
     progress &&
-    !jobIsReady &&
+    !runIsReady &&
     !progress.completed &&
     !hasConcreteEvent &&
     (progressStatus === 'launching' || progressStatus === 'running' || progressStatus === 'pending')
@@ -165,8 +165,8 @@ const buildProgressItems = (
       return {
         id: phase.id,
         label: phase.label,
-        status: jobIsReady ? 'completed' : 'pending',
-        message: jobIsReady ? 'Runtime job is ready.' : '',
+        status: runIsReady ? 'completed' : 'pending',
+        message: runIsReady ? 'Execution run is ready.' : '',
         detail: undefined,
         expectation: undefined,
       };
@@ -430,26 +430,26 @@ export default function RunJob() {
     return bundleData ? manifestLabel(bundleData.manifest, bundleData.bundle_path || 'uploaded bundle') : 'uploaded bundle';
   };
 
-  const waitForLaunchJobId = useCallback(async (id: string, initialProgress: LaunchProgressResponse | null) => {
+  const waitForLaunchRunId = useCallback(async (id: string, initialProgress: LaunchProgressResponse | null) => {
     let current = initialProgress;
     const startedAt = Date.now();
 
     while (Date.now() - startedAt <= LAUNCH_JOB_ID_TIMEOUT_MS) {
       if (!current) current = await refreshLaunchProgress(id);
 
-      const jobId = progressJobId(current);
-      if (jobId) return jobId;
+      const runId = progressRunId(current);
+      if (runId) return runId;
 
       const failureMessage = launchProgressFailureMessage(current);
       if (failureMessage) throw new Error(failureMessage);
 
-      if (current?.completed) throw new Error('Launch completed but no job id was returned.');
+      if (current?.completed) throw new Error('Launch completed but no run id was returned.');
 
       await new Promise<void>((resolve) => window.setTimeout(resolve, LAUNCH_PROGRESS_POLL_MS));
       current = await refreshLaunchProgress(id);
     }
 
-    throw new Error('Launch is still waiting for a runtime job id. Check launch progress and try again.');
+    throw new Error('Launch is still waiting for an execution run id. Check launch progress and try again.');
   }, [refreshLaunchProgress]);
 
   const confirmLaunch = () => {
@@ -467,9 +467,9 @@ export default function RunJob() {
         title: 'Launching job',
         description: 'Preparing launch steps.',
       },
-      success: (jobId: string) => ({
-        title: 'Job launched',
-        description: jobId,
+      success: (runId: string) => ({
+        title: 'Run launched',
+        description: runId,
       }),
       error: (err) => ({
         title: 'Launch failed',
@@ -492,22 +492,24 @@ export default function RunJob() {
           const launchRequest = launchBlueprintJob(launchPayload(launchProgressId));
           const handoff = await Promise.race<LaunchHandoff>([
             launchRequest.then((response) => ({ type: 'response', response })),
-            waitForLaunchJobId(launchProgressId, null).then((jobId) => ({ type: 'progress', jobId })),
+            waitForLaunchRunId(launchProgressId, null).then((runId) => ({ type: 'progress', runId })),
           ]);
-          let jobId = '';
+          let runId = '';
           if (handoff.type === 'progress') {
-            jobId = handoff.jobId;
+            runId = handoff.runId;
             void launchRequest.catch(() => undefined);
           } else {
             const res = handoff.response;
             activeProgressId = stringValue(res.progress_id) || launchProgressId;
             if (activeProgressId !== launchProgressId) setProgressId(activeProgressId);
             const progress = await refreshLaunchProgress(activeProgressId);
-            jobId = launchResponseJobId(res) || progressJobId(progress) || await waitForLaunchJobId(activeProgressId, progress);
+            const failureMessage = launchProgressFailureMessage(progress);
+            if (failureMessage) throw new Error(failureMessage);
+            runId = launchResponseRunId(res) || progressRunId(progress) || await waitForLaunchRunId(activeProgressId, progress);
           }
           setRunning(false);
-          navigate(`/jobs/${jobId}`);
-          return jobId;
+          navigate(`/runs/${encodeURIComponent(runId)}`);
+          return runId;
         } catch (err: unknown) {
           await refreshLaunchProgress(activeProgressId);
           const message = apiErrorMessage(err, 'Failed to validate and launch job');

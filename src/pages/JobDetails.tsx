@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, streamWorkflowProgress, cancelJob, pauseJob, resumeJob } from '../api';
+import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, streamWorkflowProgress, cancelRun, pauseRun, resumeRun } from '../api';
 import type { AgentGraph, ErrorEnvelope, JobDetails as JobDetailsType, JobEvent, WebUiHandle, WorkflowProgress } from '../api';
 import { format } from 'date-fns';
 import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, MessageSquare, ExternalLink, List, Code2, FileText } from 'lucide-react';
@@ -321,9 +321,9 @@ export default function JobDetails() {
     };
   }, [id, load]);
 
-  if (!details || !details.job) return <div className="p-5 text-sm text-neutral-500">Loading or Invalid Job...</div>;
+  if (!details || !details.job) return <div className="p-5 text-sm text-neutral-500">Loading run…</div>;
   const webUi = blueprintWebUiInfo(details) || webUiInfoFromRecord(runWebUi);
-  const jobId = knownStringValue(details.job.job_id, id) || id || 'job';
+  const jobId = knownStringValue(details.job.run_id, details.job.job_id, id) || id || 'run';
   const progressTerminalStatus = inferredTerminalStatusFromProgress(workflowProgress);
   const displayStatus = displayStatusFromSources(actionStatus, progressTerminalStatus || workflowProgress?.status, details.job.status, graph?.status);
   const graphId = knownStringValue(details.job.graph_id, workflowProgress?.workflow_id, graph?.graph_id);
@@ -365,16 +365,16 @@ export default function JobDetails() {
     confirmActionDialog({
       tone: 'danger',
       id: `job-cancel-${jobId}`,
-      title: 'Cancel this job?',
-      description: 'This action stops the job and interrupts running agents attached to it.',
-      confirmLabel: 'Cancel job',
+      title: 'Cancel this run?',
+      description: 'This action stops the execution and interrupts its running agents. The persistent job and shared data remain.',
+      confirmLabel: 'Cancel run',
       cancelLabel: 'Keep running',
       loading: {
-        title: 'Cancelling job',
+        title: 'Cancelling run',
         description: jobId,
       },
       success: {
-        title: 'Job cancelled',
+        title: 'Run cancelled',
         description: jobId,
       },
       error: {
@@ -384,9 +384,9 @@ export default function JobDetails() {
       onConfirm: async () => {
         setIsCancelling(true);
         try {
-          await cancelJob(jobId);
+          await cancelRun(jobId);
           setIsCancelling(false);
-          navigate('/jobs');
+          navigate('/runs');
         } catch (err: unknown) {
           console.error('Failed to cancel job', err);
           setIsCancelling(false);
@@ -399,16 +399,16 @@ export default function JobDetails() {
   const confirmPause = () => {
     confirmActionDialog({
       id: `job-pause-${jobId}`,
-      title: 'Pause this job?',
-      description: 'The job will stop accepting work until it is resumed.',
-      confirmLabel: 'Pause job',
+      title: 'Pause this run?',
+      description: 'The execution will stop accepting work until it is resumed.',
+      confirmLabel: 'Pause run',
       cancelLabel: 'Keep running',
       loading: {
-        title: 'Pausing job',
+        title: 'Pausing run',
         description: jobId,
       },
       success: {
-        title: 'Job paused',
+        title: 'Run paused',
         description: jobId,
       },
       error: {
@@ -418,7 +418,7 @@ export default function JobDetails() {
       onConfirm: async () => {
         setIsPausing(true);
         try {
-          const response = await pauseJob(jobId);
+          const response = await pauseRun(jobId);
           setActionStatus(canonicalActionStatus(response, 'paused'));
           await load();
         } catch (err) {
@@ -434,16 +434,16 @@ export default function JobDetails() {
   const confirmResume = () => {
     confirmActionDialog({
       id: `job-resume-${jobId}`,
-      title: 'Resume this job?',
-      description: 'The job will continue accepting work and processing queued agents.',
-      confirmLabel: 'Resume job',
+      title: 'Resume this run?',
+      description: 'The execution will continue accepting work and processing queued agents.',
+      confirmLabel: 'Resume run',
       cancelLabel: 'Keep paused',
       loading: {
-        title: 'Resuming job',
+        title: 'Resuming run',
         description: jobId,
       },
       success: {
-        title: 'Job resumed',
+        title: 'Run resumed',
         description: jobId,
       },
       error: {
@@ -453,7 +453,7 @@ export default function JobDetails() {
       onConfirm: async () => {
         setIsResuming(true);
         try {
-          const response = await resumeJob(jobId);
+          const response = await resumeRun(jobId);
           setActionStatus(canonicalActionStatus(response, 'running'));
           await load();
         } catch (err) {
@@ -512,7 +512,7 @@ export default function JobDetails() {
             </Tooltip>
           ) : null}
           {displayStatus === 'running' ? (
-            <Tooltip content="Pause this job after confirmation.">
+            <Tooltip content="Pause this run after confirmation.">
               <span className="inline-flex">
                 <Button type="button" variant="outline" size="sm" disabled={isPausing} onClick={confirmPause}>
                   {isPausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PauseCircle className="h-3.5 w-3.5" />} Pause
@@ -520,7 +520,7 @@ export default function JobDetails() {
               </span>
             </Tooltip>
           ) : displayStatus === 'paused' ? (
-            <Tooltip content="Resume this paused job after confirmation.">
+            <Tooltip content="Resume this paused run after confirmation.">
               <span className="inline-flex">
                 <Button type="button" variant="outline" size="sm" disabled={isResuming} onClick={confirmResume}>
                   {isResuming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Resume
@@ -529,7 +529,7 @@ export default function JobDetails() {
             </Tooltip>
           ) : null}
           {(displayStatus === 'running' || displayStatus === 'pending' || displayStatus === 'paused') ? (
-            <Tooltip content="Cancel this job after confirmation. Running agents will stop.">
+            <Tooltip content="Cancel this run after confirmation. Running agents will stop.">
               <span className="inline-flex">
                 <Button
                   type="button"
@@ -553,7 +553,7 @@ export default function JobDetails() {
           <SummaryCard icon={<Clock className="h-3.5 w-3.5" />} value={runtime} label="Runtime" />
         </div>
         <div className="space-y-3 xl:col-span-2">
-          <FailurePanel failure={failure} title="Job Failure" artifacts={artifactRefs} />
+          <FailurePanel failure={failure} title="Run failure" artifacts={artifactRefs} />
           <ObservabilitySummaryPanel summary={observabilitySummary} traceId={traceId} artifacts={artifactRefs} />
         </div>
       </div>

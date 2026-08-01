@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { AlertCircle, Ban, CheckCircle, Clock, Eye, Loader2, PauseCircle, PlayCircle, Trash2, XCircle } from 'lucide-react';
-import { cancelAllJobs, cancelJob, clearJobs, fetchJobs, isServiceJob, pauseJob } from '../api';
+import { cancelAllJobs, cancelRun, clearJobs, fetchJobs, isServiceJob, pauseRun } from '../api';
 import type { Job } from '../api';
 import { confirmActionDialog } from '../components/ui/confirm-action';
 import { Tooltip } from '../components/ui/tooltip';
@@ -32,7 +32,9 @@ const StatusIcon = ({ status }: { status: string }) => {
   }
 };
 
-export default function Jobs() {
+const executionId = (job: Job) => job.run_id || job.job_id;
+
+export default function Runs() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
@@ -44,7 +46,7 @@ export default function Jobs() {
   const applyJobs = useCallback((data: Job[]) => {
     setJobs(data);
     setSelectedJobIds((current) => {
-      const availableIds = new Set(data.map((job) => job.job_id));
+      const availableIds = new Set(data.map(executionId));
       return new Set([...current].filter((jobId) => availableIds.has(jobId)));
     });
   }, []);
@@ -86,7 +88,7 @@ export default function Jobs() {
   const toggleAllJobs = () => {
     setSelectedJobIds((current) => {
       if (current.size === jobs.length) return new Set();
-      return new Set(jobs.map((job) => job.job_id));
+      return new Set(jobs.map(executionId));
     });
   };
 
@@ -97,28 +99,28 @@ export default function Jobs() {
     const actionLabel = action === 'pause' ? 'Pause' : 'Cancel';
     const completedLabel = action === 'pause' ? 'Paused' : 'Cancelled';
     const loadingLabel = action === 'pause' ? 'Pausing' : 'Cancelling';
-    const runner = action === 'pause' ? pauseJob : cancelJob;
+    const runner = action === 'pause' ? pauseRun : cancelRun;
 
     confirmActionDialog({
       tone: action === 'cancel' ? 'danger' : 'default',
       id: `jobs-bulk-${action}`,
-      title: `${actionLabel} ${jobIds.length} selected job${jobIds.length === 1 ? '' : 's'}?`,
+      title: `${actionLabel} ${jobIds.length} selected run${jobIds.length === 1 ? '' : 's'}?`,
       description: action === 'pause'
-        ? 'Selected running jobs will stop accepting work until they are resumed.'
-        : 'Selected jobs will be stopped. Running agents attached to those jobs will be interrupted.',
+        ? 'Selected running executions will stop accepting work until they are resumed.'
+        : 'Selected executions will be stopped. Their running agents will be interrupted.',
       confirmLabel: actionLabel,
-      cancelLabel: 'Keep jobs',
+      cancelLabel: 'Keep runs',
       loading: {
-        title: `${loadingLabel} jobs`,
-        description: `${jobIds.length} selected job${jobIds.length === 1 ? '' : 's'} are being updated.`,
+        title: `${loadingLabel} runs`,
+        description: `${jobIds.length} selected run${jobIds.length === 1 ? '' : 's'} are being updated.`,
       },
       success: {
-        title: `${completedLabel} jobs`,
-        description: `${completedLabel} ${jobIds.length} job${jobIds.length === 1 ? '' : 's'}.`,
+        title: `${completedLabel} runs`,
+        description: `${completedLabel} ${jobIds.length} run${jobIds.length === 1 ? '' : 's'}.`,
       },
       error: (error) => ({
         title: `${actionLabel} failed`,
-        description: apiErrorMessage(error, `Failed to ${action} selected jobs.`),
+        description: apiErrorMessage(error, `Failed to ${action} selected runs.`),
       }),
       onConfirm: async () => {
         try {
@@ -127,7 +129,7 @@ export default function Jobs() {
           setSelectedJobIds(new Set());
           await refreshJobs();
         } catch (e) {
-          console.error(`Failed to ${action} selected jobs`, e);
+          console.error(`Failed to ${action} selected runs`, e);
           throw e;
         } finally {
           setBulkAction(null);
@@ -142,23 +144,21 @@ export default function Jobs() {
     confirmActionDialog({
       tone: 'danger',
       id: 'jobs-cancel-all',
-      title: 'Cancel all active jobs?',
-      description: 'All pending, scheduled, running, and paused jobs will be stopped. Running agents attached to those jobs will be interrupted.',
+      title: 'Cancel all active runs?',
+      description: 'A durable cancellation operation will be started for every pending, scheduled, running, and paused execution.',
       confirmLabel: 'Cancel all',
-      cancelLabel: 'Keep jobs',
+      cancelLabel: 'Keep runs',
       loading: {
-        title: 'Cancelling all jobs',
-        description: 'Stopping every active job and its running agents.',
+        title: 'Starting cancellation',
+        description: 'Submitting the durable cancellation operation.',
       },
-      success: (result: { cancelled_count: number }) => ({
-        title: result.cancelled_count > 0 ? 'Jobs cancelled' : 'No active jobs',
-        description: result.cancelled_count > 0
-          ? `Cancelled ${result.cancelled_count} active job${result.cancelled_count === 1 ? '' : 's'}.`
-          : 'There were no active jobs to cancel.',
+      success: (result: { operation_id: string }) => ({
+        title: 'Cancellation started',
+        description: `Operation ${result.operation_id} will continue until every active run is handled.`,
       }),
       error: (error) => ({
         title: 'Cancel all failed',
-        description: apiErrorMessage(error, 'Failed to cancel all active jobs.'),
+        description: apiErrorMessage(error, 'Failed to start cancellation for active runs.'),
       }),
       onConfirm: async () => {
         try {
@@ -168,7 +168,7 @@ export default function Jobs() {
           await refreshJobs();
           return result;
         } catch (e) {
-          console.error('Failed to cancel all active jobs', e);
+          console.error('Failed to cancel all active runs', e);
           throw e;
         } finally {
           setIsCancellingAll(false);
@@ -181,21 +181,21 @@ export default function Jobs() {
     confirmActionDialog({
       tone: 'danger',
       id: 'jobs-clear',
-      title: 'Clear non-running jobs?',
-      description: 'Completed, failed, cancelled, and cancellation-pending jobs will be removed from this list. Cleanup queued for an offline node finishes when that node rejoins. Running jobs stay visible.',
-      confirmLabel: 'Clear jobs',
-      cancelLabel: 'Keep jobs',
+      title: 'Clean execution history?',
+      description: 'A durable cleanup operation will remove completed, failed, cancelled, and cancellation-pending executions. Offline cleanup continues when a node rejoins. Active runs stay visible.',
+      confirmLabel: 'Start cleanup',
+      cancelLabel: 'Keep history',
       loading: {
-        title: 'Clearing jobs',
-        description: 'Removing terminal and cancellation-pending jobs.',
+        title: 'Starting cleanup',
+        description: 'Submitting the durable execution cleanup operation.',
       },
-      success: (result: { cleared_count: number }) => ({
-        title: 'Jobs cleared',
-        description: `Cleared ${result.cleared_count} job${result.cleared_count === 1 ? '' : 's'}.`,
+      success: (result: { operation_id: string }) => ({
+        title: 'Cleanup started',
+        description: `Operation ${result.operation_id} will continue in the background.`,
       }),
       error: (error) => ({
-        title: 'Clear failed',
-        description: apiErrorMessage(error, 'Failed to clear non-running jobs.'),
+        title: 'Cleanup failed',
+        description: apiErrorMessage(error, 'Failed to start execution cleanup.'),
       }),
       onConfirm: async () => {
         try {
@@ -205,7 +205,7 @@ export default function Jobs() {
           await refreshJobs();
           return result;
         } catch (e) {
-          console.error('Failed to clear non-running jobs', e);
+          console.error('Failed to start execution cleanup', e);
           throw e;
         } finally {
           setIsClearing(false);
@@ -223,10 +223,10 @@ export default function Jobs() {
       <CardHeader className="flex flex-col items-stretch gap-3 space-y-0 border-b border-neutral-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs font-medium text-neutral-500" aria-live="polite">
           {loading
-            ? 'Loading jobs…'
+            ? 'Loading runs…'
             : selectedCount > 0
-            ? `${selectedCount} job${selectedCount === 1 ? '' : 's'} selected`
-            : `${jobs.length} job${jobs.length === 1 ? '' : 's'}`}
+            ? `${selectedCount} run${selectedCount === 1 ? '' : 's'} selected`
+            : `${jobs.length} run${jobs.length === 1 ? '' : 's'}`}
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <button
@@ -249,7 +249,7 @@ export default function Jobs() {
             </span>
             Active only
           </button>
-          <Tooltip content="Pause all selected live jobs after confirmation.">
+          <Tooltip content="Pause all selected active runs after confirmation.">
             <span className="inline-flex">
               <Button
                 type="button"
@@ -263,7 +263,7 @@ export default function Jobs() {
               </Button>
             </span>
           </Tooltip>
-          <Tooltip content="Cancel all selected jobs after confirmation. Running agents will stop.">
+          <Tooltip content="Cancel all selected runs after confirmation. Running agents will stop.">
             <span className="inline-flex">
               <Button
                 type="button"
@@ -278,7 +278,7 @@ export default function Jobs() {
               </Button>
             </span>
           </Tooltip>
-          <Tooltip content="Cancel every active job after confirmation. Running agents will stop.">
+          <Tooltip content="Start a durable operation to cancel every active run.">
             <span className="inline-flex">
               <Button
                 type="button"
@@ -293,7 +293,7 @@ export default function Jobs() {
               </Button>
             </span>
           </Tooltip>
-          <Tooltip content="Clear terminal and cancellation-pending jobs after confirmation. Offline cleanup resumes when the node rejoins.">
+          <Tooltip content="Start durable cleanup for terminal and cancellation-pending executions.">
             <span className="inline-flex">
               <Button
                 type="button"
@@ -304,12 +304,12 @@ export default function Jobs() {
                 onClick={confirmClearJobs}
               >
                 {isClearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                {isClearing ? 'Clearing...' : 'Clear'}
+                {isClearing ? 'Starting...' : 'Clean up'}
               </Button>
             </span>
           </Tooltip>
           <Button asChild size="sm">
-            <Link to="/run">New job</Link>
+            <Link to="/run">New run</Link>
           </Button>
         </div>
       </CardHeader>
@@ -321,7 +321,7 @@ export default function Jobs() {
               <TableHead className="w-10 px-4 py-2">
                 <input
                   type="checkbox"
-                  aria-label="Select all jobs"
+                  aria-label="Select all runs"
                   checked={allSelected}
                   onChange={toggleAllJobs}
                   disabled={loading || jobs.length === 0}
@@ -329,7 +329,7 @@ export default function Jobs() {
                 />
               </TableHead>
               <TableHead className="px-4 py-2">Status</TableHead>
-              <TableHead className="px-4 py-2">Job ID</TableHead>
+              <TableHead className="px-4 py-2">Run ID</TableHead>
               <TableHead className="px-4 py-2">Workflow ID</TableHead>
               <TableHead className="px-4 py-2">Submitted</TableHead>
               <TableHead className="px-4 py-2">Executors</TableHead>
@@ -352,23 +352,24 @@ export default function Jobs() {
             ) : jobs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="px-4 py-8 text-center text-xs text-neutral-500">
-                  No jobs found.
+                  No execution runs found.
                 </TableCell>
               </TableRow>
             ) : (
               jobs.map((job) => {
-                const selected = selectedJobIds.has(job.job_id);
+                const runId = executionId(job);
+                const selected = selectedJobIds.has(runId);
                 return (
                 <TableRow
-                  key={job.job_id}
+                  key={runId}
                   className={cn(selected ? 'bg-neutral-50' : 'hover:bg-neutral-50')}
                 >
                   <TableCell className="px-4 py-2.5">
                     <input
                       type="checkbox"
-                      aria-label={`Select job ${job.job_id}`}
+                      aria-label={`Select run ${runId}`}
                       checked={selected}
-                      onChange={() => toggleJobSelection(job.job_id)}
+                      onChange={() => toggleJobSelection(runId)}
                       className="h-4 w-4 rounded border-neutral-300 text-neutral-950 focus:ring-neutral-950"
                     />
                   </TableCell>
@@ -380,7 +381,7 @@ export default function Jobs() {
                   </TableCell>
                   <TableCell className="px-4 py-2.5">
                     <span className="font-mono text-xs font-medium text-neutral-950">
-                      {job.job_id}
+                      {runId}
                     </span>
                   </TableCell>
                   <TableCell className="px-4 py-2.5 text-xs text-neutral-600">{job.graph_id}</TableCell>
@@ -391,11 +392,11 @@ export default function Jobs() {
                     {isServiceJob(job) ? '∞' : `${job.active_executors ?? 0} / ${job.executor_count ?? 0}`}
                   </TableCell>
                   <TableCell className="px-4 py-2.5">
-                    <Tooltip content="Open job details and live progress.">
+                    <Tooltip content="Open run details and live progress.">
                       <Button asChild variant="outline" size="icon" className="h-7 w-7 text-neutral-600">
                         <Link
-                          to={`/jobs/${job.job_id}`}
-                          aria-label={`View details for ${job.job_id}`}
+                          to={`/runs/${encodeURIComponent(runId)}`}
+                          aria-label={`View run ${runId}`}
                         >
                           <Eye className="h-3.5 w-3.5" />
                         </Link>

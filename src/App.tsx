@@ -1,8 +1,10 @@
 import { Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
-import Jobs from './pages/Jobs';
+import Runs from './pages/Jobs';
 import JobDetails from './pages/JobDetails';
+import StableJobs from './pages/StableJobs';
+import StableJobDetails from './pages/StableJobDetails';
 import Models from './pages/Models';
 import RunJob from './pages/RunJob';
 import RunUi from './pages/RunUi';
@@ -16,8 +18,10 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
-          <Route path="jobs" element={<Jobs />} />
-          <Route path="jobs/:id" element={<JobDetails />} />
+          <Route path="jobs" element={<StableJobs />} />
+          <Route path="jobs/:jobId" element={<StableJobDetails />} />
+          <Route path="runs" element={<Runs />} />
+          <Route path="runs/:id" element={<JobDetails />} />
           <Route path="models" element={<Models />} />
           <Route path="runs/:runId/ui" element={<RunUi />} />
           <Route path="run" element={<RunJob />} />

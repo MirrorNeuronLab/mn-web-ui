@@ -38,8 +38,8 @@ export default function Dashboard() {
 
   const resources = useMemo(() => summarizeRuntimeResources(summary), [summary]);
 
-  const totalJobs = metricJobs.length;
-  const activeJobs = metricJobs.filter((job) => isActiveJobStatus(job.status)).length;
+  const totalRuns = metricJobs.length;
+  const activeRuns = metricJobs.filter((job) => isActiveJobStatus(job.status)).length;
   const clusterNodes = summary?.nodes.length || 0;
 
   if (loading) {
@@ -68,17 +68,17 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
         <MetricCard
           icon={BriefcaseBusiness}
-          label="Total Jobs"
-          value={totalJobs.toLocaleString()}
+          label="Total Runs"
+          value={totalRuns.toLocaleString()}
           headline="All submitted workflow runs"
           detail={`${clusterNodes} cluster node${clusterNodes === 1 ? '' : 's'} connected`}
         />
         <MetricCard
           icon={Activity}
-          label="Active Jobs"
-          value={activeJobs.toLocaleString()}
+          label="Active Runs"
+          value={activeRuns.toLocaleString()}
           headline="Running, pending, or paused"
-          detail={`${Math.max(totalJobs - activeJobs, 0)} terminal or idle jobs`}
+          detail={`${Math.max(totalRuns - activeRuns, 0)} terminal or idle runs`}
         />
         <MetricCard
           icon={Cpu}

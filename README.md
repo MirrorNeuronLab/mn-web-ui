@@ -1,8 +1,16 @@
 # MirrorNeuron Web UI
 
-`mn-web-ui` is the React/Vite browser interface for inspecting MirrorNeuron
-runtime state, job history, job graphs, events, dead letters, and raw manifest
-submissions through `mn-api`.
+`mn-web-ui` is the React/Vite browser interface for operating persistent
+MirrorNeuron jobs and inspecting their execution runs, workflow graphs, events,
+artifacts, runtime resources, and models through `mn-api`.
+
+The main lifecycle surfaces are intentionally separate:
+
+- **Jobs** use `/api/v2` and own reusable configuration, schedules, shared data,
+  and run history.
+- **Runs** are individual executions. Lifecycle controls use `/api/v2/runs`,
+  while live progress, agent graphs, events, and artifacts use the `/api/v1`
+  execution compatibility routes.
 
 ## Quick Start
 
@@ -38,7 +46,8 @@ http://localhost:55173
 ## Notes
 
 - Start `mn-api` before using live runtime screens.
-- The default API base URL is `/api/v1`.
+- The configured API base defaults to `/api/v1`; the client derives the sibling
+  `/api/v2` base for stable job and run lifecycle requests.
 - Set `MN_WEB_API_TOKEN` when connecting to a protected API instance.
 - Blueprint-owned run interfaces use the `json-render` adapter.
 

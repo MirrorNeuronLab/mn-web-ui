@@ -4,6 +4,19 @@ import {
   fetchJobDetails,
   fetchJobEvents,
   fetchJobs,
+  fetchStableJobs,
+  fetchStableJob,
+  fetchStableJobRuns,
+  startStableJobRun,
+  archiveStableJob,
+  resetStableJobData,
+  deleteStableJob,
+  fetchStableRun,
+  pauseRun,
+  resumeRun,
+  cancelRun,
+  deleteRun,
+  fetchOperation,
   fetchWorkflowProgress,
   fetchSystemSummary,
   clearJobs,
@@ -30,10 +43,12 @@ const mockApi = vi.hoisted(() => ({
   },
   get: vi.fn(),
   post: vi.fn(),
+  delete: vi.fn(),
 }));
 
 vi.mock('../api/client', () => ({
   default: mockApi,
+  apiVersionBaseUrl: (version: number) => `/api/v${version}`,
 }));
 
 describe('api parsing helpers', () => {
@@ -146,37 +161,48 @@ describe('api parsing helpers', () => {
     );
   });
 
-  it('clears jobs through the slash cleanup endpoint', async () => {
-    mockApi.post.mockResolvedValue({ data: { cleared_count: 2 } });
+  it('starts durable cleanup through the slash cleanup endpoint', async () => {
+    mockApi.post.mockResolvedValue({
+      data: {
+        operation_id: 'op-clean-1',
+        kind: 'clear_jobs',
+        status: 'running',
+        counters: { total: 2, started: 2 },
+      },
+    });
 
-    await expect(clearJobs()).resolves.toEqual({ version: 1, cleared_count: 2 });
+    await expect(clearJobs()).resolves.toEqual(expect.objectContaining({
+      version: 1,
+      operation_id: 'op-clean-1',
+      kind: 'clear_jobs',
+      status: 'running',
+      counters: expect.objectContaining({ total: 2, started: 2 }),
+    }));
 
     expect(mockApi.post).toHaveBeenCalledWith('/jobs/cleanup');
   });
 
-  it('cancels all active jobs through the canonical cancel-all endpoint', async () => {
+  it('starts durable cancellation through the canonical cancel-all endpoint', async () => {
     mockApi.post.mockResolvedValue({
       data: {
-        status: 'cancelled',
-        active_count: 2,
-        cancelled_count: 2,
-        cancelled_job_ids: ['job-1', 'job-2'],
+        operation_id: 'op-cancel-1',
+        kind: 'cancel_all_jobs',
+        status: 'running',
+        counters: { total: 2, started: 2 },
       },
     });
 
-    await expect(cancelAllJobs()).resolves.toEqual({
-      version: 1,
-      status: 'cancelled',
-      active_count: 2,
-      cancelled_count: 2,
-      cancelled_job_ids: ['job-1', 'job-2'],
-    });
+    await expect(cancelAllJobs()).resolves.toEqual(expect.objectContaining({
+      operation_id: 'op-cancel-1',
+      kind: 'cancel_all_jobs',
+      counters: expect.objectContaining({ total: 2, started: 2 }),
+    }));
     expect(mockApi.post).toHaveBeenCalledWith('/jobs:cancel-all');
   });
 
-  it('uses safe fallbacks for malformed mutation responses', async () => {
+  it('rejects malformed durable-operation responses and keeps legacy control fallbacks', async () => {
     mockApi.post.mockResolvedValueOnce({ data: { cleared_count: 'two' } });
-    await expect(clearJobs()).resolves.toEqual({ version: 1, cleared_count: 0 });
+    await expect(clearJobs()).rejects.toThrow();
 
     mockApi.post.mockResolvedValueOnce({ data: { status: 42 } });
     await expect(cancelJob('job-1')).resolves.toEqual(expect.objectContaining({
@@ -258,6 +284,109 @@ describe('api parsing helpers', () => {
       'fetchJobs[0] validation failed:',
       expect.anything(),
     );
+  });
+
+  it('parses persistent jobs and their runs from the v2 contract', async () => {
+    mockApi.get
+      .mockResolvedValueOnce({
+        data: {
+          version: 2,
+          data: [
+            {
+              job_id: 'stable-job-1',
+              graph_id: 'research_graph',
+              job_name: 'Research job',
+              status: 'active',
+              data_generation: 3,
+              run_count: 2,
+              schedule_count: 1,
+            },
+            { job_id: 42, status: 'active' },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          version: 2,
+          job_id: 'stable-job-1',
+          graph_id: 'research_graph',
+          status: 'active',
+          resolved_configuration: { mode: 'safe' },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          version: 2,
+          job_id: 'stable-job-1',
+          data: [
+            { run_id: 'run-1', job_id: 'stable-job-1', status: 'completed', attempt: 1 },
+            { run_id: 'run-2', job_id: 'stable-job-1', status: 'running' },
+          ],
+        },
+      });
+
+    await expect(fetchStableJobs({ includeArchived: true })).resolves.toEqual([
+      expect.objectContaining({ job_id: 'stable-job-1', data_generation: 3, run_count: 2 }),
+    ]);
+    await expect(fetchStableJob('stable-job-1')).resolves.toEqual(expect.objectContaining({
+      job_id: 'stable-job-1',
+      resolved_configuration: { mode: 'safe' },
+    }));
+    await expect(fetchStableJobRuns('stable-job-1')).resolves.toEqual([
+      expect.objectContaining({ run_id: 'run-1', attempt: 1 }),
+      expect.objectContaining({ run_id: 'run-2', attempt: 1 }),
+    ]);
+
+    expect(mockApi.get).toHaveBeenNthCalledWith(1, '/jobs', {
+      baseURL: '/api/v2',
+      params: { include_archived: true },
+    });
+    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/jobs/stable-job-1', { baseURL: '/api/v2' });
+    expect(mockApi.get).toHaveBeenNthCalledWith(3, '/jobs/stable-job-1/runs', { baseURL: '/api/v2' });
+  });
+
+  it('targets v2 stable-job and run lifecycle endpoints with confirmed deletes', async () => {
+    mockApi.post
+      .mockResolvedValueOnce({ data: { version: 2, job_id: 'stable-job-1', run_id: 'run-new', status: 'pending' } })
+      .mockResolvedValueOnce({ data: { version: 2, job_id: 'stable-job-1', status: 'archived' } })
+      .mockResolvedValueOnce({ data: { version: 2, job_id: 'stable-job-1', status: 'active', data_generation: 2 } })
+      .mockResolvedValueOnce({ data: { version: 2, run_id: 'run-new', status: 'paused' } })
+      .mockResolvedValueOnce({ data: { version: 2, run_id: 'run-new', status: 'running' } })
+      .mockResolvedValueOnce({ data: { version: 2, run_id: 'run-new', status: 'cancelled' } });
+    mockApi.get.mockResolvedValueOnce({ data: { version: 2, run_id: 'run-new', job_id: 'stable-job-1', status: 'running' } });
+    mockApi.delete
+      .mockResolvedValueOnce({ data: { version: 2, job_id: 'stable-job-1', status: 'deleted' } })
+      .mockResolvedValueOnce({ data: { version: 2, run_id: 'run-new', status: 'deleted' } });
+
+    await expect(startStableJobRun('stable-job-1', { value: 1 })).resolves.toEqual(expect.objectContaining({ run_id: 'run-new' }));
+    await expect(archiveStableJob('stable-job-1')).resolves.toEqual(expect.objectContaining({ status: 'archived' }));
+    await expect(resetStableJobData('stable-job-1')).resolves.toEqual(expect.objectContaining({ data_generation: 2 }));
+    await expect(fetchStableRun('run-new')).resolves.toEqual(expect.objectContaining({ job_id: 'stable-job-1' }));
+    await expect(pauseRun('run-new')).resolves.toEqual(expect.objectContaining({ status: 'paused' }));
+    await expect(resumeRun('run-new')).resolves.toEqual(expect.objectContaining({ status: 'running' }));
+    await expect(cancelRun('run-new')).resolves.toEqual(expect.objectContaining({ status: 'cancelled' }));
+    await expect(deleteStableJob('stable-job-1')).resolves.toEqual(expect.objectContaining({ status: 'deleted' }));
+    await expect(deleteRun('run-new')).resolves.toEqual(expect.objectContaining({ status: 'deleted' }));
+
+    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/jobs/stable-job-1/runs', { version: 2, inputs: { value: 1 } }, { baseURL: '/api/v2' });
+    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/jobs/stable-job-1/archive', undefined, { baseURL: '/api/v2' });
+    expect(mockApi.post).toHaveBeenNthCalledWith(3, '/jobs/stable-job-1/data:reset', undefined, { baseURL: '/api/v2' });
+    expect(mockApi.get).toHaveBeenCalledWith('/runs/run-new', { baseURL: '/api/v2' });
+    expect(mockApi.delete).toHaveBeenNthCalledWith(1, '/jobs/stable-job-1', { baseURL: '/api/v2', data: { version: 2, confirmed: true } });
+    expect(mockApi.delete).toHaveBeenNthCalledWith(2, '/runs/run-new', { baseURL: '/api/v2', data: { version: 2, confirmed: true } });
+  });
+
+  it('fetches durable operation status by encoded id', async () => {
+    mockApi.get.mockResolvedValue({
+      data: { operation_id: 'op/1', kind: 'clear_jobs', status: 'completed', counters: { succeeded: 2 } },
+    });
+
+    await expect(fetchOperation('op/1')).resolves.toEqual(expect.objectContaining({
+      operation_id: 'op/1',
+      status: 'completed',
+      counters: expect.objectContaining({ succeeded: 2 }),
+    }));
+    expect(mockApi.get).toHaveBeenCalledWith('/operations/op%2F1');
   });
 
   it('returns structured defaults when system summary validation fails', async () => {

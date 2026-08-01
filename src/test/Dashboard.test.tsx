@@ -76,10 +76,10 @@ describe('Dashboard Component', () => {
 
     // Wait for the data to load and skeleton to disappear
     await waitFor(() => {
-      expect(screen.queryByText('Total Jobs')).toBeInTheDocument();
+      expect(screen.queryByText('Total Runs')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Active Jobs')).toBeInTheDocument();
+    expect(screen.getByText('Active Runs')).toBeInTheDocument();
     expect(screen.getAllByText('CPU').length).toBeGreaterThan(1);
     expect(screen.getAllByText('10 cores').length).toBeGreaterThan(1);
     expect(screen.getAllByText('Memory').length).toBeGreaterThan(1);
@@ -159,12 +159,12 @@ describe('Dashboard Component', () => {
 
     renderDashboard();
 
-    await waitFor(() => expect(screen.getByText('Total Jobs')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Total Runs')).toBeInTheDocument());
 
-    const totalJobsCard = screen.getByText('Total Jobs').parentElement?.parentElement;
+    const totalJobsCard = screen.getByText('Total Runs').parentElement?.parentElement;
     expect(totalJobsCard).not.toBeNull();
     expect(within(totalJobsCard as HTMLElement).getByText('1')).toBeInTheDocument();
-    expect(screen.getByText('1 terminal or idle jobs')).toBeInTheDocument();
+    expect(screen.getByText('1 terminal or idle runs')).toBeInTheDocument();
     expect(screen.getByText('1 cluster node connected')).toBeInTheDocument();
   });
 
