@@ -1,3 +1,5 @@
+import { isRecord } from './records';
+
 type ValidationIssue = {
   code?: string;
   message?: string;
@@ -27,10 +29,6 @@ type ApiErrorData = {
   };
   errors?: ValidationIssue[];
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-);
 
 const numberValue = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;

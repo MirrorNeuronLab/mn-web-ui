@@ -1,20 +1,10 @@
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-);
+import { firstString, isRecord, uniqueStrings } from '../utils/records';
 
 const asRecord = (value: unknown): Record<string, unknown> => (isRecord(value) ? value : {});
 
 const toRecordArray = (value: unknown): Record<string, unknown>[] => (
   Array.isArray(value) ? value.filter(isRecord) : []
 );
-
-const firstString = (...values: unknown[]) => {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  }
-  return '';
-};
 
 const firstNumber = (...values: unknown[]) => {
   for (const value of values) {
@@ -38,8 +28,6 @@ const firstBoolean = (...values: unknown[]) => {
   }
   return undefined;
 };
-
-const uniqueStrings = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
 
 const nestedId = (value: unknown) => {
   const record = asRecord(value);

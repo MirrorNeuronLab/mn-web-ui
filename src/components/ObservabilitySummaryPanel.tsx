@@ -1,6 +1,7 @@
 import { Network } from 'lucide-react';
 import { artifactDisplayName } from '../utils/artifacts';
 import { openArtifactLocation } from '../utils/artifactReveal';
+import { isRecord } from '../utils/records';
 import { formatElapsed } from '../utils/workflowProgress';
 
 export type ObservabilityArtifactRef = {
@@ -17,10 +18,6 @@ type Props = {
   traceId?: string;
   artifacts?: ObservabilityArtifactRef[];
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-);
 
 const numericValue = (...values: unknown[]): number | undefined => {
   for (const value of values) {

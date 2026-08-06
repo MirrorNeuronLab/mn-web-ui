@@ -29,6 +29,7 @@ import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
 import { buildOutputResources } from '../utils/workflowResources';
 import { blueprintWebUiInfo, buildFallbackWorkflowProgress, webUiInfoFromRecord } from '../utils/jobDetailsView';
 import { isTerminalJobStatus, jobStatusBadgeClass } from '../utils/jobStatus';
+import { isRecord } from '../utils/records';
 
 const StatusIcon = ({ status }: { status: string }) => {
   switch (status) {
@@ -78,10 +79,6 @@ const traceIdFrom = (
     summaryRecord.trace_id,
     observabilitySummary?.trace_id,
   )
-);
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value !== null && !Array.isArray(value)
 );
 
 const isNonEmptyRecord = (value: unknown): value is Record<string, unknown> => (

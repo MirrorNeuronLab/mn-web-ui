@@ -4,12 +4,9 @@ import { parseArrayOrEmpty, parseOrFallback } from './parsing';
 import { apiPathFromUrl, jobPath, launchProgressPath, modelPath, operationPath, runPath } from './routes';
 import { createWorkflowProgressStreamer } from './streaming';
 import { normalizeWorkflowProgressPayload } from './workflowProgress';
+import { isRecord } from '../utils/records';
 
 const InterfaceVersionSchema = z.number().optional().default(1) as unknown as z.ZodOptional<z.ZodNumber>;
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-);
-
 const arrayFromEnvelope = (data: unknown, keys: string[]) => {
   if (Array.isArray(data)) return data;
   if (!isRecord(data)) return [];

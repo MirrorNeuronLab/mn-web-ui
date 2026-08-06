@@ -1,5 +1,6 @@
 import type { JobDetails, WorkflowProgress } from '../api';
 import { artifactDisplayName, isOpenableHref } from './artifacts';
+import { isRecord } from './records';
 
 export type ProgressResource = {
   id: string;
@@ -21,10 +22,6 @@ export type FailureArtifact = {
 
 const RESOURCE_KEYS = ['outputs', 'output', 'artifacts', 'artifact', 'files', 'urls', 'results', 'result'];
 const INPUT_RESOURCE_KEYS = ['inputs', 'input', 'sources', 'source'];
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-);
 
 const displayNameFromPath = (value: string) => {
   const trimmed = value.trim();

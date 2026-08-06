@@ -4,7 +4,7 @@ import type { JobDetails, WorkflowActivity, WorkflowProgress, WorkflowProgressAg
 import { displayAgentName } from '../utils/agentGraph';
 import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
 import { artifactsFromDetails } from '../utils/workflowResources';
-// ProgressResource and openArtifactLocation were unused and removed
+import { firstString, isRecord, uniqueStrings } from '../utils/records';
 import {
   activityCategory,
   activityDetailText,
@@ -101,20 +101,6 @@ const formatList = (values?: string[]) => {
   return filtered.length ? filtered.join(', ') : 'None';
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-);
-
-const firstString = (...values: unknown[]) => {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  }
-  return '';
-};
-
-const uniqueStrings = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
-
 const nestedId = (value: unknown) => {
   const record = isRecord(value) ? value : {};
   return firstString(record.id, record.step_id, record.stepId, record.node_id, record.nodeId, record.name, record.label);
@@ -159,8 +145,6 @@ const stepMatchesId = (step: WorkflowProgressStep, index: number, id: string | n
 const eventKey = (event: WorkflowActivity, index: number) => (
   `${event.timestamp || 'unknown'}-${event.type || 'event'}-${event.step_id || ''}-${event.agent_id || ''}-${index}`
 );
-
-// ProgressResourcesColumn removed
 
 const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
   const progress = Math.max(0, Math.min(1, agent.progress || 0));

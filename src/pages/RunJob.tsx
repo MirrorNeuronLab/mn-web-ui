@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { cn } from '../lib/utils';
 import { apiErrorMessage } from '../utils/apiErrors';
 import { parseConfigOverrideAssignments } from '../utils/configOverrides';
+import { isRecord } from '../utils/records';
 
 type LaunchMode = 'blueprint' | 'path' | 'bundle';
 
@@ -58,9 +59,6 @@ const COMPLETED_LAUNCH_STATUSES = new Set(['completed', 'succeeded', 'success'])
 const makeProgressId = () => `launch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 const stringValue = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-);
 const normalizedKey = (value: unknown) => String(value || '')
   .trim()
   .toLowerCase()

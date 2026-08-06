@@ -2,6 +2,7 @@ import { AlertTriangle, ExternalLink, FileText } from 'lucide-react';
 import type { ErrorEnvelope } from '../api';
 import { artifactDisplayName } from '../utils/artifacts';
 import { openArtifactLocation } from '../utils/artifactReveal';
+import { isRecord } from '../utils/records';
 
 type ArtifactRef = {
   artifact_id?: string;
@@ -18,10 +19,6 @@ type FailurePanelProps = {
   compact?: boolean;
   artifacts?: ArtifactRef[];
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-);
 
 const text = (value: unknown): string => {
   if (typeof value === 'string') return value;

@@ -1,6 +1,7 @@
 import { isServiceJob } from '../api';
 import type { AgentGraph, JobDetails, JobEvent, WorkflowProgress } from '../api';
 import { isTerminalJobStatus } from './jobStatus';
+import { isRecord } from './records';
 
 export type WebUiInfo = {
   url: string;
@@ -10,10 +11,6 @@ export type WebUiInfo = {
 
 const ACTIVE_EVENT_TYPES = new Set(['agent_message_received', 'executor_lease_acquired', 'route_selected', 'video_frame_tick_generated']);
 const COMPLETE_EVENT_TYPES = new Set(['sandbox_job_completed', 'executor_lease_released']);
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-);
 
 const stringValue = (...values: unknown[]): string | undefined => {
   for (const value of values) {
