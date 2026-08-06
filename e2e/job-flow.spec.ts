@@ -4,7 +4,7 @@ test('submits a bundle and controls the run from the real app shell', async ({ p
   let jobStatus = 'running';
   let bundleProgressId = 'launch-e2e';
 
-  await page.route('**/api/v1/blueprints', async (route) => {
+  await page.route('**/api/v2/blueprints', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -21,7 +21,7 @@ test('submits a bundle and controls the run from the real app shell', async ({ p
     });
   });
 
-  await page.route('**/api/v1/bundles/upload', async (route) => {
+  await page.route('**/api/v2/bundles/upload', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -36,7 +36,7 @@ test('submits a bundle and controls the run from the real app shell', async ({ p
     });
   });
 
-  await page.route('**/api/v1/blueprints/launch/runs', async (route) => {
+  await page.route('**/api/v2/blueprints/launch/runs', async (route) => {
     const payload = await route.request().postDataJSON();
     expect(payload).toMatchObject({
       source: 'bundle',
@@ -53,12 +53,12 @@ test('submits a bundle and controls the run from the real app shell', async ({ p
         run_id: 'browser-run-1',
         status: 'launching',
         progress_id: bundleProgressId,
-        progress_url: `/api/v1/blueprints/launch/progress/${bundleProgressId}`,
+        progress_url: `/api/v2/blueprints/launch/progress/${bundleProgressId}`,
       }),
     });
   });
 
-  await page.route('**/api/v1/blueprints/launch/progress/**', async (route) => {
+  await page.route('**/api/v2/blueprints/launch/progress/**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -126,7 +126,7 @@ test('submits a bundle and controls the run from the real app shell', async ({ p
     });
   });
 
-  await page.route('**/api/v1/runs/browser-run-1/ui', async (route) => {
+  await page.route('**/api/v2/runs/browser-run-1/ui', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -179,21 +179,21 @@ test('submits a bundle and controls the run from the real app shell', async ({ p
     recent_events: [],
   });
 
-  await page.route('**/api/v1/jobs/browser-run-1/workflow-progress', async (route) => {
+  await page.route('**/api/v2/jobs/browser-run-1/workflow-progress', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify(workflowProgress()),
     });
   });
 
-  await page.route('**/api/v1/jobs/browser-run-1/workflow-progress/stream*', async (route) => {
+  await page.route('**/api/v2/jobs/browser-run-1/workflow-progress/stream*', async (route) => {
     await route.fulfill({
       contentType: 'text/event-stream',
       body: `event: snapshot\ndata: ${JSON.stringify(workflowProgress())}\n\n`,
     });
   });
 
-  await page.route('**/api/v1/jobs/browser-run-1/events', async (route) => {
+  await page.route('**/api/v2/jobs/browser-run-1/events', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -208,7 +208,7 @@ test('submits a bundle and controls the run from the real app shell', async ({ p
     });
   });
 
-  await page.route('**/api/v1/jobs/browser-run-1/agent-graph', async (route) => {
+  await page.route('**/api/v2/jobs/browser-run-1/agent-graph', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -297,7 +297,7 @@ test('launches a catalog blueprint through async launch progress', async ({ page
   let catalogLaunchRequests = 0;
   let catalogProgressId = 'launch-catalog-e2e';
 
-  await page.route('**/api/v1/blueprints', async (route) => {
+  await page.route('**/api/v2/blueprints', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -314,7 +314,7 @@ test('launches a catalog blueprint through async launch progress', async ({ page
     });
   });
 
-  await page.route('**/api/v1/blueprints/launch/runs', async (route) => {
+  await page.route('**/api/v2/blueprints/launch/runs', async (route) => {
     catalogLaunchRequests += 1;
     const payload = await route.request().postDataJSON();
     expect(payload).toMatchObject({
@@ -332,12 +332,12 @@ test('launches a catalog blueprint through async launch progress', async ({ page
         run_id: 'catalog-run-1',
         status: 'launching',
         progress_id: catalogProgressId,
-        progress_url: `/api/v1/blueprints/launch/progress/${catalogProgressId}`,
+        progress_url: `/api/v2/blueprints/launch/progress/${catalogProgressId}`,
       }),
     });
   });
 
-  await page.route('**/api/v1/blueprints/launch/progress/**', async (route) => {
+  await page.route('**/api/v2/blueprints/launch/progress/**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -395,7 +395,7 @@ test('launches a catalog blueprint through async launch progress', async ({ page
     });
   });
 
-  await page.route('**/api/v1/runs/catalog-run-1/ui', async (route) => {
+  await page.route('**/api/v2/runs/catalog-run-1/ui', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -436,21 +436,21 @@ test('launches a catalog blueprint through async launch progress', async ({ page
     recent_events: [],
   });
 
-  await page.route('**/api/v1/jobs/catalog-run-1/workflow-progress', async (route) => {
+  await page.route('**/api/v2/jobs/catalog-run-1/workflow-progress', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify(workflowProgress()),
     });
   });
 
-  await page.route('**/api/v1/jobs/catalog-run-1/workflow-progress/stream*', async (route) => {
+  await page.route('**/api/v2/jobs/catalog-run-1/workflow-progress/stream*', async (route) => {
     await route.fulfill({
       contentType: 'text/event-stream',
       body: `event: snapshot\ndata: ${JSON.stringify(workflowProgress())}\n\n`,
     });
   });
 
-  await page.route('**/api/v1/jobs/catalog-run-1/events', async (route) => {
+  await page.route('**/api/v2/jobs/catalog-run-1/events', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -465,7 +465,7 @@ test('launches a catalog blueprint through async launch progress', async ({ page
     });
   });
 
-  await page.route('**/api/v1/jobs/catalog-run-1/agent-graph', async (route) => {
+  await page.route('**/api/v2/jobs/catalog-run-1/agent-graph', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({

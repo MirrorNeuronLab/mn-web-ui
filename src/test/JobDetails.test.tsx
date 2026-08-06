@@ -467,7 +467,7 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
       job_id: 'pitev-5d7781d6',
-      workflow_id: 'personal_income_tax_expert_v1',
+      workflow_id: 'personal_income_tax_expert_v2',
       name: 'Personal Income Tax Expert',
       description: '',
       status: 'running',
@@ -507,7 +507,7 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
       job_id: 'service-job-1',
-      workflow_id: 'video_watch_assistant_v1',
+      workflow_id: 'video_watch_assistant_v2',
       name: 'Video Watch Assistant',
       description: '',
       status: 'running',
@@ -547,7 +547,7 @@ describe('JobDetails Component', () => {
     const completeProgress: WorkflowProgress = {
       schema_version: 2,
       job_id: 'batch-job-1',
-      workflow_id: 'batch_workflow_v1',
+      workflow_id: 'batch_workflow_v2',
       name: 'Batch Workflow',
       description: '',
       status: 'running',
@@ -808,7 +808,7 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
       job_id: 'test-job-1',
-      workflow_id: 'video_watch_assistant_v1',
+      workflow_id: 'video_watch_assistant_v2',
       name: 'Video Watch Assistant',
       description: '',
       status: 'running',

@@ -73,7 +73,7 @@ export const CONFIG_KEYS: ConfigDefinitions = {
   webApiBaseUrl: {
     env: 'MN_WEB_API_BASE_URL',
     type: 'string',
-    defaultValue: '/api/v1',
+    defaultValue: '/api/v2',
   },
   webApiToken: {
     env: 'MN_WEB_API_TOKEN',

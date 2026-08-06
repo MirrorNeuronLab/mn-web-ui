@@ -98,7 +98,7 @@ describe('node config loader', () => {
         MN_ENV: 'production',
         MN_API_HOST: '0.0.0.0',
         MN_API_PORT: '8080',
-        MN_WEB_API_BASE_URL: '/api/v1',
+        MN_WEB_API_BASE_URL: '/api/v2',
       },
     });
 

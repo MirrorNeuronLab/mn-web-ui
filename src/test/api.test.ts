@@ -35,7 +35,7 @@ import {
 
 const mockApi = vi.hoisted(() => ({
   defaults: {
-    baseURL: '/api/v1',
+    baseURL: '/api/v2',
     headers: { common: {} as Record<string, string> },
   },
   get: vi.fn(),
@@ -45,7 +45,6 @@ const mockApi = vi.hoisted(() => ({
 
 vi.mock('../api/client', () => ({
   default: mockApi,
-  apiVersionBaseUrl: (version: number) => `/api/v${version}`,
 }));
 
 describe('api parsing helpers', () => {
@@ -63,7 +62,7 @@ describe('api parsing helpers', () => {
     mockApi.get.mockResolvedValue({
       data: {
         data: [
-          { job_id: 'job-1', graph_id: 'graph-1', recovery_status: null },
+          { run_id: 'job-1', graph_id: 'graph-1', recovery_status: null },
           { status: 'running' },
         ],
       },
@@ -82,7 +81,7 @@ describe('api parsing helpers', () => {
         status: 'running',
       }),
     ]);
-    expect(mockApi.get).toHaveBeenCalledWith('/jobs');
+    expect(mockApi.get).toHaveBeenCalledWith('/runs');
   });
 
   it('passes the terminal job visibility flag when requested', async () => {
@@ -90,17 +89,17 @@ describe('api parsing helpers', () => {
 
     await expect(fetchJobs({ includeTerminal: false })).resolves.toEqual([]);
 
-    expect(mockApi.get).toHaveBeenCalledWith('/jobs', {
+    expect(mockApi.get).toHaveBeenCalledWith('/runs', {
       params: { include_terminal: false },
     });
   });
 
-  it('accepts jobs from the backend jobs envelope', async () => {
+  it('accepts runs from the v2 runs envelope', async () => {
     mockApi.get.mockResolvedValue({
       data: {
-        jobs: [
+        runs: [
           {
-            job_id: 'job-envelope-1',
+            run_id: 'job-envelope-1',
             graph_id: 'graph-envelope',
             status: 'completed',
           },
@@ -169,14 +168,14 @@ describe('api parsing helpers', () => {
     });
 
     await expect(clearJobs()).resolves.toEqual(expect.objectContaining({
-      version: 1,
+      version: 2,
       operation_id: 'op-clean-1',
       kind: 'clear_jobs',
       status: 'running',
       counters: expect.objectContaining({ total: 2, started: 2 }),
     }));
 
-    expect(mockApi.post).toHaveBeenCalledWith('/jobs/cleanup');
+    expect(mockApi.post).toHaveBeenCalledWith('/runs:cleanup');
   });
 
   it('starts durable cancellation through the canonical cancel-all endpoint', async () => {
@@ -194,7 +193,7 @@ describe('api parsing helpers', () => {
       kind: 'cancel_all_jobs',
       counters: expect.objectContaining({ total: 2, started: 2 }),
     }));
-    expect(mockApi.post).toHaveBeenCalledWith('/jobs:cancel-all');
+    expect(mockApi.post).toHaveBeenCalledWith('/runs:cancel-all');
   });
 
   it('rejects malformed durable-operation responses', async () => {
@@ -207,7 +206,7 @@ describe('api parsing helpers', () => {
       data: { job: { job_id: 'job/with space', status: 'running' } },
     });
     await fetchJobDetails('job/with space');
-    expect(mockApi.get).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/monitor', { baseURL: '/api/v2' });
+    expect(mockApi.get).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/monitor');
 
     mockApi.get.mockResolvedValueOnce({
       data: { job: { job_id: 'job/with space', status: 'running' } },
@@ -215,26 +214,22 @@ describe('api parsing helpers', () => {
     await fetchJobDetails('job/with space', { include: 'full' });
     expect(mockApi.get).toHaveBeenLastCalledWith(
       '/runs/job%2Fwith%20space/monitor',
-      { baseURL: '/api/v2', params: { include: 'full' } },
+      { params: { include: 'full' } },
     );
 
     mockApi.get.mockResolvedValueOnce({ data: { data: [] } });
     await fetchJobEvents('job/with space');
-    expect(mockApi.get).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/monitor', { baseURL: '/api/v2' });
+    expect(mockApi.get).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/monitor');
 
     mockApi.get.mockResolvedValueOnce({
       data: { agent_graph: { job_id: 'job/with space', nodes: [], edges: [] } },
     });
     await fetchJobAgentGraph('job/with space');
-    expect(mockApi.get).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/monitor', { baseURL: '/api/v2' });
+    expect(mockApi.get).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/monitor');
 
     mockApi.post.mockResolvedValueOnce({ data: { version: 2, run_id: 'job/with space', status: 'paused' } });
     await pauseRun('job/with space');
-    expect(mockApi.post).toHaveBeenLastCalledWith(
-      '/runs/job%2Fwith%20space/pause',
-      undefined,
-      { baseURL: '/api/v2' },
-    );
+    expect(mockApi.post).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/pause');
   });
 
   it('uses the list endpoint as the authoritative source for row status', async () => {
@@ -242,7 +237,7 @@ describe('api parsing helpers', () => {
       data: {
         data: [
           {
-            job_id: 'job-1',
+            run_id: 'job-1',
             graph_id: 'workflow_v1',
             status: 'running',
           },
@@ -254,7 +249,7 @@ describe('api parsing helpers', () => {
       expect.objectContaining({ job_id: 'job-1', status: 'running' }),
     ]);
     expect(mockApi.get).toHaveBeenCalledOnce();
-    expect(mockApi.get).toHaveBeenCalledWith('/jobs');
+    expect(mockApi.get).toHaveBeenCalledWith('/runs');
   });
 
   it('falls back to an empty job list when the API shape is malformed', async () => {
@@ -321,11 +316,10 @@ describe('api parsing helpers', () => {
     ]);
 
     expect(mockApi.get).toHaveBeenNthCalledWith(1, '/jobs', {
-      baseURL: '/api/v2',
       params: { include_archived: true },
     });
-    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/jobs/stable-job-1', { baseURL: '/api/v2' });
-    expect(mockApi.get).toHaveBeenNthCalledWith(3, '/jobs/stable-job-1/runs', { baseURL: '/api/v2' });
+    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/jobs/stable-job-1');
+    expect(mockApi.get).toHaveBeenNthCalledWith(3, '/jobs/stable-job-1/runs');
   });
 
   it('targets v2 stable-job and run lifecycle endpoints with confirmed deletes', async () => {
@@ -351,12 +345,12 @@ describe('api parsing helpers', () => {
     await expect(deleteStableJob('stable-job-1')).resolves.toEqual(expect.objectContaining({ status: 'deleted' }));
     await expect(deleteRun('run-new')).resolves.toEqual(expect.objectContaining({ status: 'deleted' }));
 
-    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/jobs/stable-job-1/runs', { version: 2, inputs: { value: 1 } }, { baseURL: '/api/v2' });
-    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/jobs/stable-job-1/archive', undefined, { baseURL: '/api/v2' });
-    expect(mockApi.post).toHaveBeenNthCalledWith(3, '/jobs/stable-job-1/data:reset', undefined, { baseURL: '/api/v2' });
-    expect(mockApi.get).toHaveBeenCalledWith('/runs/run-new', { baseURL: '/api/v2' });
-    expect(mockApi.delete).toHaveBeenNthCalledWith(1, '/jobs/stable-job-1', { baseURL: '/api/v2', data: { version: 2, confirmed: true } });
-    expect(mockApi.delete).toHaveBeenNthCalledWith(2, '/runs/run-new', { baseURL: '/api/v2', data: { version: 2, confirmed: true } });
+    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/jobs/stable-job-1/runs', { version: 2, inputs: { value: 1 } });
+    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/jobs/stable-job-1/archive');
+    expect(mockApi.post).toHaveBeenNthCalledWith(3, '/jobs/stable-job-1/data:reset');
+    expect(mockApi.get).toHaveBeenCalledWith('/runs/run-new');
+    expect(mockApi.delete).toHaveBeenNthCalledWith(1, '/jobs/stable-job-1', { data: { version: 2, confirmed: true } });
+    expect(mockApi.delete).toHaveBeenNthCalledWith(2, '/runs/run-new', { data: { version: 2, confirmed: true } });
   });
 
   it('fetches durable operation status by encoded id', async () => {
@@ -380,7 +374,7 @@ describe('api parsing helpers', () => {
       },
     });
 
-    await expect(fetchSystemSummary()).resolves.toEqual({ version: 1, nodes: [], jobs: [] });
+    await expect(fetchSystemSummary()).resolves.toEqual({ version: 2, nodes: [], jobs: [] });
   });
 
   it('adds cluster nodes through the system cluster endpoint', async () => {
@@ -400,7 +394,7 @@ describe('api parsing helpers', () => {
         status: 'connected',
       }),
     );
-    expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:add', { version: 1, host: '10.0.0.42', token: 'join-token' });
+    expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:add', { version: 2, host: '10.0.0.42', token: 'join-token' });
   });
 
   it('removes cluster nodes through the system cluster endpoint', async () => {
@@ -418,7 +412,7 @@ describe('api parsing helpers', () => {
         status: 'disconnected',
       }),
     );
-    expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:remove', { version: 1, node_name: 'mirror_neuron@10.0.0.42' });
+    expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:remove', { version: 2, node_name: 'mirror_neuron@10.0.0.42' });
   });
 
   it('fetches installed runtime models', async () => {
@@ -474,7 +468,7 @@ describe('api parsing helpers', () => {
         tokens_per_second: 12.5,
       }),
     );
-    expect(mockApi.post).toHaveBeenCalledWith('/models/gemma4%3Ae2b/benchmark', { version: 1, max_tokens: 32 });
+    expect(mockApi.post).toHaveBeenCalledWith('/models/gemma4%3Ae2b/benchmark', { version: 2, max_tokens: 32 });
   });
 
   it('posts catalog blueprint launches to the async launch endpoint with a progress id', async () => {
@@ -485,7 +479,7 @@ describe('api parsing helpers', () => {
         run_id: 'run-vc-1',
         status: 'launching',
         progress_id: 'progress-vc-1',
-        progress_url: '/api/v1/blueprints/launch/progress/progress-vc-1',
+        progress_url: '/api/v2/blueprints/launch/progress/progress-vc-1',
       },
     });
 
@@ -505,7 +499,7 @@ describe('api parsing helpers', () => {
     }));
 
     expect(mockApi.post).toHaveBeenCalledWith('/blueprints/launch/runs', {
-      version: 1,
+      version: 2,
       source: 'catalog',
       blueprint_id: 'vc_assistant',
       progress_id: 'progress-vc-1',
@@ -557,13 +551,13 @@ describe('api parsing helpers', () => {
     }));
 
     expect(mockApi.post).toHaveBeenNthCalledWith(1, '/blueprints/launch/runs', {
-      version: 1,
+      version: 2,
       source: 'path',
       path: '/tmp/blueprints/vc_assistant',
       progress_id: 'progress-path-1',
     });
     expect(mockApi.post).toHaveBeenNthCalledWith(2, '/blueprints/launch/runs', {
-      version: 1,
+      version: 2,
       source: 'bundle',
       _bundle_path: '/tmp/bundle',
       progress_id: 'progress-bundle-1',
@@ -578,7 +572,7 @@ describe('api parsing helpers', () => {
         id: null,
         run_id: 'run-async-1',
         progress_id: 'progress-async-1',
-        progress_url: '/api/v1/blueprints/launch/progress/progress-async-1',
+        progress_url: '/api/v2/blueprints/launch/progress/progress-async-1',
       },
     });
 
@@ -592,7 +586,7 @@ describe('api parsing helpers', () => {
       id: null,
       run_id: 'run-async-1',
       progress_id: 'progress-async-1',
-      progress_url: '/api/v1/blueprints/launch/progress/progress-async-1',
+      progress_url: '/api/v2/blueprints/launch/progress/progress-async-1',
     }));
     expect(console.error).not.toHaveBeenCalledWith(
       'launchBlueprintJob validation failed:',
@@ -646,7 +640,7 @@ describe('api parsing helpers', () => {
 
     const file = new File(['bundle'], 'bundle.zip', { type: 'application/zip' });
     await expect(uploadBundle(file)).resolves.toEqual({
-      version: 1,
+      version: 2,
       bundle_path: '',
       manifest: {},
     });
@@ -658,7 +652,7 @@ describe('api parsing helpers', () => {
       },
     });
 
-    await expect(launchBlueprintJob({ source: 'path', path: '/tmp/bad-blueprint' })).resolves.toEqual({ version: 1, status: 'pending' });
+    await expect(launchBlueprintJob({ source: 'path', path: '/tmp/bad-blueprint' })).resolves.toEqual({ version: 2, status: 'pending' });
     expect(console.error).toHaveBeenCalledWith(
       'launchBlueprintJob validation failed:',
       expect.anything(),
@@ -668,7 +662,7 @@ describe('api parsing helpers', () => {
   it('posts reveal artifact calls through same-origin API paths only', async () => {
     mockApi.post.mockResolvedValueOnce({ data: { ok: true, folder: '/tmp/job-1' } });
 
-    await expect(revealArtifact('/api/v1/artifacts/logs/reveal')).resolves.toEqual(
+    await expect(revealArtifact('/api/v2/artifacts/logs/reveal')).resolves.toEqual(
       expect.objectContaining({ ok: true, folder: '/tmp/job-1' }),
     );
     expect(mockApi.post).toHaveBeenLastCalledWith('/artifacts/logs/reveal');
@@ -876,7 +870,7 @@ describe('api parsing helpers', () => {
         ],
       }),
     );
-    expect(mockApi.get).toHaveBeenCalledWith('/runs/job-1/workflow-progress', { baseURL: '/api/v2' });
+    expect(mockApi.get).toHaveBeenCalledWith('/runs/job-1/workflow-progress');
   });
 
   it('normalizes wrapped workflow progress snapshots from the newer API shape', async () => {

@@ -49,7 +49,7 @@ http://localhost:55173
 ## Notes
 
 - Start `mn-api` before using live runtime screens.
-- The configured API base may still point at `/api/v1` for runtime-wide
+- The configured API base may still point at `/api/v2` for runtime-wide
   inventory endpoints; all job and execution monitoring derives and uses the
   sibling `/api/v2` base.
 - Set `MN_WEB_API_TOKEN` when connecting to a protected API instance.
@@ -94,7 +94,7 @@ export MN_HOME=/var/lib/mirrorneuron
 export MN_LOG_LEVEL=info
 export MN_API_HOST=0.0.0.0
 export MN_API_PORT=8080
-export MN_WEB_API_BASE_URL=/api/v1
+export MN_WEB_API_BASE_URL=/api/v2
 npm run build
 ```
 

@@ -17,8 +17,8 @@ export const apiPathFromUrl = (
   if (!trimmed) throw new Error('Artifact reveal URL is empty');
   if (trimmed.startsWith(`${base}/`)) return trimmed.slice(base.length);
   if (trimmed === base) return '/';
-  if (trimmed.startsWith('/api/v1/')) return trimmed.slice('/api/v1'.length);
-  if (trimmed === '/api/v1') return '/';
+  if (trimmed.startsWith('/api/v2/')) return trimmed.slice('/api/v2'.length);
+  if (trimmed === '/api/v2') return '/';
   if (/^https?:\/\//i.test(trimmed)) {
     const parsed = new URL(trimmed);
     const baseUrl = /^https?:\/\//i.test(base) ? new URL(base) : null;

@@ -1,4 +1,4 @@
-import api, { apiVersionBaseUrl } from './client';
+import api from './client';
 import { z } from 'zod';
 import { parseArrayOrEmpty, parseOrFallback } from './parsing';
 import { apiPathFromUrl, jobPath, launchProgressPath, modelPath, operationPath, runPath, runtimeRunPath } from './routes';
@@ -6,7 +6,10 @@ import { createWorkflowProgressStreamer } from './streaming';
 import { normalizeWorkflowProgressPayload } from './workflowProgress';
 import { isRecord } from '../utils/records';
 
-const InterfaceVersionSchema = z.number().optional().default(1) as unknown as z.ZodOptional<z.ZodNumber>;
+const InterfaceVersionSchema = z
+  .literal(2)
+  .optional()
+  .default(2) as unknown as z.ZodOptional<z.ZodNumber>;
 const arrayFromEnvelope = (data: unknown, keys: string[]) => {
   if (Array.isArray(data)) return data;
   if (!isRecord(data)) return [];
@@ -24,7 +27,7 @@ const withInterfaceVersion = <T>(payload: T): T | (Record<string, unknown> & { v
     Array.isArray(payload) ||
     (typeof FormData !== 'undefined' && payload instanceof FormData)
   ) return payload;
-  return { version: 1, ...(payload as Record<string, unknown>) };
+  return { version: 2, ...(payload as Record<string, unknown>) };
 };
 
 export const ErrorEnvelopeSchema = z.object({
@@ -100,10 +103,8 @@ export const JobSchema = z.object({
   failure: ErrorEnvelopeSchema.optional(),
 }).passthrough();
 
-const V2InterfaceVersionSchema = z.number().optional().default(2) as unknown as z.ZodOptional<z.ZodNumber>;
-
 export const StableJobSchema = z.object({
-  version: V2InterfaceVersionSchema,
+  version: InterfaceVersionSchema,
   job_id: z.string(),
   blueprint_id: z.string().nullable().optional(),
   graph_id: z.string().nullable().optional(),
@@ -124,7 +125,7 @@ export const StableJobSchema = z.object({
 }).passthrough();
 
 export const StableRunSchema = z.object({
-  version: V2InterfaceVersionSchema,
+  version: InterfaceVersionSchema,
   run_id: z.string(),
   job_id: z.string().nullable().optional(),
   graph_id: z.string().nullable().optional(),
@@ -400,14 +401,14 @@ export const OperationSchema = z.object({
 }).passthrough();
 
 export const StableJobActionResponseSchema = z.object({
-  version: V2InterfaceVersionSchema,
+  version: InterfaceVersionSchema,
   job_id: z.string(),
   status: z.string().optional().default('active'),
   data_generation: z.number().optional(),
 }).passthrough();
 
 export const StableRunActionResponseSchema = z.object({
-  version: V2InterfaceVersionSchema,
+  version: InterfaceVersionSchema,
   run_id: z.string(),
   job_id: z.string().nullable().optional(),
   status: z.string().optional().default('unknown'),
@@ -665,14 +666,16 @@ export type FetchJobsOptions = {
 export const fetchJobs = async (options: FetchJobsOptions = {}) => {
   const request =
     typeof options.includeTerminal === 'boolean'
-      ? api.get('/jobs', { params: { include_terminal: options.includeTerminal } })
-      : api.get('/jobs');
+      ? api.get('/runs', { params: { include_terminal: options.includeTerminal } })
+      : api.get('/runs');
   const r = await request;
-  const data = arrayFromEnvelope(r.data, ['data', 'jobs']);
+  const data = arrayFromEnvelope(r.data, ['data', 'runs']).map((run) => (
+    isRecord(run) && typeof run.run_id === 'string'
+      ? { ...run, job_id: run.run_id }
+      : run
+  ));
   return parseArrayOrEmpty(JobSchema, data, 'fetchJobs', true);
 };
-
-const v2RequestConfig = () => ({ baseURL: apiVersionBaseUrl(2) });
 
 export type FetchStableJobsOptions = {
   includeArchived?: boolean;
@@ -680,7 +683,6 @@ export type FetchStableJobsOptions = {
 
 export const fetchStableJobs = async (options: FetchStableJobsOptions = {}) => {
   const response = await api.get('/jobs', {
-    ...v2RequestConfig(),
     params: { include_archived: options.includeArchived ?? false },
   });
   return parseArrayOrEmpty(
@@ -691,11 +693,11 @@ export const fetchStableJobs = async (options: FetchStableJobsOptions = {}) => {
   );
 };
 
-export const fetchStableJob = (id: string) => api.get(jobPath(id), v2RequestConfig()).then((response) => (
+export const fetchStableJob = (id: string) => api.get(jobPath(id)).then((response) => (
   StableJobSchema.parse(response.data)
 ));
 
-export const fetchStableJobRuns = (id: string) => api.get(jobPath(id, '/runs'), v2RequestConfig()).then((response) => (
+export const fetchStableJobRuns = (id: string) => api.get(jobPath(id, '/runs')).then((response) => (
   parseArrayOrEmpty(
     StableRunSchema,
     arrayFromEnvelope(response.data, ['data', 'runs']),
@@ -705,30 +707,29 @@ export const fetchStableJobRuns = (id: string) => api.get(jobPath(id, '/runs'), 
 ));
 
 export const startStableJobRun = (id: string, inputs: Record<string, unknown> = {}) => (
-  api.post(jobPath(id, '/runs'), { version: 2, inputs }, v2RequestConfig()).then((response) => StableRunActionResponseSchema.parse(response.data))
+  api.post(jobPath(id, '/runs'), { version: 2, inputs }).then((response) => StableRunActionResponseSchema.parse(response.data))
 );
 
-export const archiveStableJob = (id: string) => api.post(jobPath(id, '/archive'), undefined, v2RequestConfig()).then((response) => (
+export const archiveStableJob = (id: string) => api.post(jobPath(id, '/archive')).then((response) => (
   StableJobActionResponseSchema.parse(response.data)
 ));
 
-export const resetStableJobData = (id: string) => api.post(jobPath(id, '/data:reset'), undefined, v2RequestConfig()).then((response) => (
+export const resetStableJobData = (id: string) => api.post(jobPath(id, '/data:reset')).then((response) => (
   StableJobActionResponseSchema.parse(response.data)
 ));
 
 export const deleteStableJob = (id: string) => api.delete(jobPath(id), {
-  ...v2RequestConfig(),
   data: { version: 2, confirmed: true },
 }).then((response) => (
   StableJobActionResponseSchema.parse(response.data)
 ));
 
-export const fetchStableRun = (id: string) => api.get(runPath(id), v2RequestConfig()).then((response) => (
+export const fetchStableRun = (id: string) => api.get(runPath(id)).then((response) => (
   StableRunSchema.parse(response.data)
 ));
 
 const runAction = (id: string, action: 'pause' | 'resume' | 'cancel') => (
-  api.post(runPath(id, `/${action}`), undefined, v2RequestConfig()).then((response) => (
+  api.post(runPath(id, `/${action}`)).then((response) => (
     StableRunActionResponseSchema.parse(response.data)
   ))
 );
@@ -738,7 +739,6 @@ export const resumeRun = (id: string) => runAction(id, 'resume');
 export const cancelRun = (id: string) => runAction(id, 'cancel');
 
 export const deleteRun = (id: string) => api.delete(runPath(id), {
-  ...v2RequestConfig(),
   data: { version: 2, confirmed: true },
 }).then((response) => (
   StableRunActionResponseSchema.parse(response.data)
@@ -750,36 +750,35 @@ export type FetchJobDetailsOptions = {
 
 export const fetchJobDetails = (id: string, options: FetchJobDetailsOptions = {}) => {
   const request = options.include
-    ? api.get(runPath(id, '/monitor'), { ...v2RequestConfig(), params: { include: options.include } })
-    : api.get(runPath(id, '/monitor'), v2RequestConfig());
+    ? api.get(runPath(id, '/monitor'), { params: { include: options.include } })
+    : api.get(runPath(id, '/monitor'));
   return request.then(r => (
     parseOrFallback(JobDetailsSchema, r.data, { job: { job_id: id, status: 'unknown' } }, `fetchJobDetails(${id})`)
   ));
 };
 
-export const fetchJobEvents = (id: string) => api.get(runPath(id, '/monitor'), v2RequestConfig()).then(r => (
+export const fetchJobEvents = (id: string) => api.get(runPath(id, '/monitor')).then(r => (
   parseArrayOrEmpty(JobEventSchema, arrayFromEnvelope(r.data, ['data', 'events', 'recent_events']), `fetchJobEvents(${id})`)
 ));
-export const fetchJobAgentGraph = (id: string) => api.get(runPath(id, '/monitor'), v2RequestConfig()).then(r => (
+export const fetchJobAgentGraph = (id: string) => api.get(runPath(id, '/monitor')).then(r => (
   parseOrFallback(AgentGraphSchema, r.data?.agent_graph, { job_id: id, nodes: [], edges: [] }, `fetchJobAgentGraph(${id})`)
 ));
-export const fetchRunUi = (id: string) => api.get(runtimeRunPath(id, '/ui'), v2RequestConfig()).then(r => (
+export const fetchRunUi = (id: string) => api.get(runtimeRunPath(id, '/ui')).then(r => (
   parseOrFallback(RunUiResponseSchema, r.data, { run_id: id, ui: { run_id: id, title: 'Blueprint Run' } }, `fetchRunUi(${id})`)
 ));
 export const fetchBlueprints = () => api.get('/blueprints').then(r => (
   parseOrFallback(BlueprintListResponseSchema, r.data, {}, 'fetchBlueprints')
 ));
-export const fetchWorkflowProgress = (id: string) => api.get(runPath(id, '/workflow-progress'), v2RequestConfig()).then(r => (
+export const fetchWorkflowProgress = (id: string) => api.get(runPath(id, '/workflow-progress')).then(r => (
   parseOrFallback(WorkflowProgressSchema, r.data, { job_id: id, workflow_id: id, name: id }, `fetchWorkflowProgress(${id})`)
 ));
 
-const apiBaseUrl = () => String(api.defaults.baseURL || '/api/v1').replace(/\/$/, '');
-const v2ApiBaseUrl = () => apiVersionBaseUrl(2).replace(/\/$/, '');
+const apiBaseUrl = () => String(api.defaults.baseURL || '/api/v2').replace(/\/$/, '');
 const authHeader = (): Record<string, string> => {
   const header = api.defaults.headers.common.Authorization;
   return typeof header === 'string' && header ? { Authorization: header } : {};
 };
-const workflowProgressStreamUrl = (id: string) => `${v2ApiBaseUrl()}${runPath(id, '/workflow-progress/stream')}`;
+const workflowProgressStreamUrl = (id: string) => `${apiBaseUrl()}${runPath(id, '/workflow-progress/stream')}`;
 
 export const revealArtifact = (revealUrl: string) => {
   let path: string;
@@ -802,10 +801,10 @@ export const streamWorkflowProgress = createWorkflowProgressStreamer({
 export const fetchOperation = (id: string) => api.get(operationPath(id)).then(r => (
   OperationSchema.parse(r.data)
 ));
-export const clearJobs = () => api.post('/jobs/cleanup').then(r => (
+export const clearJobs = () => api.post('/runs:cleanup').then(r => (
   OperationSchema.parse(r.data)
 ));
-export const cancelAllJobs = () => api.post('/jobs:cancel-all').then(r => (
+export const cancelAllJobs = () => api.post('/runs:cancel-all').then(r => (
   OperationSchema.parse(r.data)
 ));
 export const uploadBundle = (file: File) => {

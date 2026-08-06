@@ -45,7 +45,7 @@ describe('workflow resource helpers', () => {
             {
               artifact_id: 'report_pdf',
               relative_path: 'runs/job-1/report.pdf',
-              reveal_url: '/api/v1/artifacts/report_pdf/reveal',
+              reveal_url: '/api/v2/artifacts/report_pdf/reveal',
             },
           ],
           provides: ['runs/job-1/shared.csv'],
@@ -86,7 +86,7 @@ describe('workflow resource helpers', () => {
       expect.objectContaining({
         label: 'runs/job-1/report.pdf',
         value: 'runs/job-1/report.pdf',
-        revealUrl: '/api/v1/artifacts/report_pdf/reveal',
+        revealUrl: '/api/v2/artifacts/report_pdf/reveal',
         kind: 'file',
       }),
       expect.objectContaining({
