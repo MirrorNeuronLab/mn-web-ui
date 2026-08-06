@@ -83,4 +83,27 @@ describe('usePollingEffect', () => {
 
     expect(onPoll).not.toHaveBeenCalled();
   });
+
+  it('does not restart polling when only the initial-loading callback changes', async () => {
+    vi.useFakeTimers();
+    const onPoll = vi.fn();
+    const firstInitialPoll = vi.fn();
+    const secondInitialPoll = vi.fn();
+
+    const { rerender } = render(
+      <PollingProbe onInitialPoll={firstInitialPoll} onPoll={onPoll} />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    rerender(<PollingProbe onInitialPoll={secondInitialPoll} onPoll={onPoll} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(firstInitialPoll).toHaveBeenCalledOnce();
+    expect(secondInitialPoll).not.toHaveBeenCalled();
+    expect(onPoll).toHaveBeenCalledOnce();
+  });
 });

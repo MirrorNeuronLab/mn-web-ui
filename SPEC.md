@@ -27,9 +27,10 @@ direct-linkable and survive refresh with the same route parameters.
 
 ## API Boundary
 
-The browser calls the configured API base (safe default `/api/v1`) through the
-central API client. Persistent jobs and their execution controls use `/api/v2`;
-runtime observability and compatibility views use `/api/v1`. When
+The browser calls the configured API base through the central API client.
+Persistent jobs, execution controls, monitor snapshots, public workflow
+progress, and execution artifacts use `/api/v2`. Runtime-wide inventory
+surfaces may continue to use the configured base. When
 `MN_WEB_API_TOKEN` is set, requests send it as a bearer token. The token is
 sensitive and is never printed or included in diagnostics.
 Run-specific UI definitions use the `json-render` adapter; Gradio adapters and
@@ -53,6 +54,10 @@ avoids duplicate events or stale-state overwrites.
   exposing internal secrets or raw errors.
 - Workflow views make status, current activity, evidence/artifacts, failure
   context, and available controls discoverable.
+- Workflow list and graph modes render the same public steps returned by
+  `/api/v2/runs/{id}/workflow-progress`, preserving the step names, counts, current
+  state, and topology shown by `mn job monitor` without exposing lowered
+  runtime control nodes.
 - Advanced IDs, raw manifests, and diagnostics use progressive disclosure.
 - Keyboard navigation, semantic labels, focus restoration, contrast, and
   screen-reader announcements are required for interactive controls.

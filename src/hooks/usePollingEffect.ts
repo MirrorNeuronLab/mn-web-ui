@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 type PollingOptions = {
   intervalMs: number;
@@ -16,6 +16,12 @@ export function usePollingEffect(
     onInitialPoll,
   }: PollingOptions,
 ) {
+  const onInitialPollRef = useRef(onInitialPoll);
+
+  useEffect(() => {
+    onInitialPollRef.current = onInitialPoll;
+  }, [onInitialPoll]);
+
   useEffect(() => {
     if (!enabled) return undefined;
 
@@ -32,7 +38,7 @@ export function usePollingEffect(
       }
     };
     const initialTimer = window.setTimeout(() => {
-      onInitialPoll?.();
+      onInitialPollRef.current?.();
       void run();
     }, initialDelayMs);
 
@@ -41,5 +47,5 @@ export function usePollingEffect(
       window.clearTimeout(initialTimer);
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
     };
-  }, [callback, enabled, initialDelayMs, intervalMs, onInitialPoll]);
+  }, [callback, enabled, initialDelayMs, intervalMs]);
 }

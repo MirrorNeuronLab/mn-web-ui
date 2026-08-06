@@ -4,9 +4,55 @@ import WorkflowProgressPanel from '../components/WorkflowProgressPanel';
 import type { WorkflowProgress } from '../api';
 
 describe('WorkflowProgressPanel activity timeline', () => {
+  it('shows a blueprint-agnostic public step list and can switch to the graph', () => {
+    const steps = Array.from({ length: 10 }, (_, index) => ({
+      id: `public-step-${index + 1}`,
+      label: `Public step ${index + 1}`,
+      goal: `Run public step ${index + 1}`,
+      status: index < 3 ? 'done' : index === 3 ? 'running' : 'ready',
+      current: index === 3,
+      done_count: index < 3 ? 1 : 0,
+      running_count: index === 3 ? 1 : 0,
+      idle_count: 0,
+      ready_count: index > 3 ? 1 : 0,
+      failed_count: 0,
+      total_count: 1,
+      live: false,
+      elapsed_seconds: 1,
+      agents: [],
+    }));
+    const progress = {
+      schema_version: 2,
+      job_id: 'generic-blueprint-1234567890',
+      workflow_id: 'generic-blueprint-workflow',
+      name: 'Generic Blueprint Workflow',
+      description: 'A public workflow contract.',
+      status: 'running',
+      workflow_kind: 'batch',
+      elapsed_seconds: 12,
+      agent_count: { done: 3, running: 1, idle: 0, ready: 6, failed: 0, total: 10 },
+      current_step_id: 'public-step-4',
+      current_step_ids: ['public-step-4'],
+      current_step: null,
+      steps,
+      messages: [],
+      recent_events: [],
+    } as WorkflowProgress;
+
+    render(<WorkflowProgressPanel progress={progress} details={null} />);
+
+    expect(screen.getByRole('button', { name: '10. Public step 10 0/1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Graph' }));
+
+    expect(screen.getByRole('button', { name: 'Graph' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('workflow-step-node-public-step-4')).toBeInTheDocument();
+  });
+
   it('renders mixed activity categories and filters to tool events', () => {
     const progress: WorkflowProgress = {
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'job-observe',
       workflow_id: 'observe-workflow',
       name: 'Observe Workflow',

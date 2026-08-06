@@ -21,7 +21,6 @@ import {
   fetchSystemSummary,
   clearJobs,
   cancelAllJobs,
-  cancelJob,
   isServiceJob,
   addClusterNode,
   benchmarkRuntimeModel,
@@ -29,8 +28,6 @@ import {
   fetchRuntimeModels,
   launchBlueprintJob,
   removeClusterNode,
-  pauseJob,
-  resumeJob,
   revealArtifact,
   streamWorkflowProgress,
   uploadBundle,
@@ -200,27 +197,9 @@ describe('api parsing helpers', () => {
     expect(mockApi.post).toHaveBeenCalledWith('/jobs:cancel-all');
   });
 
-  it('rejects malformed durable-operation responses and keeps legacy control fallbacks', async () => {
+  it('rejects malformed durable-operation responses', async () => {
     mockApi.post.mockResolvedValueOnce({ data: { cleared_count: 'two' } });
     await expect(clearJobs()).rejects.toThrow();
-
-    mockApi.post.mockResolvedValueOnce({ data: { status: 42 } });
-    await expect(cancelJob('job-1')).resolves.toEqual(expect.objectContaining({
-      job_id: 'job-1',
-      status: 'cancelled',
-    }));
-
-    mockApi.post.mockResolvedValueOnce({ data: { status: null } });
-    await expect(pauseJob('job-1')).resolves.toEqual(expect.objectContaining({
-      job_id: 'job-1',
-      status: 'paused',
-    }));
-
-    mockApi.post.mockResolvedValueOnce({ data: { status: false } });
-    await expect(resumeJob('job-1')).resolves.toEqual(expect.objectContaining({
-      job_id: 'job-1',
-      status: 'running',
-    }));
   });
 
   it('encodes dynamic job ids before building routes', async () => {
@@ -228,30 +207,34 @@ describe('api parsing helpers', () => {
       data: { job: { job_id: 'job/with space', status: 'running' } },
     });
     await fetchJobDetails('job/with space');
-    expect(mockApi.get).toHaveBeenLastCalledWith('/jobs/job%2Fwith%20space');
+    expect(mockApi.get).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/monitor', { baseURL: '/api/v2' });
 
     mockApi.get.mockResolvedValueOnce({
       data: { job: { job_id: 'job/with space', status: 'running' } },
     });
     await fetchJobDetails('job/with space', { include: 'full' });
     expect(mockApi.get).toHaveBeenLastCalledWith(
-      '/jobs/job%2Fwith%20space',
-      { params: { include: 'full' } },
+      '/runs/job%2Fwith%20space/monitor',
+      { baseURL: '/api/v2', params: { include: 'full' } },
     );
 
     mockApi.get.mockResolvedValueOnce({ data: { data: [] } });
     await fetchJobEvents('job/with space');
-    expect(mockApi.get).toHaveBeenLastCalledWith('/jobs/job%2Fwith%20space/events');
+    expect(mockApi.get).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/monitor', { baseURL: '/api/v2' });
 
     mockApi.get.mockResolvedValueOnce({
-      data: { job_id: 'job/with space', nodes: [], edges: [] },
+      data: { agent_graph: { job_id: 'job/with space', nodes: [], edges: [] } },
     });
     await fetchJobAgentGraph('job/with space');
-    expect(mockApi.get).toHaveBeenLastCalledWith('/jobs/job%2Fwith%20space/agent-graph');
+    expect(mockApi.get).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/monitor', { baseURL: '/api/v2' });
 
-    mockApi.post.mockResolvedValueOnce({ data: { status: 'paused' } });
-    await pauseJob('job/with space');
-    expect(mockApi.post).toHaveBeenLastCalledWith('/jobs/job%2Fwith%20space/pause');
+    mockApi.post.mockResolvedValueOnce({ data: { version: 2, run_id: 'job/with space', status: 'paused' } });
+    await pauseRun('job/with space');
+    expect(mockApi.post).toHaveBeenLastCalledWith(
+      '/runs/job%2Fwith%20space/pause',
+      undefined,
+      { baseURL: '/api/v2' },
+    );
   });
 
   it('uses the list endpoint as the authoritative source for row status', async () => {
@@ -893,7 +876,7 @@ describe('api parsing helpers', () => {
         ],
       }),
     );
-    expect(mockApi.get).toHaveBeenCalledWith('/jobs/job-1/workflow-progress');
+    expect(mockApi.get).toHaveBeenCalledWith('/runs/job-1/workflow-progress', { baseURL: '/api/v2' });
   });
 
   it('normalizes wrapped workflow progress snapshots from the newer API shape', async () => {
@@ -1003,7 +986,7 @@ describe('api parsing helpers', () => {
 
     await streamWorkflowProgress('job-1', onSnapshot, undefined, onHeartbeat);
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/jobs/job-1/workflow-progress/stream', {
+    expect(fetchMock).toHaveBeenCalledWith('/api/v2/runs/job-1/workflow-progress/stream', {
       headers: {},
       signal: undefined,
     });

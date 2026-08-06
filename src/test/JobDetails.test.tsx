@@ -72,7 +72,7 @@ describe('JobDetails Component', () => {
       events: [],
     });
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'test-job-1',
       workflow_id: 'test-workflow',
       name: 'Test Workflow',
@@ -238,10 +238,10 @@ describe('JobDetails Component', () => {
         token_totals: { total_tokens: 1200 },
       },
       artifacts: [
-        { artifact_id: 'timeline_jsonl', url: '/api/v1/runs/trace-run/artifacts/timeline.jsonl' },
-        { artifact_id: 'events_jsonl', url: '/api/v1/runs/trace-run/artifacts/events.jsonl' },
-        { artifact_id: 'logs_jsonl', url: '/api/v1/runs/trace-run/artifacts/logs.jsonl' },
-        { artifact_id: 'errors_jsonl', url: '/api/v1/runs/trace-run/artifacts/errors.jsonl' },
+        { artifact_id: 'timeline_jsonl', url: '/api/v2/runtime-runs/trace-run/artifacts/timeline.jsonl' },
+        { artifact_id: 'events_jsonl', url: '/api/v2/runtime-runs/trace-run/artifacts/events.jsonl' },
+        { artifact_id: 'logs_jsonl', url: '/api/v2/runtime-runs/trace-run/artifacts/logs.jsonl' },
+        { artifact_id: 'errors_jsonl', url: '/api/v2/runtime-runs/trace-run/artifacts/errors.jsonl' },
       ],
       agents: [],
       sandboxes: [],
@@ -258,8 +258,8 @@ describe('JobDetails Component', () => {
     expect(screen.getByText('4 / 2 / 1')).toBeInTheDocument();
     expect(screen.getByText('1 / 2')).toBeInTheDocument();
     expect(screen.getByText('256 MB / 1,200')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'timeline.jsonl' })[0].getAttribute('href')).toContain('/api/v1/runs/trace-run/artifacts/timeline.jsonl');
-    expect(screen.getAllByRole('link', { name: 'errors.jsonl' })[0].getAttribute('href')).toContain('/api/v1/runs/trace-run/artifacts/errors.jsonl');
+    expect(screen.getAllByRole('link', { name: 'timeline.jsonl' })[0].getAttribute('href')).toContain('/api/v2/runtime-runs/trace-run/artifacts/timeline.jsonl');
+    expect(screen.getAllByRole('link', { name: 'errors.jsonl' })[0].getAttribute('href')).toContain('/api/v2/runtime-runs/trace-run/artifacts/errors.jsonl');
   });
 
   it('renders artifact filenames and opens local file locations from failure and outputs', async () => {
@@ -267,20 +267,20 @@ describe('JobDetails Component', () => {
       {
         artifact_id: 'errors_jsonl',
         relative_path: 'errors.jsonl',
-        url: '/api/v1/runs/artifact-run/artifacts/errors.jsonl',
-        reveal_url: '/api/v1/runs/artifact-run/artifacts/errors.jsonl/reveal',
+        url: '/api/v2/runtime-runs/artifact-run/artifacts/errors.jsonl',
+        reveal_url: '/api/v2/runtime-runs/artifact-run/artifacts/errors.jsonl/reveal',
       },
       {
         artifact_id: 'events_jsonl',
         relative_path: 'events.jsonl',
-        url: '/api/v1/runs/artifact-run/artifacts/events.jsonl',
-        reveal_url: '/api/v1/runs/artifact-run/artifacts/events.jsonl/reveal',
+        url: '/api/v2/runtime-runs/artifact-run/artifacts/events.jsonl',
+        reveal_url: '/api/v2/runtime-runs/artifact-run/artifacts/events.jsonl/reveal',
       },
       {
         artifact_id: 'logs_jsonl',
         relative_path: 'logs.jsonl',
-        url: '/api/v1/runs/artifact-run/artifacts/logs.jsonl',
-        reveal_url: '/api/v1/runs/artifact-run/artifacts/logs.jsonl/reveal',
+        url: '/api/v2/runtime-runs/artifact-run/artifacts/logs.jsonl',
+        reveal_url: '/api/v2/runtime-runs/artifact-run/artifacts/logs.jsonl/reveal',
       },
     ];
     vi.mocked(fetchJobDetails).mockResolvedValue({
@@ -309,7 +309,7 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'test-job-1',
       workflow_id: 'test-workflow',
       name: 'Test Workflow',
@@ -338,7 +338,7 @@ describe('JobDetails Component', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'errors.jsonl' })[0]);
 
     await waitFor(() => {
-      expect(revealArtifact).toHaveBeenCalledWith('/api/v1/runs/artifact-run/artifacts/errors.jsonl/reveal');
+      expect(revealArtifact).toHaveBeenCalledWith('/api/v2/runtime-runs/artifact-run/artifacts/errors.jsonl/reveal');
     });
   });
 
@@ -368,7 +368,7 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'test-job-1',
       workflow_id: 'test-workflow',
       name: 'Test Workflow',
@@ -423,7 +423,7 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'vwav-be7cc6d4',
       workflow_id: 'unknown',
       name: 'Video Watch Assistant',
@@ -465,7 +465,7 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'pitev-5d7781d6',
       workflow_id: 'personal_income_tax_expert_v1',
       name: 'Personal Income Tax Expert',
@@ -505,7 +505,7 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'service-job-1',
       workflow_id: 'video_watch_assistant_v1',
       name: 'Video Watch Assistant',
@@ -532,6 +532,7 @@ describe('JobDetails Component', () => {
   });
 
   it('infers completed batch status from complete progress counters', async () => {
+    let progressSignal: AbortSignal | undefined;
     vi.mocked(fetchJobDetails).mockResolvedValue({
       job: {
         job_id: 'batch-job-1',
@@ -544,7 +545,7 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     const completeProgress: WorkflowProgress = {
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'batch-job-1',
       workflow_id: 'batch_workflow_v1',
       name: 'Batch Workflow',
@@ -562,6 +563,7 @@ describe('JobDetails Component', () => {
     };
     vi.mocked(fetchWorkflowProgress).mockResolvedValue(completeProgress);
     vi.mocked(streamWorkflowProgress).mockImplementation(async (_id, onSnapshot, _signal, onHeartbeat) => {
+      progressSignal = _signal;
       onSnapshot({ ...completeProgress, status: 'completed' });
       onHeartbeat?.();
     });
@@ -576,6 +578,7 @@ describe('JobDetails Component', () => {
     await waitFor(() => {
       expect(screen.getAllByText('closed').length).toBeGreaterThan(0);
     });
+    expect(progressSignal?.aborted).toBe(true);
     expect(screen.queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
@@ -689,7 +692,7 @@ describe('JobDetails Component', () => {
       stats: { agent_count: 2, edge_count: 0, message_count: 0, event_count: 0 },
     });
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'video-job-1',
       workflow_id: 'video_watch_assistant',
       name: 'Video Watch Assistant',
@@ -749,7 +752,7 @@ describe('JobDetails Component', () => {
     expect(screen.getByText('node-a')).toBeInTheDocument();
   });
 
-  it('shows runtime fallback progress when workflow progress is unavailable', async () => {
+  it('waits for the public v2 workflow instead of inventing runtime-agent steps', async () => {
     const mockDetails = {
       job: {
         job_id: 'test-job-1',
@@ -785,10 +788,8 @@ describe('JobDetails Component', () => {
     });
 
     fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
-    expect(screen.queryByText(/Loading workflow progress/i)).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Runtime Agents/).length).toBeGreaterThan(0);
-    expect(screen.getByText('agent-1')).toBeInTheDocument();
-    expect(screen.getAllByText(/Showing runtime job status/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Waiting for public v2 workflow progress/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Runtime Agents/)).not.toBeInTheDocument();
   });
 
   it('renders service workflow agents as idle instead of done while the job is running', async () => {
@@ -805,7 +806,7 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'test-job-1',
       workflow_id: 'video_watch_assistant_v1',
       name: 'Video Watch Assistant',
@@ -906,7 +907,7 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'test-job-1',
       workflow_id: 'tax_graph',
       name: 'Tax Graph',
@@ -1018,7 +1019,7 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     const progress: WorkflowProgress = {
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'test-job-1',
       workflow_id: 'tax_graph',
       name: 'Tax Graph',
@@ -1132,7 +1133,7 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
-      schema_version: 1,
+      schema_version: 2,
       job_id: 'test-job-1',
       workflow_id: 'retry_graph',
       name: 'Retry Graph',
@@ -1233,9 +1234,10 @@ describe('JobDetails Component', () => {
 
   it('shows blueprint web ui from the run ui endpoint when job details are compact', async () => {
     const mockDetails = {
+      runtime_run_id: 'blueprint-run-1',
       job: {
         job_id: 'test-job-1',
-        run_id: 'blueprint-run-1',
+        run_id: 'test-job-1',
         graph_id: 'graph-1',
         status: 'running',
         submitted_at: '2026-04-16T12:00:00Z',
@@ -1269,6 +1271,34 @@ describe('JobDetails Component', () => {
       expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute('href', 'http://localhost:61000/');
     });
     expect(fetchRunUi).toHaveBeenCalledWith('blueprint-run-1');
+  });
+
+  it('treats a missing optional run web ui as a normal progress-only run', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(fetchJobDetails).mockResolvedValue({
+      runtime_run_id: 'progress-only-runtime',
+      job: {
+        job_id: 'test-job-1',
+        run_id: 'test-job-1',
+        graph_id: 'graph-1',
+        status: 'running',
+      },
+      agents: [],
+      sandboxes: [],
+      recent_events: [],
+    });
+    vi.mocked(fetchRunUi).mockRejectedValue({ response: { status: 404 } });
+
+    try {
+      renderWithRouter(<JobDetails />);
+
+      await waitFor(() => {
+        expect(fetchRunUi).toHaveBeenCalledWith('progress-only-runtime');
+      });
+      expect(consoleError).not.toHaveBeenCalledWith('Failed to load run web UI', expect.anything());
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('pauses a running execution through the v2 run control', async () => {

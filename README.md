@@ -8,9 +8,12 @@ The main lifecycle surfaces are intentionally separate:
 
 - **Jobs** use `/api/v2` and own reusable configuration, schedules, shared data,
   and run history.
-- **Runs** are individual executions. Lifecycle controls use `/api/v2/runs`,
-  while live progress, agent graphs, events, and artifacts use the `/api/v1`
-  execution compatibility routes.
+- **Runs** are individual executions. Lifecycle controls, live progress,
+  monitor snapshots, agent graphs, events, and artifacts use `/api/v2`.
+
+The run monitor defaults to a selectable public-step list and can switch to the
+equivalent workflow graph. Both modes consume the same workflow-progress
+contract as `mn job monitor`; runtime-only control nodes are not UI steps.
 
 ## Quick Start
 
@@ -46,8 +49,9 @@ http://localhost:55173
 ## Notes
 
 - Start `mn-api` before using live runtime screens.
-- The configured API base defaults to `/api/v1`; the client derives the sibling
-  `/api/v2` base for stable job and run lifecycle requests.
+- The configured API base may still point at `/api/v1` for runtime-wide
+  inventory endpoints; all job and execution monitoring derives and uses the
+  sibling `/api/v2` base.
 - Set `MN_WEB_API_TOKEN` when connecting to a protected API instance.
 - Blueprint-owned run interfaces use the `json-render` adapter.
 

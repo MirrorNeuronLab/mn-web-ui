@@ -27,7 +27,7 @@ import {
 import { cn } from '../lib/utils';
 import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
 import { buildOutputResources } from '../utils/workflowResources';
-import { blueprintWebUiInfo, buildFallbackWorkflowProgress, webUiInfoFromRecord } from '../utils/jobDetailsView';
+import { blueprintWebUiInfo, webUiInfoFromRecord } from '../utils/jobDetailsView';
 import { isTerminalJobStatus, jobStatusBadgeClass } from '../utils/jobStatus';
 import { isRecord } from '../utils/records';
 
@@ -84,6 +84,11 @@ const traceIdFrom = (
 const isNonEmptyRecord = (value: unknown): value is Record<string, unknown> => (
   isRecord(value) && Object.keys(value).length > 0
 );
+
+const responseStatusFromError = (error: unknown): number | undefined => {
+  if (!isRecord(error) || !isRecord(error.response)) return undefined;
+  return typeof error.response.status === 'number' ? error.response.status : undefined;
+};
 
 const stringValue = (...values: unknown[]): string | undefined => {
   for (const value of values) {
@@ -198,13 +203,16 @@ export default function JobDetails() {
     try {
       const d = await fetchJobDetails(id, { include: 'full' });
       setDetails(d);
-      setWorkflowProgress(current => current ?? buildFallbackWorkflowProgress(d, d.recent_events || [], null));
-      const runId = stringValue(d.job?.run_id, isRecord(d.summary) ? d.summary.run_id : undefined);
+      const runId = stringValue(d.runtime_run_id, isRecord(d.summary) ? d.summary.runtime_run_id : undefined);
       if (blueprintWebUiInfo(d) || !runId) {
         setRunWebUi(null);
       } else {
         const runUi = await fetchRunUi(runId).catch((err) => {
-          console.error('Failed to load run web UI', err);
+          // A workflow run does not need to publish a separate blueprint dashboard.
+          // Keep the progress UI quiet when that optional resource is absent.
+          if (responseStatusFromError(err) !== 404) {
+            console.error('Failed to load run web UI', err);
+          }
           return null;
         });
         setRunWebUi(runUi?.web_ui || null);
@@ -290,6 +298,7 @@ export default function JobDetails() {
         terminalObserved = true;
         clearHealthTimers();
         setProgressStreamState('closed');
+        controller.abort();
       } else {
         markLive();
       }

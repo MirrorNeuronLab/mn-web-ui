@@ -45,9 +45,13 @@ export default function StableJobs() {
     }
   }, [includeArchived]);
 
+  const markInitialLoading = useCallback(() => {
+    setLoading(true);
+  }, []);
+
   usePollingEffect(loadJobs, {
     intervalMs: 5000,
-    onInitialPoll: () => setLoading(true),
+    onInitialPoll: markInitialLoading,
   });
 
   return (

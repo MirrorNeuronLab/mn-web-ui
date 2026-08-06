@@ -1,7 +1,7 @@
 import api, { apiVersionBaseUrl } from './client';
 import { z } from 'zod';
 import { parseArrayOrEmpty, parseOrFallback } from './parsing';
-import { apiPathFromUrl, jobPath, launchProgressPath, modelPath, operationPath, runPath } from './routes';
+import { apiPathFromUrl, jobPath, launchProgressPath, modelPath, operationPath, runPath, runtimeRunPath } from './routes';
 import { createWorkflowProgressStreamer } from './streaming';
 import { normalizeWorkflowProgressPayload } from './workflowProgress';
 import { isRecord } from '../utils/records';
@@ -156,6 +156,8 @@ export const JobDetailsSchema = z.object({
   web_ui_service: z.record(z.string(), z.unknown()).optional(),
   blueprint_web_ui_service: z.record(z.string(), z.unknown()).optional(),
   trace_id: z.string().nullable().optional(),
+  execution_id: z.string().nullable().optional(),
+  runtime_run_id: z.string().nullable().optional(),
   observability_summary: ObservabilitySummarySchema,
   failure: ErrorEnvelopeSchema.optional().nullable(),
 }).passthrough();
@@ -371,14 +373,6 @@ export const UploadedBundleSchema = z.object({
   version: InterfaceVersionSchema,
   bundle_path: z.string().optional().default(''),
   manifest: z.record(z.string(), z.unknown()).optional().default({}),
-}).passthrough();
-
-export const JobActionResponseSchema = z.object({
-  version: InterfaceVersionSchema,
-  ok: z.boolean().optional(),
-  job_id: z.string().optional(),
-  status: z.string().optional().default('unknown'),
-  message: z.string().optional(),
 }).passthrough();
 
 export const OperationCountersSchema = z.object({
@@ -620,7 +614,6 @@ export type Blueprint = z.infer<typeof BlueprintSchema>;
 export type BlueprintListResponse = z.infer<typeof BlueprintListResponseSchema>;
 export type BlueprintLaunchResponse = z.infer<typeof BlueprintLaunchResponseSchema>;
 export type UploadedBundle = z.infer<typeof UploadedBundleSchema>;
-export type JobActionResponse = z.infer<typeof JobActionResponseSchema>;
 export type Operation = z.infer<typeof OperationSchema>;
 export type StableJobActionResponse = z.infer<typeof StableJobActionResponseSchema>;
 export type StableRunActionResponse = z.infer<typeof StableRunActionResponseSchema>;
@@ -757,35 +750,36 @@ export type FetchJobDetailsOptions = {
 
 export const fetchJobDetails = (id: string, options: FetchJobDetailsOptions = {}) => {
   const request = options.include
-    ? api.get(jobPath(id), { params: { include: options.include } })
-    : api.get(jobPath(id));
+    ? api.get(runPath(id, '/monitor'), { ...v2RequestConfig(), params: { include: options.include } })
+    : api.get(runPath(id, '/monitor'), v2RequestConfig());
   return request.then(r => (
     parseOrFallback(JobDetailsSchema, r.data, { job: { job_id: id, status: 'unknown' } }, `fetchJobDetails(${id})`)
   ));
 };
 
-export const fetchJobEvents = (id: string) => api.get(jobPath(id, '/events')).then(r => (
-  parseArrayOrEmpty(JobEventSchema, arrayFromEnvelope(r.data, ['data', 'events']), `fetchJobEvents(${id})`)
+export const fetchJobEvents = (id: string) => api.get(runPath(id, '/monitor'), v2RequestConfig()).then(r => (
+  parseArrayOrEmpty(JobEventSchema, arrayFromEnvelope(r.data, ['data', 'events', 'recent_events']), `fetchJobEvents(${id})`)
 ));
-export const fetchJobAgentGraph = (id: string) => api.get(jobPath(id, '/agent-graph')).then(r => (
-  parseOrFallback(AgentGraphSchema, r.data, { job_id: id, nodes: [], edges: [] }, `fetchJobAgentGraph(${id})`)
+export const fetchJobAgentGraph = (id: string) => api.get(runPath(id, '/monitor'), v2RequestConfig()).then(r => (
+  parseOrFallback(AgentGraphSchema, r.data?.agent_graph, { job_id: id, nodes: [], edges: [] }, `fetchJobAgentGraph(${id})`)
 ));
-export const fetchRunUi = (id: string) => api.get(runPath(id, '/ui')).then(r => (
+export const fetchRunUi = (id: string) => api.get(runtimeRunPath(id, '/ui'), v2RequestConfig()).then(r => (
   parseOrFallback(RunUiResponseSchema, r.data, { run_id: id, ui: { run_id: id, title: 'Blueprint Run' } }, `fetchRunUi(${id})`)
 ));
 export const fetchBlueprints = () => api.get('/blueprints').then(r => (
   parseOrFallback(BlueprintListResponseSchema, r.data, {}, 'fetchBlueprints')
 ));
-export const fetchWorkflowProgress = (id: string) => api.get(jobPath(id, '/workflow-progress')).then(r => (
+export const fetchWorkflowProgress = (id: string) => api.get(runPath(id, '/workflow-progress'), v2RequestConfig()).then(r => (
   parseOrFallback(WorkflowProgressSchema, r.data, { job_id: id, workflow_id: id, name: id }, `fetchWorkflowProgress(${id})`)
 ));
 
 const apiBaseUrl = () => String(api.defaults.baseURL || '/api/v1').replace(/\/$/, '');
+const v2ApiBaseUrl = () => apiVersionBaseUrl(2).replace(/\/$/, '');
 const authHeader = (): Record<string, string> => {
   const header = api.defaults.headers.common.Authorization;
   return typeof header === 'string' && header ? { Authorization: header } : {};
 };
-const workflowProgressStreamUrl = (id: string) => `${apiBaseUrl()}${jobPath(id, '/workflow-progress/stream')}`;
+const workflowProgressStreamUrl = (id: string) => `${v2ApiBaseUrl()}${runPath(id, '/workflow-progress/stream')}`;
 
 export const revealArtifact = (revealUrl: string) => {
   let path: string;
@@ -813,15 +807,6 @@ export const clearJobs = () => api.post('/jobs/cleanup').then(r => (
 ));
 export const cancelAllJobs = () => api.post('/jobs:cancel-all').then(r => (
   OperationSchema.parse(r.data)
-));
-export const cancelJob = (id: string) => api.post(jobPath(id, '/cancel')).then(r => (
-  parseOrFallback(JobActionResponseSchema, r.data, { job_id: id, status: 'cancelled' }, `cancelJob(${id})`)
-));
-export const pauseJob = (id: string) => api.post(jobPath(id, '/pause')).then(r => (
-  parseOrFallback(JobActionResponseSchema, r.data, { job_id: id, status: 'paused' }, `pauseJob(${id})`)
-));
-export const resumeJob = (id: string) => api.post(jobPath(id, '/resume')).then(r => (
-  parseOrFallback(JobActionResponseSchema, r.data, { job_id: id, status: 'running' }, `resumeJob(${id})`)
 ));
 export const uploadBundle = (file: File) => {
   const formData = new FormData();

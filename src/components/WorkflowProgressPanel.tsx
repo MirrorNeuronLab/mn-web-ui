@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Activity, Check, Circle, Clock3, Loader2, X } from 'lucide-react';
+import { Activity, Check, Circle, Clock3, ListTree, Loader2, Workflow, X } from 'lucide-react';
 import type { JobDetails, WorkflowActivity, WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
 import { displayAgentName } from '../utils/agentGraph';
 import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
@@ -297,11 +297,12 @@ const ActivityList = ({ activities, fallbackMessages }: { activities: WorkflowAc
 
 export function WorkflowProgressPanel({ progress, details, showFailurePanel = true }: WorkflowProgressPanelProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'graph'>('list');
 
   if (!progress) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-white font-mono text-xs text-neutral-500">
-        Loading workflow progress...
+        Waiting for public v2 workflow progress...
       </div>
     );
   }
@@ -398,11 +399,88 @@ export function WorkflowProgressPanel({ progress, details, showFailurePanel = tr
               <FailurePanel failure={visibleFailure} title={progress.failure ? 'Job Failure' : 'Step Failure'} artifacts={failureArtifacts} />
             </div>
           ) : null}
-          <WorkflowTopologyGraph
-            progress={progress}
-            selectedStepId={effectiveSelectedStepId}
-            onSelectStep={setSelectedStepId}
-          />
+          <div className="mb-3 flex justify-end">
+            <div className="inline-flex overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm" role="group" aria-label="Workflow display mode">
+              <button
+                type="button"
+                aria-pressed={viewMode === 'list'}
+                onClick={() => setViewMode('list')}
+                className={`inline-flex h-8 items-center gap-1.5 border-r border-neutral-200 px-3 text-xs font-medium ${viewMode === 'list' ? 'bg-neutral-950 text-white' : 'text-neutral-600 hover:bg-neutral-50'}`}
+              >
+                <ListTree className="h-3.5 w-3.5" />
+                List
+              </button>
+              <button
+                type="button"
+                aria-pressed={viewMode === 'graph'}
+                onClick={() => setViewMode('graph')}
+                className={`inline-flex h-8 items-center gap-1.5 px-3 text-xs font-medium ${viewMode === 'graph' ? 'bg-neutral-950 text-white' : 'text-neutral-600 hover:bg-neutral-50'}`}
+              >
+                <Workflow className="h-3.5 w-3.5" />
+                Graph
+              </button>
+            </div>
+          </div>
+          {viewMode === 'graph' ? (
+            <WorkflowTopologyGraph
+              progress={progress}
+              selectedStepId={effectiveSelectedStepId}
+              onSelectStep={setSelectedStepId}
+            />
+          ) : (
+            <div className="mb-3 grid overflow-hidden rounded-lg border border-neutral-200 bg-white lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
+              <aside className="border-b border-neutral-200 bg-neutral-50 p-2.5 lg:border-b-0 lg:border-r" aria-label="Workflow steps">
+                <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_3.5rem] gap-2 px-2 text-[11px] font-medium text-neutral-500">
+                  <span>Steps</span>
+                  <span className="text-right">Work</span>
+                </div>
+                <div className="max-h-[28rem] space-y-1 overflow-auto">
+                  {progress.steps.map((step, index) => {
+                    const focused = Boolean(primaryStep && stepMatchesId(step, index, primaryStep.id));
+                    return (
+                      <button
+                        key={step.id}
+                        type="button"
+                        aria-pressed={focused}
+                        aria-label={`${index + 1}. ${step.label} ${step.done_count}/${step.total_count}`}
+                        onClick={() => setSelectedStepId(step.id)}
+                        className={`grid w-full grid-cols-[1rem_minmax(0,1fr)_3.5rem] items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition ${focused ? 'bg-white shadow-sm ring-1 ring-neutral-200' : 'hover:bg-white/80'}`}
+                      >
+                        <StatusGlyph status={step.status} current={step.current} />
+                        <span className={`truncate font-medium ${statusTone(step.status)}`}>{index + 1}. {step.label}</span>
+                        <span className="text-right font-mono text-[11px] tabular-nums text-neutral-600">{step.done_count}/{step.total_count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </aside>
+              <div className="min-w-0 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-base font-semibold text-neutral-950">{primaryStep?.label || 'Workflow step'}</div>
+                    <div className="mt-1 text-sm leading-5 text-neutral-600">
+                      {primaryStep?.goal || primaryStep?.activity_summary || progress.description || 'Runtime activity is being monitored.'}
+                    </div>
+                  </div>
+                  <div className={`inline-flex items-center gap-1.5 text-xs font-medium capitalize ${statusTone(primaryStep?.status || progress.status)}`}>
+                    <StatusGlyph status={primaryStep?.status || progress.status} current={primaryStep?.current} />
+                    {primaryStep?.status || progress.status || 'unknown'}
+                  </div>
+                </div>
+                {primaryStep ? (
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <DetailStat label="Done" value={`${primaryStep.done_count}/${primaryStep.total_count}`} />
+                    <DetailStat label="Running" value={primaryStep.running_count} tone={primaryStep.running_count ? 'text-sky-700' : undefined} />
+                    <DetailStat label="Failed" value={primaryStep.failed_count} tone={primaryStep.failed_count ? 'text-red-700' : undefined} />
+                    <DetailStat label="Elapsed" value={formatElapsed(primaryStep.elapsed_seconds || 0)} />
+                  </div>
+                ) : null}
+                {monitorActivity ? (
+                  <div className="mt-3 rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">{monitorActivity}</div>
+                ) : null}
+              </div>
+            </div>
+          )}
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="truncate text-xs font-semibold text-neutral-950">
