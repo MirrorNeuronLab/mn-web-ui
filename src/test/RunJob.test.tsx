@@ -28,6 +28,12 @@ const renderRunJob = () => render(
   </TooltipProvider>,
 );
 
+const waitForBlueprintSelection = async () => {
+  const select = await screen.findByRole('combobox', { name: 'Blueprint' });
+  await waitFor(() => expect(select).toHaveValue('worker_one'));
+  return select;
+};
+
 describe('RunJob Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -46,7 +52,7 @@ describe('RunJob Component', () => {
     expect(screen.getByRole('tab', { name: 'Blueprint' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'ZIP bundle' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'File system path' })).not.toBeInTheDocument();
-    expect(await screen.findByRole('combobox', { name: 'Blueprint' })).toHaveValue('worker_one');
+    expect(await waitForBlueprintSelection()).toHaveValue('worker_one');
   });
 
   it('creates a run directly from a catalog blueprint without version or progress aliases', async () => {
@@ -56,7 +62,7 @@ describe('RunJob Component', () => {
       status: 'pending',
     });
     renderRunJob();
-    await screen.findByRole('combobox', { name: 'Blueprint' });
+    await waitForBlueprintSelection();
 
     fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
     const confirm = await screen.findByRole('dialog');
@@ -74,7 +80,7 @@ describe('RunJob Component', () => {
   it('sends nested configuration overrides with a blueprint run', async () => {
     vi.mocked(launchBlueprintJob).mockResolvedValue({ run_id: 'run-config-123', status: 'pending' });
     renderRunJob();
-    await screen.findByRole('combobox', { name: 'Blueprint' });
+    await waitForBlueprintSelection();
     fireEvent.click(screen.getByText('Run configuration'));
     fireEvent.change(screen.getByLabelText('Configuration overrides'), {
       target: { value: 'llm.configs.primary.context_size=8192\nfeatures.research=true' },
@@ -94,7 +100,7 @@ describe('RunJob Component', () => {
 
   it('blocks malformed run configuration overrides', async () => {
     renderRunJob();
-    await screen.findByRole('combobox', { name: 'Blueprint' });
+    await waitForBlueprintSelection();
     fireEvent.click(screen.getByText('Run configuration'));
     fireEvent.change(screen.getByLabelText('Configuration overrides'), {
       target: { value: 'llm..model=default' },
@@ -132,7 +138,7 @@ describe('RunJob Component', () => {
       response: { data: { detail: 'Blueprint validation failed.', code: 'request.validation_failed' } },
     });
     renderRunJob();
-    await screen.findByRole('combobox', { name: 'Blueprint' });
+    await waitForBlueprintSelection();
     fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
     const confirm = await screen.findByRole('dialog');
     fireEvent.click(within(confirm).getByRole('button', { name: 'Launch' }));
