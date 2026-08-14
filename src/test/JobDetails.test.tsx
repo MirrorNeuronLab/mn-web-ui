@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { toast } from 'sonner';
 import JobDetails from '../pages/JobDetails';
-import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelRun, pauseRun, resumeRun, revealArtifact } from '../api';
+import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelRun, pauseRun, resumeRun } from '../api';
 import type { WorkflowProgress } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
@@ -22,7 +22,6 @@ vi.mock('../api', async (importOriginal) => {
     cancelRun: vi.fn(),
     pauseRun: vi.fn(),
     resumeRun: vi.fn(),
-    revealArtifact: vi.fn(),
   };
 });
 
@@ -120,7 +119,6 @@ describe('JobDetails Component', () => {
         // Tests that exercise the fallback intentionally reject the snapshot.
       }
     });
-    vi.mocked(revealArtifact).mockResolvedValue({ ok: true });
     // mock window.location to ensure useParams picks it up
     window.history.pushState({}, 'Test page', '/runs/test-job-1');
   });
@@ -238,10 +236,10 @@ describe('JobDetails Component', () => {
         token_totals: { total_tokens: 1200 },
       },
       artifacts: [
-        { artifact_id: 'timeline_jsonl', url: '/api/v2/runtime-runs/trace-run/artifacts/timeline.jsonl' },
-        { artifact_id: 'events_jsonl', url: '/api/v2/runtime-runs/trace-run/artifacts/events.jsonl' },
-        { artifact_id: 'logs_jsonl', url: '/api/v2/runtime-runs/trace-run/artifacts/logs.jsonl' },
-        { artifact_id: 'errors_jsonl', url: '/api/v2/runtime-runs/trace-run/artifacts/errors.jsonl' },
+        { artifact_id: 'timeline_jsonl', url: '/api/v1/runs/trace-run/artifacts/timeline.jsonl' },
+        { artifact_id: 'events_jsonl', url: '/api/v1/runs/trace-run/artifacts/events.jsonl' },
+        { artifact_id: 'logs_jsonl', url: '/api/v1/runs/trace-run/artifacts/logs.jsonl' },
+        { artifact_id: 'errors_jsonl', url: '/api/v1/runs/trace-run/artifacts/errors.jsonl' },
       ],
       agents: [],
       sandboxes: [],
@@ -258,29 +256,26 @@ describe('JobDetails Component', () => {
     expect(screen.getByText('4 / 2 / 1')).toBeInTheDocument();
     expect(screen.getByText('1 / 2')).toBeInTheDocument();
     expect(screen.getByText('256 MB / 1,200')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'timeline.jsonl' })[0].getAttribute('href')).toContain('/api/v2/runtime-runs/trace-run/artifacts/timeline.jsonl');
-    expect(screen.getAllByRole('link', { name: 'errors.jsonl' })[0].getAttribute('href')).toContain('/api/v2/runtime-runs/trace-run/artifacts/errors.jsonl');
+    expect(screen.getAllByRole('link', { name: 'timeline.jsonl' })[0].getAttribute('href')).toContain('/api/v1/runs/trace-run/artifacts/timeline.jsonl');
+    expect(screen.getAllByRole('link', { name: 'errors.jsonl' })[0].getAttribute('href')).toContain('/api/v1/runs/trace-run/artifacts/errors.jsonl');
   });
 
-  it('renders artifact filenames and opens local file locations from failure and outputs', async () => {
+  it('renders artifact filenames as canonical download links', async () => {
     const artifacts = [
       {
         artifact_id: 'errors_jsonl',
         relative_path: 'errors.jsonl',
-        url: '/api/v2/runtime-runs/artifact-run/artifacts/errors.jsonl',
-        reveal_url: '/api/v2/runtime-runs/artifact-run/artifacts/errors.jsonl/reveal',
+        url: '/api/v1/runs/artifact-run/artifacts/errors.jsonl',
       },
       {
         artifact_id: 'events_jsonl',
         relative_path: 'events.jsonl',
-        url: '/api/v2/runtime-runs/artifact-run/artifacts/events.jsonl',
-        reveal_url: '/api/v2/runtime-runs/artifact-run/artifacts/events.jsonl/reveal',
+        url: '/api/v1/runs/artifact-run/artifacts/events.jsonl',
       },
       {
         artifact_id: 'logs_jsonl',
         relative_path: 'logs.jsonl',
-        url: '/api/v2/runtime-runs/artifact-run/artifacts/logs.jsonl',
-        reveal_url: '/api/v2/runtime-runs/artifact-run/artifacts/logs.jsonl/reveal',
+        url: '/api/v1/runs/artifact-run/artifacts/logs.jsonl',
       },
     ];
     vi.mocked(fetchJobDetails).mockResolvedValue({
@@ -331,15 +326,12 @@ describe('JobDetails Component', () => {
       expect(screen.getByText('test-job-1')).toBeInTheDocument();
     });
 
-    expect(screen.getAllByRole('button', { name: 'errors.jsonl' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: 'events.jsonl' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: 'logs.jsonl' }).length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'errors.jsonl' })[0]);
-
-    await waitFor(() => {
-      expect(revealArtifact).toHaveBeenCalledWith('/api/v2/runtime-runs/artifact-run/artifacts/errors.jsonl/reveal');
-    });
+    expect(screen.getAllByRole('link', { name: 'errors.jsonl' })[0]).toHaveAttribute(
+      'href',
+      '/api/v1/runs/artifact-run/artifacts/errors.jsonl',
+    );
+    expect(screen.getAllByRole('link', { name: 'events.jsonl' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'logs.jsonl' }).length).toBeGreaterThan(0);
   });
 
   it('shows a workflow job failure only once in the details page', async () => {

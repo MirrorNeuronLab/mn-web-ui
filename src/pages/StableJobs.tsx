@@ -33,10 +33,14 @@ export default function StableJobs() {
   const [loading, setLoading] = useState(true);
   const [includeArchived, setIncludeArchived] = useState(false);
   const [error, setError] = useState('');
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const loadJobs = useCallback(async () => {
     try {
-      setJobs(await fetchStableJobs({ includeArchived }));
+      const page = await fetchStableJobs({ includeArchived });
+      setJobs(page.items);
+      setNextPageToken(page.next_page_token);
       setError('');
     } catch (err) {
       setError(apiErrorMessage(err, 'Failed to load persistent jobs.'));
@@ -44,6 +48,20 @@ export default function StableJobs() {
       setLoading(false);
     }
   }, [includeArchived]);
+
+  const loadMore = async () => {
+    if (!nextPageToken || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchStableJobs({ includeArchived, pageToken: nextPageToken });
+      setJobs((current) => [...current, ...page.items]);
+      setNextPageToken(page.next_page_token);
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Failed to load more persistent jobs.'));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const markInitialLoading = useCallback(() => {
     setLoading(true);
@@ -151,6 +169,13 @@ export default function StableJobs() {
           </TableBody>
         </Table>
       </CardContent>
+      {nextPageToken ? (
+        <div className="border-t border-neutral-200 p-3 text-center">
+          <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? 'Loading…' : 'Load more'}
+          </Button>
+        </div>
+      ) : null}
     </Card>
   );
 }

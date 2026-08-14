@@ -66,13 +66,16 @@ describe('StableJobDetails', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(fetchStableJob).mockResolvedValue(stableJob);
-    vi.mocked(fetchStableJobRuns).mockResolvedValue([{
-      run_id: 'run-old',
-      job_id: 'job-stable-1',
-      status: 'completed',
-      attempt: 1,
-      submitted_at: '2026-08-01T11:00:00Z',
-    }]);
+    vi.mocked(fetchStableJobRuns).mockResolvedValue({
+      items: [{
+        run_id: 'run-old',
+        job_id: 'job-stable-1',
+        status: 'completed',
+        attempt: 1,
+        submitted_at: '2026-08-01T11:00:00Z',
+      }],
+      next_page_token: null,
+    });
   });
 
   it('renders persistent configuration separately from execution history', async () => {
@@ -105,7 +108,12 @@ describe('StableJobDetails', () => {
 
   it('archives and resets only after explicit confirmation', async () => {
     vi.mocked(archiveStableJob).mockResolvedValue({ job_id: 'job-stable-1', status: 'archived' });
-    vi.mocked(resetStableJobData).mockResolvedValue({ job_id: 'job-stable-1', status: 'active', data_generation: 3 });
+    vi.mocked(resetStableJobData).mockResolvedValue({
+      operation_id: 'op-reset-1',
+      kind: 'reset_job_data',
+      status: 'running',
+      counters: { total: 0, started: 0, finished: 0, succeeded: 0, failed: 0, deferred: 0 },
+    });
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Archive' }));
@@ -120,12 +128,15 @@ describe('StableJobDetails', () => {
   });
 
   it('controls and deletes runs without deleting shared job data', async () => {
-    vi.mocked(fetchStableJobRuns).mockResolvedValue([
-      { run_id: 'run-live', job_id: 'job-stable-1', status: 'running', attempt: 1 },
-      { run_id: 'run-done', job_id: 'job-stable-1', status: 'completed', attempt: 1 },
-    ]);
+    vi.mocked(fetchStableJobRuns).mockResolvedValue({
+      items: [
+        { run_id: 'run-live', job_id: 'job-stable-1', status: 'running', attempt: 1 },
+        { run_id: 'run-done', job_id: 'job-stable-1', status: 'completed', attempt: 1 },
+      ],
+      next_page_token: null,
+    });
     vi.mocked(pauseRun).mockResolvedValue({ run_id: 'run-live', status: 'paused' });
-    vi.mocked(deleteRun).mockResolvedValue({ run_id: 'run-done', status: 'deleted' });
+    vi.mocked(deleteRun).mockResolvedValue(undefined);
     renderPage();
 
     fireEvent.click(await screen.findByLabelText('Pause run run-live'));
@@ -141,7 +152,7 @@ describe('StableJobDetails', () => {
   });
 
   it('permanently deletes the stable job only after confirmation', async () => {
-    vi.mocked(deleteStableJob).mockResolvedValue({ job_id: 'job-stable-1', status: 'deleted' });
+    vi.mocked(deleteStableJob).mockResolvedValue(undefined);
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));

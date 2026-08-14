@@ -1,13 +1,11 @@
 import { Network } from 'lucide-react';
 import { artifactDisplayName } from '../utils/artifacts';
-import { openArtifactLocation } from '../utils/artifactReveal';
 import { isRecord } from '../utils/records';
 import { formatElapsed } from '../utils/workflowProgress';
 
 export type ObservabilityArtifactRef = {
   artifact_id?: string;
   url?: string;
-  reveal_url?: string;
   size_bytes?: number;
   path?: string;
   relative_path?: string;
@@ -92,14 +90,10 @@ export default function ObservabilitySummaryPanel({ summary, traceId, artifacts 
       <div className="mt-3 flex flex-wrap gap-2">
         {links.map(([artifactId, label]) => {
           const artifact = artifactLink(artifacts, artifactId);
-          if (!artifact?.url && !artifact?.reveal_url) return null;
+          if (!artifact?.url) return null;
           const displayLabel = artifactDisplayName(artifact, label);
           const className = "rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-medium text-neutral-700 hover:border-neutral-300 hover:bg-white";
-          return artifact.reveal_url ? (
-            <button key={artifactId} type="button" onClick={() => openArtifactLocation(artifact.reveal_url, displayLabel)} className={className}>
-              {displayLabel}
-            </button>
-          ) : (
+          return (
             <a key={artifactId} href={artifact.url} target="_blank" rel="noreferrer" className={className}>
               {displayLabel}
             </a>

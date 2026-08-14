@@ -1,31 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchBlueprints, fetchLaunchProgress, launchBlueprintJob, uploadBundle } from '../api';
+import { fetchBlueprints, launchBlueprintJob, uploadBundle } from '../api';
 import type { Blueprint, LaunchProgressEvent, LaunchProgressPhase, LaunchProgressResponse } from '../api';
-import { CheckCircle, FileArchive, FolderInput, Loader2, Play, UploadCloud, Workflow, XCircle } from 'lucide-react';
+import { CheckCircle, FileArchive, Loader2, Play, UploadCloud, Workflow, XCircle } from 'lucide-react';
 import { confirmActionDialog } from '../components/ui/confirm-action';
 import { Tooltip } from '../components/ui/tooltip';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { Input } from '../components/ui/input';
 import { Progress } from '../components/ui/progress';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { cn } from '../lib/utils';
 import { apiErrorMessage } from '../utils/apiErrors';
 import { parseConfigOverrideAssignments } from '../utils/configOverrides';
-import { isRecord } from '../utils/records';
 
-type LaunchMode = 'blueprint' | 'path' | 'bundle';
+type LaunchMode = 'blueprint' | 'bundle';
 
 type UploadedBundle = {
-  bundle_path: string;
-  manifest: Record<string, unknown>;
+  bundle_id: string;
 };
 
 const modeTabs: Array<{ id: LaunchMode; label: string; description: string }> = [
   { id: 'blueprint', label: 'Blueprint', description: 'Choose an installed blueprint from the catalog.' },
-  { id: 'path', label: 'File system path', description: 'Run a local blueprint folder on this machine.' },
   { id: 'bundle', label: 'ZIP bundle', description: 'Upload a zipped bundle with manifest.json and payloads/.' },
 ];
 
@@ -47,16 +43,8 @@ type LaunchProgressItem = {
   expectation: string | undefined;
 };
 
-type LaunchHandoff =
-  | { type: 'response'; response: Awaited<ReturnType<typeof launchBlueprintJob>> }
-  | { type: 'progress'; runId: string };
-
-const LAUNCH_PROGRESS_POLL_MS = 1000;
-const LAUNCH_JOB_ID_TIMEOUT_MS = 90 * 60 * 1000;
 const FAILED_LAUNCH_STATUSES = new Set(['failed', 'error', 'cancelled', 'canceled']);
 const COMPLETED_LAUNCH_STATUSES = new Set(['completed', 'succeeded', 'success']);
-
-const makeProgressId = () => `launch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 const stringValue = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 const normalizedKey = (value: unknown) => String(value || '')
@@ -88,27 +76,6 @@ const phaseId = (phase: LaunchProgressPhase) => (
 const labelFromPhase = (phase: LaunchProgressPhase, id: string) => (
   stringValue(phase.label) || stringValue(phase.name) || id.replace(/_/g, ' ')
 );
-
-const messageFromProgressError = (error: unknown) => {
-  if (typeof error === 'string' && error.trim()) return error.trim();
-  if (!isRecord(error)) return null;
-  const detail = error.detail;
-  if (typeof detail === 'string' && detail.trim()) return detail.trim();
-  if (isRecord(detail)) return stringValue(detail.message) || stringValue(detail.error);
-  return stringValue(error.message) || stringValue(error.desc) || stringValue(error.error);
-};
-
-const launchProgressFailureMessage = (progress: LaunchProgressResponse | null | undefined) => {
-  if (!progress) return null;
-  const status = normalizedStatus(progress.status);
-  const latestStatus = normalizedStatus(progress.latest?.status);
-  if (!FAILED_LAUNCH_STATUSES.has(status) && !FAILED_LAUNCH_STATUSES.has(latestStatus)) return null;
-  return (
-    messageFromProgressError(progress.error) ||
-    stringValue(progress.latest?.message) ||
-    'Blueprint launch failed.'
-  );
-};
 
 const buildProgressItems = (
   progress: LaunchProgressResponse | null,
@@ -268,26 +235,17 @@ function LaunchProgressModal({
   );
 }
 
-const manifestLabel = (manifest: Record<string, unknown>, fallback = 'uploaded bundle') => {
-  const graphId = typeof manifest.graph_id === 'string' && manifest.graph_id.trim() ? manifest.graph_id.trim() : '';
-  const jobName = typeof manifest.job_name === 'string' && manifest.job_name.trim() ? manifest.job_name.trim() : '';
-  return graphId || jobName || fallback;
-};
-
 export default function RunJob() {
   const [mode, setMode] = useState<LaunchMode>('blueprint');
   const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
   const [selectedBlueprintId, setSelectedBlueprintId] = useState('');
-  const [pathValue, setPathValue] = useState('');
   const [bundleData, setBundleData] = useState<UploadedBundle | null>(null);
   const [configAssignments, setConfigAssignments] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loadingBlueprints, setLoadingBlueprints] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [running, setRunning] = useState(false);
-  const [progressId, setProgressId] = useState<string | null>(null);
   const [progressEvents, setProgressEvents] = useState<LaunchProgressEvent[]>([]);
-  const [launchProgress, setLaunchProgress] = useState<LaunchProgressResponse | null>(null);
   const [progressModalOpen, setProgressModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
@@ -299,8 +257,8 @@ export default function RunJob() {
       fetchBlueprints()
         .then((response) => {
           if (cancelled) return;
-          setBlueprints(response.blueprints || []);
-          setSelectedBlueprintId((current) => current || response.blueprints?.[0]?.id || '');
+          setBlueprints(response.items || []);
+          setSelectedBlueprintId((current) => current || response.items?.[0]?.id || '');
         })
         .catch((err: unknown) => {
           if (!cancelled) setError(apiErrorMessage(err, 'Failed to load blueprints'));
@@ -325,45 +283,11 @@ export default function RunJob() {
     [configAssignments],
   );
 
-  const refreshLaunchProgress = useCallback(async (id: string) => {
-    try {
-      const progress = await fetchLaunchProgress(id);
-      setLaunchProgress(progress);
-      setProgressEvents(progress.events || []);
-      return progress;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!running || !progressId) return undefined;
-    let cancelled = false;
-    const loadProgress = async () => {
-      try {
-        const progress = await fetchLaunchProgress(progressId);
-        if (!cancelled) {
-          setLaunchProgress(progress);
-          setProgressEvents(progress.events || []);
-        }
-      } catch {
-        // The launch request is still the source of truth; a missed progress poll is harmless.
-      }
-    };
-    void loadProgress();
-    const timer = window.setInterval(loadProgress, LAUNCH_PROGRESS_POLL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [progressId, running]);
-
   const canLaunch =
     !running &&
     parsedConfigOverrides.ok &&
     ((mode === 'blueprint' && Boolean(selectedBlueprintId)) ||
-      (mode === 'path' && Boolean(pathValue.trim())) ||
-      (mode === 'bundle' && Boolean(bundleData?.bundle_path)));
+      (mode === 'bundle' && Boolean(bundleData?.bundle_id)));
 
   const resetFileInput = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -385,7 +309,7 @@ export default function RunJob() {
       },
       success: (result: UploadedBundle) => ({
         title: 'Bundle uploaded',
-        description: manifestLabel(result.manifest, selectedFile.name),
+        description: `${selectedFile.name} · ${result.bundle_id}`,
       }),
       error: (err) => ({
         title: 'Upload failed',
@@ -413,48 +337,23 @@ export default function RunJob() {
     });
   };
 
-  const launchPayload = (launchProgressId: string) => {
+  const launchPayload = () => {
     const config_overrides = parsedConfigOverrides.ok && parsedConfigOverrides.count
       ? parsedConfigOverrides.value
       : undefined;
-    if (mode === 'blueprint') return { source: 'catalog', blueprint_id: selectedBlueprintId, progress_id: launchProgressId, config_overrides };
-    if (mode === 'path') return { source: 'path', path: pathValue.trim(), progress_id: launchProgressId, config_overrides };
-    return { source: 'bundle', _bundle_path: bundleData?.bundle_path, progress_id: launchProgressId, config_overrides };
+    if (mode === 'blueprint') return { source: 'catalog', blueprint_id: selectedBlueprintId, config_overrides };
+    return { source: 'bundle', bundle_id: bundleData?.bundle_id, config_overrides };
   };
 
   const launchSummary = () => {
     if (mode === 'blueprint') return selectedBlueprint?.name || selectedBlueprintId;
-    if (mode === 'path') return pathValue.trim();
-    return bundleData ? manifestLabel(bundleData.manifest, bundleData.bundle_path || 'uploaded bundle') : 'uploaded bundle';
+    return bundleData?.bundle_id || 'uploaded bundle';
   };
-
-  const waitForLaunchRunId = useCallback(async (id: string, initialProgress: LaunchProgressResponse | null) => {
-    let current = initialProgress;
-    const startedAt = Date.now();
-
-    while (Date.now() - startedAt <= LAUNCH_JOB_ID_TIMEOUT_MS) {
-      if (!current) current = await refreshLaunchProgress(id);
-
-      const runId = progressRunId(current);
-      if (runId) return runId;
-
-      const failureMessage = launchProgressFailureMessage(current);
-      if (failureMessage) throw new Error(failureMessage);
-
-      if (current?.completed) throw new Error('Launch completed but no run id was returned.');
-
-      await new Promise<void>((resolve) => window.setTimeout(resolve, LAUNCH_PROGRESS_POLL_MS));
-      current = await refreshLaunchProgress(id);
-    }
-
-    throw new Error('Launch is still waiting for an execution run id. Check launch progress and try again.');
-  }, [refreshLaunchProgress]);
 
   const confirmLaunch = () => {
     if (!canLaunch) return;
 
     const summary = launchSummary();
-    const launchProgressId = makeProgressId();
     confirmActionDialog({
       id: `launch-${mode}-${summary}`,
       title: 'Launch this job?',
@@ -476,8 +375,6 @@ export default function RunJob() {
       onConfirm: async () => {
         setRunning(true);
         setError(null);
-        setProgressId(launchProgressId);
-        setLaunchProgress(null);
         setProgressModalOpen(true);
         setProgressEvents([{
           ts: new Date().toISOString(),
@@ -485,33 +382,28 @@ export default function RunJob() {
           status: 'running',
           message: 'Starting launch.',
         }]);
-        let activeProgressId = launchProgressId;
         try {
-          const launchRequest = launchBlueprintJob(launchPayload(launchProgressId));
-          const handoff = await Promise.race<LaunchHandoff>([
-            launchRequest.then((response) => ({ type: 'response', response })),
-            waitForLaunchRunId(launchProgressId, null).then((runId) => ({ type: 'progress', runId })),
-          ]);
-          let runId = '';
-          if (handoff.type === 'progress') {
-            runId = handoff.runId;
-            void launchRequest.catch(() => undefined);
-          } else {
-            const res = handoff.response;
-            activeProgressId = stringValue(res.progress_id) || launchProgressId;
-            if (activeProgressId !== launchProgressId) setProgressId(activeProgressId);
-            const progress = await refreshLaunchProgress(activeProgressId);
-            const failureMessage = launchProgressFailureMessage(progress);
-            if (failureMessage) throw new Error(failureMessage);
-            runId = launchResponseRunId(res) || progressRunId(progress) || await waitForLaunchRunId(activeProgressId, progress);
-          }
+          const response = await launchBlueprintJob(launchPayload());
+          const runId = launchResponseRunId(response);
+          if (!runId) throw new Error('Run creation did not return a run id.');
+          setProgressEvents((events) => [...events, {
+            ts: new Date().toISOString(),
+            phase: 'submit',
+            status: 'completed',
+            message: 'Run accepted by the runtime.',
+          }]);
           setRunning(false);
           navigate(`/runs/${encodeURIComponent(runId)}`);
           return runId;
         } catch (err: unknown) {
-          await refreshLaunchProgress(activeProgressId);
           const message = apiErrorMessage(err, 'Failed to validate and launch job');
           setError(message);
+          setProgressEvents((events) => [...events, {
+            ts: new Date().toISOString(),
+            phase: 'submit',
+            status: 'failed',
+            message,
+          }]);
           setRunning(false);
           setProgressModalOpen(true);
           throw new Error(message);
@@ -524,9 +416,7 @@ export default function RunJob() {
     if (nextMode === mode) return;
     setMode(nextMode);
     setError(null);
-    setProgressId(null);
     setProgressEvents([]);
-    setLaunchProgress(null);
     setProgressModalOpen(false);
   };
 
@@ -581,24 +471,6 @@ export default function RunJob() {
                 </div>
               ) : null}
 
-              {mode === 'path' ? (
-                <div className="space-y-3">
-                  <label className="block text-xs font-medium text-neutral-700" htmlFor="path-input">Blueprint folder path</label>
-                  <div className="flex items-center gap-2.5">
-                    <FolderInput className="h-4 w-4 text-neutral-400" />
-                    <Input
-                      id="path-input"
-                      type="text"
-                      value={pathValue}
-                      onChange={(event) => setPathValue(event.target.value)}
-                      placeholder="~/Projects/mirror-neuron-set/otterdesk-blueprints/video_watch_assistant"
-                      className="min-w-0 flex-1 font-mono text-xs"
-                      disabled={running}
-                    />
-                  </div>
-                </div>
-              ) : null}
-
               {mode === 'bundle' ? (
                 <div className="space-y-4">
                   {!bundleData ? (
@@ -633,9 +505,8 @@ export default function RunJob() {
                         <div>
                           <h3 className="text-xs font-medium text-neutral-950">Bundle uploaded</h3>
                           <p className="mt-1 text-xs text-neutral-700">
-                            Workflow ID: <strong className="font-mono">{manifestLabel(bundleData.manifest, 'bundle')}</strong>
+                            Bundle ID: <strong className="font-mono">{bundleData.bundle_id}</strong>
                           </p>
-                          <p className="mt-1 font-mono text-xs text-neutral-500">{bundleData.bundle_path}</p>
                         </div>
                       </div>
                     </div>
@@ -711,8 +582,8 @@ export default function RunJob() {
       </Card>
       <LaunchProgressModal
         events={progressEvents}
-        progress={launchProgress}
-        open={progressModalOpen && (running || progressEvents.length > 0 || Boolean(launchProgress))}
+        progress={null}
+        open={progressModalOpen && (running || progressEvents.length > 0)}
         running={running}
         onClose={() => setProgressModalOpen(false)}
       />

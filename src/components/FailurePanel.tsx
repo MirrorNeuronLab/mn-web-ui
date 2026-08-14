@@ -1,7 +1,6 @@
 import { AlertTriangle, ExternalLink, FileText } from 'lucide-react';
 import type { ErrorEnvelope } from '../api';
 import { artifactDisplayName } from '../utils/artifacts';
-import { openArtifactLocation } from '../utils/artifactReveal';
 import { isRecord } from '../utils/records';
 
 type ArtifactRef = {
@@ -9,7 +8,6 @@ type ArtifactRef = {
   relative_path?: string;
   path?: string;
   url?: string;
-  reveal_url?: string;
   size_bytes?: number;
 };
 
@@ -118,23 +116,18 @@ export function FailurePanel({ failure, title = 'Failure', compact = false, arti
             <div className="flex flex-wrap gap-2 border-t border-red-100 pt-2">
               {links.map((link, index) => {
                 const artifact = artifactForLink(link.artifact_id, artifacts);
-                const revealUrl = artifact?.reveal_url;
                 const href = link.url || artifact?.url;
                 const label = artifactDisplayName(artifact || { artifact_id: link.artifact_id }, link.rel || 'artifact');
                 const size = formatBytes(artifact?.size_bytes);
                 const content = (
                   <>
-                    {revealUrl || href ? <ExternalLink className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+                    {href ? <ExternalLink className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
                     <span>{label}</span>
                     {size ? <span className="text-neutral-500">{size}</span> : null}
                   </>
                 );
                 const className = "inline-flex h-7 items-center gap-1.5 rounded-md border border-red-200 bg-white px-2 text-xs font-medium text-neutral-800";
-                return revealUrl ? (
-                  <button key={`${label}-${index}`} type="button" onClick={() => openArtifactLocation(revealUrl, label)} className={className}>
-                    {content}
-                  </button>
-                ) : href ? (
+                return href ? (
                   <a key={`${label}-${index}`} href={href} target="_blank" rel="noreferrer" className={className}>
                     {content}
                   </a>

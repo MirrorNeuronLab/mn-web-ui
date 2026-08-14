@@ -42,6 +42,8 @@ export default function Runs() {
   const [isClearing, setIsClearing] = useState(false);
   const [isCancellingAll, setIsCancellingAll] = useState(false);
   const [activeOnly, setActiveOnly] = useState(false);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const applyJobs = useCallback((data: Job[]) => {
     setJobs(data);
@@ -53,8 +55,9 @@ export default function Runs() {
 
   const loadJobs = useCallback(async () => {
     try {
-      const data = await fetchJobs({ includeTerminal: !activeOnly });
-      applyJobs(data);
+      const page = await fetchJobs({ includeTerminal: !activeOnly });
+      applyJobs(page.items);
+      setNextPageToken(page.next_page_token);
     } catch (e) {
       console.error('Failed to load jobs', e);
     } finally {
@@ -69,8 +72,21 @@ export default function Runs() {
   usePollingEffect(loadJobs, { intervalMs: 5000, onInitialPoll: markInitialLoading });
 
   const refreshJobs = async () => {
-    const data = await fetchJobs({ includeTerminal: !activeOnly });
-    applyJobs(data);
+    const page = await fetchJobs({ includeTerminal: !activeOnly });
+    applyJobs(page.items);
+    setNextPageToken(page.next_page_token);
+  };
+
+  const loadMore = async () => {
+    if (!nextPageToken || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchJobs({ includeTerminal: !activeOnly, pageToken: nextPageToken });
+      applyJobs([...jobs, ...page.items]);
+      setNextPageToken(page.next_page_token);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const toggleJobSelection = (jobId: string) => {
@@ -410,6 +426,13 @@ export default function Runs() {
           </TableBody>
         </Table>
       </CardContent>
+      {nextPageToken ? (
+        <div className="border-t border-neutral-200 p-3 text-center">
+          <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? 'Loading…' : 'Load more'}
+          </Button>
+        </div>
+      ) : null}
     </Card>
   );
 }

@@ -1,492 +1,185 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-test('submits a bundle and controls the run from the real app shell', async ({ page }) => {
-  let jobStatus = 'running';
-  let bundleProgressId = 'launch-e2e';
+const blueprintPage = {
+  items: [{ id: 'browser_flow_graph', name: 'Browser flow graph', description: 'Browser flow job' }],
+  next_page_token: null,
+};
 
-  await page.route('**/api/v2/blueprints', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        repo_dir: '/tmp/blueprints',
-        blueprints: [
-          {
-            id: 'browser_flow_graph',
-            name: 'Browser flow graph',
-            description: 'Browser flow job',
-          },
-        ],
-        categories: [],
-      }),
-    });
-  });
-
-  await page.route('**/api/v2/bundles/upload', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        bundle_path: '/tmp/e2e-bundle',
-        manifest: {
-          graph_id: 'browser_flow_graph',
-          job_name: 'Browser flow job',
-          nodes: [{ node_id: 'node_1', agent_type: 'router' }],
-          edges: [],
-        },
-      }),
-    });
-  });
-
-  await page.route('**/api/v2/blueprints/launch/runs', async (route) => {
-    const payload = await route.request().postDataJSON();
-    expect(payload).toMatchObject({
-      source: 'bundle',
-      _bundle_path: '/tmp/e2e-bundle',
-    });
-    expect(String(payload.progress_id)).toMatch(/^launch-/);
-    bundleProgressId = String(payload.progress_id);
-    await route.fulfill({
-      status: 202,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        id: null,
-        job_id: null,
-        run_id: 'browser-run-1',
-        status: 'launching',
-        progress_id: bundleProgressId,
-        progress_url: `/api/v2/blueprints/launch/progress/${bundleProgressId}`,
-      }),
-    });
-  });
-
-  await page.route('**/api/v2/blueprints/launch/progress/**', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        progress_id: bundleProgressId,
-        run_id: 'browser-run-1',
-        job_id: 'browser-job-1',
-        status: 'completed',
-        current_phase: 'submit',
-        phases: [
-          { id: 'resolve_source', label: 'Resolve blueprint source', status: 'completed' },
-          { id: 'submit', label: 'Submit job to runtime', status: 'completed', message: 'Job submitted.' },
-        ],
-        events: [
-          { phase: 'resolve_source', status: 'completed', message: 'Bundle source resolved.' },
-          { phase: 'submit', status: 'completed', message: 'Job submitted.' },
-        ],
-        latest: { phase: 'submit', status: 'completed', message: 'Job submitted.' },
-        completed: true,
-      }),
-    });
-  });
-
-  await page.route(/\/api\/v1\/jobs(?:\?.*)?$/, async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        data: [
-          {
-            job_id: 'browser-run-1',
-            run_id: 'browser-run-1',
-            graph_id: 'browser_flow_graph',
-            status: jobStatus,
-            submitted_at: '2026-05-11T14:00:00Z',
-            active_executors: jobStatus === 'running' ? 1 : 0,
-            executor_count: 1,
-          },
-        ],
-      }),
-    });
-  });
-
-  await page.route(/\/api\/v1\/jobs\/browser-run-1(?:\?.*)?$/, async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        job: {
-          job_id: 'browser-run-1',
-          run_id: 'browser-run-1',
-          graph_id: 'browser_flow_graph',
-          status: jobStatus,
-          submitted_at: '2026-05-11T14:00:00Z',
-        },
-        agents: [
-          {
-            agent_id: 'node_1',
-            agent_type: 'router',
-            type: 'map',
-            status: jobStatus,
-            processed_messages: 1,
-            mailbox_depth: 0,
-            assigned_node: 'local',
-          },
-        ],
-      }),
-    });
-  });
-
-  await page.route('**/api/v2/runs/browser-run-1/ui', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        run_id: 'browser-run-1',
-        ui: {
-          run_id: 'browser-run-1',
-          schema_version: 1,
-          adapter: 'json-render',
-          kind: 'output',
-          title: 'Blueprint Run',
-          components: [],
-        },
-      }),
-    });
-  });
-
-  const workflowProgress = () => ({
-    schema_version: 1,
-    job_id: 'browser-run-1',
-    workflow_id: 'browser_flow_graph',
-    name: 'Browser flow job',
-    description: 'Browser flow job',
-    status: jobStatus,
+const workflowProgress = (runId: string, status: string) => ({
+  schema_version: 1,
+  job_id: runId,
+  workflow_id: 'browser_flow_graph',
+  name: 'Browser flow job',
+  description: 'Browser flow job',
+  status,
+  elapsed_seconds: 4,
+  agent_count: { done: status === 'running' ? 0 : 1, total: 1 },
+  current_step_id: 'node_1',
+  current_step: {
+    id: 'node_1',
+    label: 'Node 1',
+    goal: 'router',
+    status,
+    current: true,
+    done_count: status === 'running' ? 0 : 1,
+    total_count: 1,
     elapsed_seconds: 4,
-    agent_count: { done: jobStatus === 'running' ? 0 : 1, total: 1 },
-    current_step_id: 'node_1',
-    current_step: {
-      id: 'node_1',
-      label: 'Node 1',
-      goal: 'router',
-      status: jobStatus,
-      current: true,
-      done_count: jobStatus === 'running' ? 0 : 1,
-      total_count: 1,
-      elapsed_seconds: 4,
-      agents: [
-        {
-          id: 'node_1',
-          role: 'router',
-          working_on: 'router',
-          model: 'runtime',
-          status: jobStatus,
-          progress: jobStatus === 'running' ? 0.5 : 1,
-          elapsed_seconds: 4,
-        },
-      ],
-    },
-    steps: [],
-    messages: [`Running: ${jobStatus}`],
-    recent_events: [],
-  });
+    agents: [],
+  },
+  steps: [],
+  messages: [`Running: ${status}`],
+  recent_events: [],
+});
 
-  await page.route('**/api/v2/jobs/browser-run-1/workflow-progress', async (route) => {
+const installRunRoutes = async (
+  page: Page,
+  runId: string,
+  status: () => string,
+  updateStatus: (next: string) => void,
+) => {
+  await page.route(/\/api\/v1\/runs(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify(workflowProgress()),
+      body: JSON.stringify({
+        items: [{
+          run_id: runId,
+          graph_id: 'browser_flow_graph',
+          status: status(),
+          submitted_at: '2026-05-11T14:00:00Z',
+          active_executors: status() === 'running' ? 1 : 0,
+          executor_count: 1,
+        }],
+        next_page_token: null,
+      }),
     });
   });
-
-  await page.route('**/api/v2/jobs/browser-run-1/workflow-progress/stream*', async (route) => {
+  await page.route(`**/api/v1/runs/${runId}/monitor*`, async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        job: { job_id: runId, run_id: runId, graph_id: 'browser_flow_graph', status: status() },
+        agents: [],
+        recent_events: [],
+      }),
+    });
+  });
+  await page.route(`**/api/v1/runs/${runId}/workflow-progress`, async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(workflowProgress(runId, status())) });
+  });
+  await page.route(`**/api/v1/runs/${runId}/events/stream*`, async (route) => {
+    const envelope = {
+      id: '1',
+      type: 'run.snapshot',
+      occurred_at: '2026-05-11T14:00:01Z',
+      resource: `/api/v1/runs/${runId}`,
+      data: workflowProgress(runId, status()),
+    };
     await route.fulfill({
       contentType: 'text/event-stream',
-      body: `event: snapshot\ndata: ${JSON.stringify(workflowProgress())}\n\n`,
+      body: `id: 1\nevent: run.snapshot\ndata: ${JSON.stringify(envelope)}\n\n`,
     });
   });
-
-  await page.route('**/api/v2/jobs/browser-run-1/events', async (route) => {
+  await page.route(new RegExp(`/api/v1/runs/${runId}/events(?:\\?.*)?$`), async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [], next_page_token: null }),
+    });
+  });
+  await page.route(`**/api/v1/runs/${runId}/agent-graph`, async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ job_id: runId, status: status(), nodes: [], edges: [], stats: {} }),
+    });
+  });
+  await page.route(`**/api/v1/runs/${runId}/ui`, async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
-        data: [
-          {
-            type: 'job_running',
-            timestamp: '2026-05-11T14:00:01Z',
-            payload: { status: jobStatus },
-          },
-        ],
+        run_id: runId,
+        ui: { schema_version: 1, adapter: 'json-render', kind: 'output', title: 'Blueprint Run', components: [] },
       }),
     });
   });
-
-  await page.route('**/api/v2/jobs/browser-run-1/agent-graph', async (route) => {
+  await page.route(`**/api/v1/runs/${runId}`, async (route) => {
+    if (route.request().method() === 'PATCH') {
+      const body = await route.request().postDataJSON();
+      const next = body.desired_state === 'cancelled' ? 'cancelled' : body.desired_state;
+      updateStatus(next);
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ run_id: runId, job_id: 'browser-job-1', status: next }),
+      });
+      return;
+    }
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({
-        job_id: 'browser-run-1',
-        graph_id: 'browser_flow_graph',
-        status: jobStatus,
-        nodes: [
-          {
-            id: 'node_1',
-            label: 'node_1',
-            agent_type: 'router',
-            type: 'map',
-            status: jobStatus,
-            assigned_node: 'local',
-          },
-        ],
-        edges: [],
-        stats: { agent_count: 1, edge_count: 0, message_count: 1, event_count: 1 },
-      }),
+      body: JSON.stringify({ run_id: runId, job_id: 'browser-job-1', status: status() }),
     });
   });
+};
 
-  await page.route('**/api/v2/runs/browser-run-1/pause', async (route) => {
-    jobStatus = 'paused';
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ version: 2, run_id: 'browser-run-1', job_id: 'browser-job-1', status: 'paused' }),
-    });
+test('submits an opaque bundle and controls its canonical Run', async ({ page }) => {
+  let runStatus = 'running';
+  await page.route('**/api/v1/blueprints*', (route) => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify(blueprintPage),
+  }));
+  await page.route('**/api/v1/bundles', async (route) => {
+    expect(route.request().method()).toBe('POST');
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ bundle_id: 'bundle_01JABC' }) });
   });
-
-  await page.route('**/api/v2/runs/browser-run-1/resume', async (route) => {
-    jobStatus = 'running';
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ version: 2, run_id: 'browser-run-1', job_id: 'browser-job-1', status: 'running' }),
-    });
+  await page.route('**/api/v1/jobs', async (route) => {
+    expect(await route.request().postDataJSON()).toEqual({ bundle_id: 'bundle_01JABC' });
+    expect(route.request().headers()['idempotency-key']).toBeTruthy();
+    await route.fulfill({ status: 201, headers: { Location: '/api/v1/jobs/browser-job-1' }, contentType: 'application/json', body: JSON.stringify({ job_id: 'browser-job-1' }) });
   });
-
-  await page.route('**/api/v2/runs/browser-run-1/cancel', async (route) => {
-    jobStatus = 'cancelled';
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ version: 2, run_id: 'browser-run-1', job_id: 'browser-job-1', status: 'cancelled' }),
-    });
+  await page.route('**/api/v1/jobs/browser-job-1/runs', async (route) => {
+    expect(route.request().headers()['idempotency-key']).toBeTruthy();
+    await route.fulfill({ status: 202, headers: { Location: '/api/v1/runs/browser-run-1' }, contentType: 'application/json', body: JSON.stringify({ run_id: 'browser-run-1', status: 'pending' }) });
   });
+  await installRunRoutes(page, 'browser-run-1', () => runStatus, (next) => { runStatus = next; });
 
   await page.goto('/run');
   await page.getByRole('tab', { name: 'ZIP bundle' }).click();
   await page.setInputFiles('input[type="file"]', {
-    name: 'bundle.zip',
-    mimeType: 'application/zip',
-    buffer: Buffer.from('fake zip contents'),
+    name: 'bundle.zip', mimeType: 'application/zip', buffer: Buffer.from('fake zip contents'),
   });
-  await expect(page.getByText('Upload this ZIP bundle?')).toBeVisible();
   await page.getByRole('button', { name: 'Upload ZIP' }).click();
-
-  await expect(page.getByRole('heading', { name: 'Bundle uploaded' })).toBeVisible();
-  await expect(page.locator('strong').filter({ hasText: 'browser_flow_graph' })).toBeVisible();
-
+  await expect(page.getByText('bundle_01JABC', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Launch' }).click();
-  await expect(page.getByText('Launch this job?')).toBeVisible();
   await page.getByRole('button', { name: 'Launch' }).last().click();
   await expect(page).toHaveURL(/\/runs\/browser-run-1$/);
-  await expect(page.getByRole('heading', { name: 'browser-run-1' })).toBeVisible();
-  await expect(page.getByText('running').first()).toBeVisible();
 
   await page.getByRole('button', { name: 'Pause' }).click();
-  await expect(page.getByText('Pause this run?')).toBeVisible();
   await page.getByRole('button', { name: 'Pause run' }).click();
   await expect(page.getByText('paused').first()).toBeVisible();
-
   await page.getByRole('button', { name: 'Resume' }).click();
-  await expect(page.getByText('Resume this run?')).toBeVisible();
   await page.getByRole('button', { name: 'Resume run' }).click();
   await expect(page.getByText('running').first()).toBeVisible();
-
   await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.getByText('Cancel this run?')).toBeVisible();
   await page.getByRole('button', { name: 'Cancel run' }).click();
   await expect(page).toHaveURL(/\/runs$/);
-  await expect(page.getByRole('cell', { name: 'browser-run-1', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: /cancelled/i })).toBeVisible();
 });
 
-test('launches a catalog blueprint through async launch progress', async ({ page }) => {
-  let catalogLaunchRequests = 0;
-  let catalogProgressId = 'launch-catalog-e2e';
-
-  await page.route('**/api/v2/blueprints', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        repo_dir: '/tmp/blueprints',
-        blueprints: [
-          {
-            id: 'browser_flow_graph',
-            name: 'Browser flow graph',
-            description: 'Browser flow job',
-          },
-        ],
-        categories: [],
-      }),
-    });
+test('creates a catalog Run directly without launch-progress aliases', async ({ page }) => {
+  let requests = 0;
+  let runStatus = 'running';
+  await page.route('**/api/v1/blueprints*', (route) => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify(blueprintPage),
+  }));
+  await page.route('**/api/v1/blueprints/browser_flow_graph/runs', async (route) => {
+    requests += 1;
+    expect(await route.request().postDataJSON()).toEqual({ config_overrides: {} });
+    expect(route.request().headers()['idempotency-key']).toBeTruthy();
+    await route.fulfill({ status: 202, headers: { Location: '/api/v1/runs/catalog-run-1' }, contentType: 'application/json', body: JSON.stringify({ run_id: 'catalog-run-1', status: 'pending' }) });
   });
-
-  await page.route('**/api/v2/blueprints/launch/runs', async (route) => {
-    catalogLaunchRequests += 1;
-    const payload = await route.request().postDataJSON();
-    expect(payload).toMatchObject({
-      source: 'catalog',
-      blueprint_id: 'browser_flow_graph',
-    });
-    expect(String(payload.progress_id)).toMatch(/^launch-/);
-    catalogProgressId = String(payload.progress_id);
-    await route.fulfill({
-      status: 202,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        id: null,
-        job_id: null,
-        run_id: 'catalog-run-1',
-        status: 'launching',
-        progress_id: catalogProgressId,
-        progress_url: `/api/v2/blueprints/launch/progress/${catalogProgressId}`,
-      }),
-    });
-  });
-
-  await page.route('**/api/v2/blueprints/launch/progress/**', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        progress_id: catalogProgressId,
-        run_id: 'catalog-run-1',
-        job_id: 'catalog-job-1',
-        status: 'completed',
-        current_phase: 'submit',
-        phases: [
-          { id: 'resolve_source', label: 'Resolve blueprint source', status: 'completed' },
-          { id: 'submit', label: 'Submit job to runtime', status: 'completed', message: 'Job submitted.' },
-        ],
-        events: [
-          { phase: 'resolve_source', status: 'completed', message: 'Catalog source resolved.' },
-          { phase: 'submit', status: 'completed', message: 'Job submitted.' },
-        ],
-        latest: { phase: 'submit', status: 'completed', message: 'Job submitted.' },
-        completed: true,
-      }),
-    });
-  });
-
-  await page.route(/\/api\/v1\/jobs(?:\?.*)?$/, async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        jobs: [
-          {
-            job_id: 'catalog-run-1',
-            run_id: 'catalog-run-1',
-            graph_id: 'browser_flow_graph',
-            status: 'running',
-            submitted_at: '2026-05-11T14:00:00Z',
-            active_executors: 1,
-            executor_count: 1,
-          },
-        ],
-      }),
-    });
-  });
-
-  await page.route(/\/api\/v1\/jobs\/catalog-run-1(?:\?.*)?$/, async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        job: {
-          job_id: 'catalog-run-1',
-          run_id: 'catalog-run-1',
-          graph_id: 'browser_flow_graph',
-          status: 'running',
-          submitted_at: '2026-05-11T14:00:00Z',
-        },
-        agents: [],
-      }),
-    });
-  });
-
-  await page.route('**/api/v2/runs/catalog-run-1/ui', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        run_id: 'catalog-run-1',
-        ui: {
-          run_id: 'catalog-run-1',
-          schema_version: 1,
-          adapter: 'json-render',
-          kind: 'output',
-          title: 'Blueprint Run',
-          components: [],
-        },
-      }),
-    });
-  });
-
-  const workflowProgress = () => ({
-    schema_version: 1,
-    job_id: 'catalog-run-1',
-    workflow_id: 'browser_flow_graph',
-    name: 'Browser flow job',
-    status: 'running',
-    workflow_kind: 'batch',
-    agent_count: { done: 0, total: 1 },
-    current_step_id: 'node_1',
-    current_step: {
-      id: 'node_1',
-      label: 'Node 1',
-      goal: 'router',
-      status: 'running',
-      current: true,
-      done_count: 0,
-      total_count: 1,
-      agents: [],
-    },
-    steps: [],
-    messages: ['Running: running'],
-    recent_events: [],
-  });
-
-  await page.route('**/api/v2/jobs/catalog-run-1/workflow-progress', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify(workflowProgress()),
-    });
-  });
-
-  await page.route('**/api/v2/jobs/catalog-run-1/workflow-progress/stream*', async (route) => {
-    await route.fulfill({
-      contentType: 'text/event-stream',
-      body: `event: snapshot\ndata: ${JSON.stringify(workflowProgress())}\n\n`,
-    });
-  });
-
-  await page.route('**/api/v2/jobs/catalog-run-1/events', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        events: [
-          {
-            type: 'job_running',
-            timestamp: '2026-05-11T14:00:01Z',
-            payload: { status: 'running' },
-          },
-        ],
-      }),
-    });
-  });
-
-  await page.route('**/api/v2/jobs/catalog-run-1/agent-graph', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        job_id: 'catalog-run-1',
-        graph_id: 'browser_flow_graph',
-        status: 'running',
-        nodes: [],
-        edges: [],
-        stats: { agent_count: 0, edge_count: 0, message_count: 0, event_count: 1 },
-      }),
-    });
-  });
+  await installRunRoutes(page, 'catalog-run-1', () => runStatus, (next) => { runStatus = next; });
 
   await page.goto('/run');
   await expect(page.locator('#blueprint-select')).toHaveValue('browser_flow_graph');
-
   await page.getByRole('button', { name: 'Launch' }).click();
-  await expect(page.getByText('Launch this job?')).toBeVisible();
   await page.getByRole('button', { name: 'Launch' }).last().click();
-
   await expect(page).toHaveURL(/\/runs\/catalog-run-1$/);
-  expect(catalogLaunchRequests).toBe(1);
+  expect(requests).toBe(1);
   await expect(page.getByRole('heading', { name: 'catalog-run-1' })).toBeVisible();
 });

@@ -1,56 +1,43 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  fetchJobAgentGraph,
-  fetchJobDetails,
+  addClusterNode,
+  archiveStableJob,
+  cancelAllJobs,
+  cancelRun,
+  clearJobs,
+  deleteStableJob,
   fetchJobEvents,
   fetchJobs,
-  fetchStableJobs,
-  fetchStableJob,
-  fetchStableJobRuns,
-  startStableJobRun,
-  archiveStableJob,
-  resetStableJobData,
-  deleteStableJob,
-  fetchStableRun,
-  pauseRun,
-  resumeRun,
-  cancelRun,
-  deleteRun,
-  fetchOperation,
-  fetchWorkflowProgress,
-  fetchSystemSummary,
-  clearJobs,
-  cancelAllJobs,
-  isServiceJob,
-  addClusterNode,
-  benchmarkRuntimeModel,
-  fetchLaunchProgress,
   fetchRuntimeModels,
+  fetchStableJobRuns,
+  fetchStableJobs,
   launchBlueprintJob,
+  pauseRun,
   removeClusterNode,
-  revealArtifact,
-  streamWorkflowProgress,
+  resumeRun,
+  startStableJobRun,
   uploadBundle,
 } from '../api';
 
 const mockApi = vi.hoisted(() => ({
   defaults: {
-    baseURL: '/api/v2',
+    baseURL: '/api/v1',
     headers: { common: {} as Record<string, string> },
   },
   get: vi.fn(),
   post: vi.fn(),
+  patch: vi.fn(),
+  put: vi.fn(),
   delete: vi.fn(),
 }));
 
-vi.mock('../api/client', () => ({
-  default: mockApi,
-}));
+vi.mock('../api/client', () => ({ default: mockApi }));
 
-describe('api parsing helpers', () => {
+describe('canonical REST v1 client', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal('crypto', { randomUUID: () => 'idem-test-key' });
   });
 
   afterEach(() => {
@@ -58,1000 +45,176 @@ describe('api parsing helpers', () => {
     vi.unstubAllGlobals();
   });
 
-  it('normalizes sparse job list records with safe defaults', async () => {
+  it('reads runs as a paginated collection and preserves the continuation token', async () => {
     mockApi.get.mockResolvedValue({
       data: {
-        data: [
-          { run_id: 'job-1', graph_id: 'graph-1', recovery_status: null },
-          { status: 'running' },
-        ],
+        items: [{ run_id: 'run-1', graph_id: 'graph-1', status: 'running' }],
+        next_page_token: 'opaque-next',
       },
     });
 
-    await expect(fetchJobs()).resolves.toEqual([
-      expect.objectContaining({
-        job_id: 'job-1',
-        graph_id: 'graph-1',
-        recovery_status: null,
-        status: 'unknown',
-      }),
-      expect.objectContaining({
-        job_id: 'unknown',
-        graph_id: 'unknown',
-        status: 'running',
-      }),
-    ]);
-    expect(mockApi.get).toHaveBeenCalledWith('/runs');
-  });
-
-  it('passes the terminal job visibility flag when requested', async () => {
-    mockApi.get.mockResolvedValue({ data: { data: [] } });
-
-    await expect(fetchJobs({ includeTerminal: false })).resolves.toEqual([]);
-
+    await expect(fetchJobs({ includeTerminal: false, pageSize: 20, pageToken: 'opaque-current' }))
+      .resolves.toEqual({
+        items: [expect.objectContaining({ job_id: 'run-1', status: 'running' })],
+        next_page_token: 'opaque-next',
+      });
     expect(mockApi.get).toHaveBeenCalledWith('/runs', {
-      params: { include_terminal: false },
+      params: {
+        include_terminal: false,
+        page_size: 20,
+        page_token: 'opaque-current',
+      },
     });
   });
 
-  it('accepts runs from the v2 runs envelope', async () => {
+  it('drops malformed rows without restoring legacy envelopes', async () => {
     mockApi.get.mockResolvedValue({
       data: {
-        runs: [
-          {
-            run_id: 'job-envelope-1',
-            graph_id: 'graph-envelope',
-            status: 'completed',
-          },
+        items: [
+          { run_id: 'valid-run', status: 'running' },
+          { run_id: 42, status: 'running' },
         ],
+        next_page_token: null,
       },
     });
-
-    await expect(fetchJobs()).resolves.toEqual([
-      expect.objectContaining({
-        job_id: 'job-envelope-1',
-        graph_id: 'graph-envelope',
-        status: 'completed',
-      }),
-    ]);
+    await expect(fetchJobs()).resolves.toEqual({
+      items: [expect.objectContaining({ job_id: 'valid-run' })],
+      next_page_token: null,
+    });
   });
 
-  it('accepts legacy jobs with a null job type', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        data: [
-          {
-            job_id: 'legacy-job-1',
-            graph_id: 'legacy-workflow',
-            status: 'paused',
-            job_type: null,
-          },
-        ],
-      },
-    });
-
-    await expect(fetchJobs()).resolves.toEqual([
-      expect.objectContaining({
-        job_id: 'legacy-job-1',
-        job_type: null,
-      }),
-    ]);
-  });
-
-  it('keeps valid jobs when another row is malformed', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        data: [
-          { job_id: 'valid-job', status: 'running' },
-          { job_id: 123, status: 'running' },
-        ],
-      },
-    });
-
-    await expect(fetchJobs()).resolves.toEqual([
-      expect.objectContaining({ job_id: 'valid-job', status: 'running' }),
-    ]);
-    expect(console.error).toHaveBeenCalledWith(
-      'fetchJobs[1] validation failed:',
-      expect.anything(),
-    );
-  });
-
-  it('starts durable cleanup through the slash cleanup endpoint', async () => {
-    mockApi.post.mockResolvedValue({
-      data: {
-        operation_id: 'op-clean-1',
-        kind: 'clear_jobs',
-        status: 'running',
-        counters: { total: 2, started: 2 },
-      },
-    });
-
-    await expect(clearJobs()).resolves.toEqual(expect.objectContaining({
-      version: 2,
-      operation_id: 'op-clean-1',
-      kind: 'clear_jobs',
-      status: 'running',
-      counters: expect.objectContaining({ total: 2, started: 2 }),
-    }));
-
-    expect(mockApi.post).toHaveBeenCalledWith('/runs:cleanup');
-  });
-
-  it('starts durable cancellation through the canonical cancel-all endpoint', async () => {
-    mockApi.post.mockResolvedValue({
-      data: {
-        operation_id: 'op-cancel-1',
-        kind: 'cancel_all_jobs',
-        status: 'running',
-        counters: { total: 2, started: 2 },
-      },
-    });
-
-    await expect(cancelAllJobs()).resolves.toEqual(expect.objectContaining({
-      operation_id: 'op-cancel-1',
-      kind: 'cancel_all_jobs',
-      counters: expect.objectContaining({ total: 2, started: 2 }),
-    }));
-    expect(mockApi.post).toHaveBeenCalledWith('/runs:cancel-all');
-  });
-
-  it('rejects malformed durable-operation responses', async () => {
-    mockApi.post.mockResolvedValueOnce({ data: { cleared_count: 'two' } });
-    await expect(clearJobs()).rejects.toThrow();
-  });
-
-  it('encodes dynamic job ids before building routes', async () => {
-    mockApi.get.mockResolvedValueOnce({
-      data: { job: { job_id: 'job/with space', status: 'running' } },
-    });
-    await fetchJobDetails('job/with space');
-    expect(mockApi.get).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/monitor');
-
-    mockApi.get.mockResolvedValueOnce({
-      data: { job: { job_id: 'job/with space', status: 'running' } },
-    });
-    await fetchJobDetails('job/with space', { include: 'full' });
-    expect(mockApi.get).toHaveBeenLastCalledWith(
-      '/runs/job%2Fwith%20space/monitor',
-      { params: { include: 'full' } },
-    );
-
-    mockApi.get.mockResolvedValueOnce({ data: { data: [] } });
-    await fetchJobEvents('job/with space');
-    expect(mockApi.get).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/monitor');
-
-    mockApi.get.mockResolvedValueOnce({
-      data: { agent_graph: { job_id: 'job/with space', nodes: [], edges: [] } },
-    });
-    await fetchJobAgentGraph('job/with space');
-    expect(mockApi.get).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/monitor');
-
-    mockApi.post.mockResolvedValueOnce({ data: { version: 2, run_id: 'job/with space', status: 'paused' } });
-    await pauseRun('job/with space');
-    expect(mockApi.post).toHaveBeenLastCalledWith('/runs/job%2Fwith%20space/pause');
-  });
-
-  it('uses the list endpoint as the authoritative source for row status', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        data: [
-          {
-            run_id: 'job-1',
-            graph_id: 'workflow_v1',
-            status: 'running',
-          },
-        ],
-      },
-    });
-
-    await expect(fetchJobs()).resolves.toEqual([
-      expect.objectContaining({ job_id: 'job-1', status: 'running' }),
-    ]);
-    expect(mockApi.get).toHaveBeenCalledOnce();
-    expect(mockApi.get).toHaveBeenCalledWith('/runs');
-  });
-
-  it('falls back to an empty job list when the API shape is malformed', async () => {
-    mockApi.get.mockResolvedValue({
-      data: { data: [{ job_id: 123, status: 'running' }] },
-    });
-
-    await expect(fetchJobs()).resolves.toEqual([]);
-    expect(console.error).toHaveBeenCalledWith(
-      'fetchJobs[0] validation failed:',
-      expect.anything(),
-    );
-  });
-
-  it('parses persistent jobs and their runs from the v2 contract', async () => {
+  it('pages persistent jobs and their run history', async () => {
     mockApi.get
       .mockResolvedValueOnce({
         data: {
-          version: 2,
-          data: [
-            {
-              job_id: 'stable-job-1',
-              graph_id: 'research_graph',
-              job_name: 'Research job',
-              status: 'active',
-              data_generation: 3,
-              run_count: 2,
-              schedule_count: 1,
-            },
-            { job_id: 42, status: 'active' },
-          ],
+          items: [{ job_id: 'job-1', status: 'active', data_generation: 1 }],
+          next_page_token: 'jobs-next',
         },
       })
       .mockResolvedValueOnce({
         data: {
-          version: 2,
-          job_id: 'stable-job-1',
-          graph_id: 'research_graph',
-          status: 'active',
-          resolved_configuration: { mode: 'safe' },
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          version: 2,
-          job_id: 'stable-job-1',
-          data: [
-            { run_id: 'run-1', job_id: 'stable-job-1', status: 'completed', attempt: 1 },
-            { run_id: 'run-2', job_id: 'stable-job-1', status: 'running' },
-          ],
+          items: [{ run_id: 'run-1', job_id: 'job-1', status: 'completed', attempt: 1 }],
+          next_page_token: null,
         },
       });
 
-    await expect(fetchStableJobs({ includeArchived: true })).resolves.toEqual([
-      expect.objectContaining({ job_id: 'stable-job-1', data_generation: 3, run_count: 2 }),
-    ]);
-    await expect(fetchStableJob('stable-job-1')).resolves.toEqual(expect.objectContaining({
-      job_id: 'stable-job-1',
-      resolved_configuration: { mode: 'safe' },
-    }));
-    await expect(fetchStableJobRuns('stable-job-1')).resolves.toEqual([
-      expect.objectContaining({ run_id: 'run-1', attempt: 1 }),
-      expect.objectContaining({ run_id: 'run-2', attempt: 1 }),
-    ]);
-
+    await expect(fetchStableJobs({ includeArchived: true, pageToken: 'jobs-page' })).resolves.toEqual({
+      items: [expect.objectContaining({ job_id: 'job-1' })],
+      next_page_token: 'jobs-next',
+    });
+    await expect(fetchStableJobRuns('job-1', 'runs-page')).resolves.toEqual({
+      items: [expect.objectContaining({ run_id: 'run-1' })],
+      next_page_token: null,
+    });
     expect(mockApi.get).toHaveBeenNthCalledWith(1, '/jobs', {
-      params: { include_archived: true },
+      params: { include_archived: true, page_size: undefined, page_token: 'jobs-page' },
     });
-    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/jobs/stable-job-1');
-    expect(mockApi.get).toHaveBeenNthCalledWith(3, '/jobs/stable-job-1/runs');
+    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/jobs/job-1/runs', {
+      params: { page_token: 'runs-page' },
+    });
   });
 
-  it('targets v2 stable-job and run lifecycle endpoints with confirmed deletes', async () => {
-    mockApi.post
-      .mockResolvedValueOnce({ data: { version: 2, job_id: 'stable-job-1', run_id: 'run-new', status: 'pending' } })
-      .mockResolvedValueOnce({ data: { version: 2, job_id: 'stable-job-1', status: 'archived' } })
-      .mockResolvedValueOnce({ data: { version: 2, job_id: 'stable-job-1', status: 'active', data_generation: 2 } })
-      .mockResolvedValueOnce({ data: { version: 2, run_id: 'run-new', status: 'paused' } })
-      .mockResolvedValueOnce({ data: { version: 2, run_id: 'run-new', status: 'running' } })
-      .mockResolvedValueOnce({ data: { version: 2, run_id: 'run-new', status: 'cancelled' } });
-    mockApi.get.mockResolvedValueOnce({ data: { version: 2, run_id: 'run-new', job_id: 'stable-job-1', status: 'running' } });
-    mockApi.delete
-      .mockResolvedValueOnce({ data: { version: 2, job_id: 'stable-job-1', status: 'deleted' } })
-      .mockResolvedValueOnce({ data: { version: 2, run_id: 'run-new', status: 'deleted' } });
-
-    await expect(startStableJobRun('stable-job-1', { value: 1 })).resolves.toEqual(expect.objectContaining({ run_id: 'run-new' }));
-    await expect(archiveStableJob('stable-job-1')).resolves.toEqual(expect.objectContaining({ status: 'archived' }));
-    await expect(resetStableJobData('stable-job-1')).resolves.toEqual(expect.objectContaining({ data_generation: 2 }));
-    await expect(fetchStableRun('run-new')).resolves.toEqual(expect.objectContaining({ job_id: 'stable-job-1' }));
-    await expect(pauseRun('run-new')).resolves.toEqual(expect.objectContaining({ status: 'paused' }));
-    await expect(resumeRun('run-new')).resolves.toEqual(expect.objectContaining({ status: 'running' }));
-    await expect(cancelRun('run-new')).resolves.toEqual(expect.objectContaining({ status: 'cancelled' }));
-    await expect(deleteStableJob('stable-job-1')).resolves.toEqual(expect.objectContaining({ status: 'deleted' }));
-    await expect(deleteRun('run-new')).resolves.toEqual(expect.objectContaining({ status: 'deleted' }));
-
-    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/jobs/stable-job-1/runs', { version: 2, inputs: { value: 1 } });
-    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/jobs/stable-job-1/archive');
-    expect(mockApi.post).toHaveBeenNthCalledWith(3, '/jobs/stable-job-1/data:reset');
-    expect(mockApi.get).toHaveBeenCalledWith('/runs/run-new');
-    expect(mockApi.delete).toHaveBeenNthCalledWith(1, '/jobs/stable-job-1', { data: { version: 2, confirmed: true } });
-    expect(mockApi.delete).toHaveBeenNthCalledWith(2, '/runs/run-new', { data: { version: 2, confirmed: true } });
+  it('always supplies an idempotency key when creating a run', async () => {
+    mockApi.post.mockResolvedValue({ data: { run_id: 'run-new', job_id: 'job-1', status: 'pending' } });
+    await expect(startStableJobRun('job-1', { query: 'test' })).resolves.toEqual(
+      expect.objectContaining({ run_id: 'run-new' }),
+    );
+    expect(mockApi.post).toHaveBeenCalledWith('/jobs/job-1/runs', { inputs: { query: 'test' } }, {
+      headers: { 'Idempotency-Key': 'idem-test-key' },
+    });
   });
 
-  it('fetches durable operation status by encoded id', async () => {
+  it('fetches and retains an ETag before conditionally archiving and deleting a job', async () => {
+    mockApi.get
+      .mockResolvedValueOnce({ data: { job_id: 'job-etag-1', status: 'active' }, headers: { etag: '"rev-1"' } })
+      .mockResolvedValueOnce({ data: { job_id: 'job-etag-2', status: 'active' }, headers: { etag: '"rev-8"' } });
+    mockApi.patch.mockResolvedValue({
+      data: { job_id: 'job-etag-1', status: 'archived' },
+      headers: { etag: '"rev-2"' },
+    });
+    mockApi.delete.mockResolvedValue({ status: 204, data: undefined });
+
+    await archiveStableJob('job-etag-1');
+    await deleteStableJob('job-etag-2');
+
+    expect(mockApi.patch).toHaveBeenCalledWith('/jobs/job-etag-1', { status: 'archived' }, {
+      headers: { 'If-Match': '"rev-1"' },
+    });
+    expect(mockApi.delete).toHaveBeenCalledWith('/jobs/job-etag-2', {
+      headers: { 'If-Match': '"rev-8"' },
+    });
+  });
+
+  it('uses desired-state PATCH for run lifecycle changes', async () => {
+    mockApi.patch
+      .mockResolvedValueOnce({ data: { run_id: 'run-1', status: 'paused' } })
+      .mockResolvedValueOnce({ data: { run_id: 'run-1', status: 'running' } })
+      .mockResolvedValueOnce({ data: { run_id: 'run-1', status: 'cancelled' } });
+    await pauseRun('run-1');
+    await resumeRun('run-1');
+    await cancelRun('run-1');
+    expect(mockApi.patch).toHaveBeenNthCalledWith(1, '/runs/run-1', { desired_state: 'paused' });
+    expect(mockApi.patch).toHaveBeenNthCalledWith(2, '/runs/run-1', { desired_state: 'running' });
+    expect(mockApi.patch).toHaveBeenNthCalledWith(3, '/runs/run-1', { desired_state: 'cancelled' });
+  });
+
+  it('uses paginated run events instead of runtime-run aliases', async () => {
     mockApi.get.mockResolvedValue({
-      data: { operation_id: 'op/1', kind: 'clear_jobs', status: 'completed', counters: { succeeded: 2 } },
+      data: { items: [{ type: 'agent.completed', timestamp: '2026-08-13T00:00:00Z' }], next_page_token: null },
     });
-
-    await expect(fetchOperation('op/1')).resolves.toEqual(expect.objectContaining({
-      operation_id: 'op/1',
-      status: 'completed',
-      counters: expect.objectContaining({ succeeded: 2 }),
-    }));
-    expect(mockApi.get).toHaveBeenCalledWith('/operations/op%2F1');
-  });
-
-  it('returns structured defaults when system summary validation fails', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        nodes: [{ name: 42 }],
-        jobs: 'not-a-list',
-      },
-    });
-
-    await expect(fetchSystemSummary()).resolves.toEqual({ version: 2, nodes: [], jobs: [] });
-  });
-
-  it('adds cluster nodes through the system cluster endpoint', async () => {
-    mockApi.post.mockResolvedValue({
-      data: {
-        ok: true,
-        host: '10.0.0.42',
-        node_name: 'mirror_neuron@10.0.0.42',
-        status: 'connected',
-      },
-    });
-
-    await expect(addClusterNode({ host: '10.0.0.42', token: 'join-token' })).resolves.toEqual(
-      expect.objectContaining({
-        host: '10.0.0.42',
-        node_name: 'mirror_neuron@10.0.0.42',
-        status: 'connected',
-      }),
-    );
-    expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:add', { version: 2, host: '10.0.0.42', token: 'join-token' });
-  });
-
-  it('removes cluster nodes through the system cluster endpoint', async () => {
-    mockApi.post.mockResolvedValue({
-      data: {
-        ok: true,
-        node_name: 'mirror_neuron@10.0.0.42',
-        status: 'disconnected',
-      },
-    });
-
-    await expect(removeClusterNode('mirror_neuron@10.0.0.42')).resolves.toEqual(
-      expect.objectContaining({
-        node_name: 'mirror_neuron@10.0.0.42',
-        status: 'disconnected',
-      }),
-    );
-    expect(mockApi.post).toHaveBeenCalledWith('/system/cluster/nodes:remove', { version: 2, node_name: 'mirror_neuron@10.0.0.42' });
-  });
-
-  it('fetches installed runtime models', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        node: 'mn1@local',
-        runner_available: true,
-        models: [
-          {
-            id: 'gemma4:e2b',
-            name: 'Gemma 4 E2B',
-            docker_model: 'ai/gemma4:E2B',
-            model: 'ai/gemma4:E2B',
-            backend: 'llama.cpp',
-            installed: true,
-            node: 'mn1@local',
-          },
-        ],
-      },
-    });
-
-    await expect(fetchRuntimeModels()).resolves.toEqual(
-      expect.objectContaining({
-        node: 'mn1@local',
-        models: [
-          expect.objectContaining({
-            id: 'gemma4:e2b',
-            docker_model: 'ai/gemma4:E2B',
-          }),
-        ],
-      }),
-    );
-    expect(mockApi.get).toHaveBeenCalledWith('/models');
-  });
-
-  it('benchmarks runtime models through the encoded model route', async () => {
-    mockApi.post.mockResolvedValue({
-      data: {
-        model: 'gemma4:e2b',
-        docker_model: 'ai/gemma4:E2B',
-        node: 'mn1@local',
-        elapsed_ms: 1200,
-        first_token_ms: 340,
-        generated_tokens: 15,
-        tokens_per_second: 12.5,
-        sample: 'Ready now.',
-      },
-    });
-
-    await expect(benchmarkRuntimeModel('gemma4:e2b', { max_tokens: 32 })).resolves.toEqual(
-      expect.objectContaining({
-        model: 'gemma4:e2b',
-        tokens_per_second: 12.5,
-      }),
-    );
-    expect(mockApi.post).toHaveBeenCalledWith('/models/gemma4%3Ae2b/benchmark', { version: 2, max_tokens: 32 });
-  });
-
-  it('posts catalog blueprint launches to the async launch endpoint with a progress id', async () => {
-    mockApi.post.mockResolvedValue({
-      data: {
-        job_id: null,
-        id: null,
-        run_id: 'run-vc-1',
-        status: 'launching',
-        progress_id: 'progress-vc-1',
-        progress_url: '/api/v2/blueprints/launch/progress/progress-vc-1',
-      },
-    });
-
-    await expect(launchBlueprintJob({
-      source: 'catalog',
-      blueprint_id: 'vc_assistant',
-      progress_id: 'progress-vc-1',
-      run_id: 'run-vc-1',
-      config_overrides: { llm: { model: 'local' } },
-      force: true,
-      fake_llm: false,
-      fake_skills: true,
-    })).resolves.toEqual(expect.objectContaining({
-      job_id: null,
-      run_id: 'run-vc-1',
-      progress_id: 'progress-vc-1',
-    }));
-
-    expect(mockApi.post).toHaveBeenCalledWith('/blueprints/launch/runs', {
-      version: 2,
-      source: 'catalog',
-      blueprint_id: 'vc_assistant',
-      progress_id: 'progress-vc-1',
-      run_id: 'run-vc-1',
-      config_overrides: { llm: { model: 'local' } },
-      force: true,
-      fake_llm: false,
-      fake_skills: true,
-    });
-  });
-
-  it('keeps path and bundle launches on the generic launch endpoint', async () => {
-    mockApi.post
-      .mockResolvedValueOnce({
-        data: {
-          status: 'launching',
-          job_id: null,
-          run_id: 'run-path-1',
-          progress_id: 'progress-path-1',
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          status: 'launching',
-          job_id: null,
-          run_id: 'run-bundle-1',
-          progress_id: 'progress-bundle-1',
-        },
-      });
-
-    await expect(launchBlueprintJob({
-      source: 'path',
-      path: '/tmp/blueprints/vc_assistant',
-      progress_id: 'progress-path-1',
-    })).resolves.toEqual(expect.objectContaining({
-      status: 'launching',
-      job_id: null,
-      progress_id: 'progress-path-1',
-    }));
-
-    await expect(launchBlueprintJob({
-      source: 'bundle',
-      _bundle_path: '/tmp/bundle',
-      progress_id: 'progress-bundle-1',
-    })).resolves.toEqual(expect.objectContaining({
-      status: 'launching',
-      job_id: null,
-      progress_id: 'progress-bundle-1',
-    }));
-
-    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/blueprints/launch/runs', {
-      version: 2,
-      source: 'path',
-      path: '/tmp/blueprints/vc_assistant',
-      progress_id: 'progress-path-1',
-    });
-    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/blueprints/launch/runs', {
-      version: 2,
-      source: 'bundle',
-      _bundle_path: '/tmp/bundle',
-      progress_id: 'progress-bundle-1',
-    });
-  });
-
-  it('preserves accepted async launch responses without a job id', async () => {
-    mockApi.post.mockResolvedValue({
-      data: {
-        status: 'launching',
-        job_id: null,
-        id: null,
-        run_id: 'run-async-1',
-        progress_id: 'progress-async-1',
-        progress_url: '/api/v2/blueprints/launch/progress/progress-async-1',
-      },
-    });
-
-    await expect(launchBlueprintJob({
-      source: 'path',
-      path: '/tmp/blueprints/vc_assistant',
-      progress_id: 'progress-async-1',
-    })).resolves.toEqual(expect.objectContaining({
-      status: 'launching',
-      job_id: null,
-      id: null,
-      run_id: 'run-async-1',
-      progress_id: 'progress-async-1',
-      progress_url: '/api/v2/blueprints/launch/progress/progress-async-1',
-    }));
-    expect(console.error).not.toHaveBeenCalledWith(
-      'launchBlueprintJob validation failed:',
-      expect.anything(),
-    );
-  });
-
-  it('parses launch progress snapshots with phases and job metadata', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        progress_id: 'progress-async-1',
-        run_id: 'run-async-1',
-        job_id: 'job-async-1',
-        status: 'completed',
-        current_phase: 'submit',
-        phases: [
-          { id: 'resolve_source', label: 'Resolve blueprint source', status: 'completed' },
-          { id: 'submit', label: 'Submit job to runtime', status: 'completed', message: 'Job submitted.' },
-        ],
-        events: [
-          { phase: 'submit', status: 'completed', message: 'Job submitted.' },
-        ],
-        latest: { phase: 'submit', status: 'completed', message: 'Job submitted.' },
-        completed: true,
-      },
-    });
-
-    await expect(fetchLaunchProgress('progress-async-1')).resolves.toEqual(expect.objectContaining({
-      progress_id: 'progress-async-1',
-      run_id: 'run-async-1',
-      job_id: 'job-async-1',
-      status: 'completed',
-      current_phase: 'submit',
-      phases: [
-        expect.objectContaining({ id: 'resolve_source', status: 'completed' }),
-        expect.objectContaining({ id: 'submit', status: 'completed', message: 'Job submitted.' }),
-      ],
-      events: [
-        expect.objectContaining({ phase: 'submit', status: 'completed' }),
-      ],
-    }));
-  });
-
-  it('normalizes malformed upload and launch responses', async () => {
-    mockApi.post.mockResolvedValueOnce({
-      data: {
-        bundle_path: 42,
-        manifest: 'not-a-manifest',
-      },
-    });
-
-    const file = new File(['bundle'], 'bundle.zip', { type: 'application/zip' });
-    await expect(uploadBundle(file)).resolves.toEqual({
-      version: 2,
-      bundle_path: '',
-      manifest: {},
-    });
-
-    mockApi.post.mockResolvedValueOnce({
-      data: {
-        id: 123,
-        status: 456,
-      },
-    });
-
-    await expect(launchBlueprintJob({ source: 'path', path: '/tmp/bad-blueprint' })).resolves.toEqual({ version: 2, status: 'pending' });
-    expect(console.error).toHaveBeenCalledWith(
-      'launchBlueprintJob validation failed:',
-      expect.anything(),
-    );
-  });
-
-  it('posts reveal artifact calls through same-origin API paths only', async () => {
-    mockApi.post.mockResolvedValueOnce({ data: { ok: true, folder: '/tmp/job-1' } });
-
-    await expect(revealArtifact('/api/v2/artifacts/logs/reveal')).resolves.toEqual(
-      expect.objectContaining({ ok: true, folder: '/tmp/job-1' }),
-    );
-    expect(mockApi.post).toHaveBeenLastCalledWith('/artifacts/logs/reveal');
-
-    await expect(revealArtifact('https://evil.example/artifacts/logs/reveal')).rejects.toThrow('same-origin');
-    expect(mockApi.post).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps job detail screens renderable when the detail payload is malformed', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        job: { job_id: 123 },
-        agents: {},
-      },
-    });
-
-    await expect(fetchJobDetails('job-1')).resolves.toEqual(
-      expect.objectContaining({
-        job: expect.objectContaining({ job_id: 'job-1', status: 'unknown' }),
-        agents: [],
-      }),
-    );
-  });
-
-  it('preserves compact paused job details with nullable graph metadata', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        job: {
-          job_id: 'job-1',
-          graph_id: null,
-          run_id: 'run-1',
-          status: 'paused',
-          submitted_at: '2026-06-02T15:41:54Z',
-          updated_at: null,
-        },
-        summary: {
-          mode: 'compact',
-          graph_id: null,
-          status: 'paused',
-        },
-        agents: [],
-        recent_events: [],
-      },
-    });
-
-    await expect(fetchJobDetails('job-1')).resolves.toEqual(
-      expect.objectContaining({
-        job: expect.objectContaining({
-          job_id: 'job-1',
-          graph_id: null,
-          run_id: 'run-1',
-          status: 'paused',
-          updated_at: null,
-        }),
-      }),
-    );
-  });
-
-  it('preserves blueprint web ui handles on job detail payloads', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        job: { job_id: 'job-1', status: 'running' },
-        web_ui: {
-          url: 'http://localhost:61000',
-          title: 'Blueprint Dashboard',
-          status: 'running',
-        },
-      },
-    });
-
-    await expect(fetchJobDetails('job-1')).resolves.toEqual(
-      expect.objectContaining({
-        web_ui: expect.objectContaining({
-          url: 'http://localhost:61000',
-          title: 'Blueprint Dashboard',
-          status: 'running',
-        }),
-      }),
-    );
-  });
-
-  it('drops malformed event streams instead of surfacing partial bad data', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        data: [
-          { timestamp: '2026-04-16T12:00:00Z', type: 'agent_started' },
-          { timestamp: 123, type: 'agent_completed' },
-        ],
-      },
-    });
-
-    await expect(fetchJobEvents('job-1')).resolves.toEqual([]);
-  });
-
-  it('accepts job events from the backend events envelope', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        events: [
-          {
-            timestamp: '2026-04-16T12:00:00Z',
-            type: 'job_running',
-          },
-        ],
-      },
-    });
-
-    await expect(fetchJobEvents('job-1')).resolves.toEqual([
-      expect.objectContaining({
-        timestamp: '2026-04-16T12:00:00Z',
-        type: 'job_running',
-      }),
+    await expect(fetchJobEvents('run/with space')).resolves.toEqual([
+      expect.objectContaining({ type: 'agent.completed' }),
     ]);
+    expect(mockApi.get).toHaveBeenCalledWith('/runs/run%2Fwith%20space/events');
   });
 
-  it('falls back to an empty agent graph when graph validation fails', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        job_id: 'job-1',
-        nodes: [{ label: 'missing id' }],
-        edges: [],
-      },
+  it('starts administrative operations through noun resources with idempotency', async () => {
+    mockApi.post
+      .mockResolvedValueOnce({ data: { operation_id: 'op-clean', kind: 'clear_jobs', status: 'running' } })
+      .mockResolvedValueOnce({ data: { operation_id: 'op-cancel', kind: 'cancel_all_jobs', status: 'running' } });
+    await clearJobs();
+    await cancelAllJobs();
+    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/run-cleanups', {}, {
+      headers: { 'Idempotency-Key': 'idem-test-key' },
     });
+    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/run-cancellations', {}, {
+      headers: { 'Idempotency-Key': 'idem-test-key' },
+    });
+  });
 
-    await expect(fetchJobAgentGraph('job-1')).resolves.toEqual(
-      expect.objectContaining({
-        job_id: 'job-1',
-        nodes: [],
-        edges: [],
-        stats: { agent_count: 0, edge_count: 0, message_count: 0, event_count: 0 },
-      }),
+  it('creates blueprint runs directly and rejects public host paths', async () => {
+    mockApi.post.mockResolvedValue({ data: { run_id: 'run-blueprint', job_id: 'job-blueprint', status: 'pending' } });
+    await expect(launchBlueprintJob({
+      source: 'catalog',
+      blueprint_id: 'researcher',
+      config_overrides: { mode: 'safe' },
+    })).resolves.toEqual(expect.objectContaining({ run_id: 'run-blueprint' }));
+    expect(mockApi.post).toHaveBeenCalledWith('/blueprints/researcher/runs', {
+      config_overrides: { mode: 'safe' },
+    }, { headers: { 'Idempotency-Key': 'idem-test-key' } });
+    await expect(launchBlueprintJob({ source: 'path', path: '/tmp/private' })).rejects.toThrow(
+      'Host filesystem paths are not accepted',
     );
   });
 
-  it('parses workflow progress snapshots', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        job_id: 'job-1',
-        workflow_id: 'workflow-1',
-        name: 'Workflow One',
-        sequence: 7,
-        status: 'running',
-        progress_source: 'explicit',
-        workflow_kind: 'service',
-        agent_count: { done: 1, total: 2 },
-        current_step_id: 'research',
-        current_step_ids: ['research'],
-        edges: [{ from: 'intake', to: 'research', event: 'intake_ready' }],
-        layers: [['intake'], ['research']],
-        steps: [
-          {
-            id: 'research',
-            label: 'Research',
-            status: 'running',
-            current: true,
-            parents: ['intake'],
-            children: [],
-            layer: 1,
-            done_count: 1,
-            ready_count: 2,
-            total_count: 2,
-            agents: [{
-              id: 'research:docs',
-              status: 'idle',
-              progress: 0.2,
-              progress_source: 'items',
-              activity_summary: null,
-              items_done: 2,
-              items_total: 10,
-              tokens_used: 300,
-              token_budget: 1200,
-              live: true,
-            }],
-          },
-        ],
-      },
+  it('uploads multipart bundles and retains only the opaque bundle identity', async () => {
+    mockApi.post.mockResolvedValue({ data: { bundle_id: 'bundle_01JABC' } });
+    const file = new File(['bundle'], 'worker.zip', { type: 'application/zip' });
+    await expect(uploadBundle(file)).resolves.toEqual({ bundle_id: 'bundle_01JABC' });
+    expect(mockApi.post).toHaveBeenCalledWith('/bundles', expect.any(FormData), {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
-
-    await expect(fetchWorkflowProgress('job-1')).resolves.toEqual(
-      expect.objectContaining({
-        job_id: 'job-1',
-        workflow_id: 'workflow-1',
-        sequence: 7,
-        progress_source: 'explicit',
-        workflow_kind: 'service',
-        current_step_ids: ['research'],
-        edges: [{ from: 'intake', to: 'research', event: 'intake_ready' }],
-        layers: [['intake'], ['research']],
-        steps: [
-          expect.objectContaining({
-            id: 'research',
-            parents: ['intake'],
-            layer: 1,
-            agents: [expect.objectContaining({
-              id: 'research:docs',
-              status: 'idle',
-              progress_source: 'items',
-              activity_summary: '',
-              items_done: 2,
-              items_total: 10,
-              tokens_used: 300,
-              token_budget: 1200,
-              live: true,
-            })],
-          }),
-        ],
-      }),
-    );
-    expect(mockApi.get).toHaveBeenCalledWith('/runs/job-1/workflow-progress');
   });
 
-  it('normalizes wrapped workflow progress snapshots from the newer API shape', async () => {
-    mockApi.get.mockResolvedValue({
-      data: {
-        event: 'snapshot',
-        data: {
-          workflowProgress: {
-            schema_version: 'otterdesk.workflow_progress.v1',
-            jobId: 'job-2',
-            workflowId: 'workflow-2',
-            workflowKind: 'live',
-            state: 'in_progress',
-            currentStepId: 'prepare',
-            phases: [
-              {
-                stepId: 'prepare',
-                name: 'Prepare workspace',
-                state: 'in_progress',
-                agentCount: { running: '1', total: '1' },
-              },
-            ],
-            agents: [
-              {
-                agentId: 'worker-1',
-                displayName: 'Worker One',
-                currentStepId: 'prepare',
-                state: 'working',
-                progressPercent: 45,
-                tokensUsed: '1500',
-                tokenBudget: '3000',
-                currentTask: 'Preparing workspace',
-              },
-            ],
-            edges: [{ source: 'prepare', target: 'submit', type: 'next' }],
-            recentEvents: [{ time: '2026-06-12T17:38:02Z', event: 'agent_beacon', message: 'Preparing workspace' }],
-          },
-        },
-      },
-    });
-
-    await expect(fetchWorkflowProgress('job-2')).resolves.toEqual(
-      expect.objectContaining({
-        schema_version: 'otterdesk.workflow_progress.v1',
-        job_id: 'job-2',
-        workflow_id: 'workflow-2',
-        workflow_kind: 'service',
-        status: 'running',
-        current_step_id: 'prepare',
-        current_step_ids: ['prepare'],
-        agent_count: expect.objectContaining({ running: 1, total: 1 }),
-        edges: [expect.objectContaining({ from: 'prepare', to: 'submit', event: 'next' })],
-        steps: [
-          expect.objectContaining({
-            id: 'prepare',
-            label: 'Prepare workspace',
-            status: 'running',
-            current: true,
-            running_count: 1,
-            total_count: 1,
-            agents: [
-              expect.objectContaining({
-                id: 'worker-1',
-                display_name: 'Worker One',
-                status: 'running',
-                progress: 0.45,
-                tokens_used: 1500,
-                token_budget: 3000,
-                working_on: 'Preparing workspace',
-              }),
-            ],
-          }),
-        ],
-        recent_events: [expect.objectContaining({ timestamp: '2026-06-12T17:38:02Z', type: 'agent_beacon' })],
-      }),
-    );
-    expect(console.error).not.toHaveBeenCalledWith(
-      'fetchWorkflowProgress(job-2) validation failed:',
-      expect.anything(),
-    );
-  });
-
-  it('skips malformed workflow progress stream snapshots and keeps reading', async () => {
-    vi.stubGlobal('EventSource', undefined);
-    const snapshot = JSON.stringify({
-      job_id: 'job-1',
-      workflow_id: 'workflow-1',
-      name: 'Workflow One',
-      status: 'running',
-    });
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode(`event: snapshot\ndata: {bad json}\n\n`));
-        controller.enqueue(new TextEncoder().encode(`event: heartbeat\ndata: {"job_id":"job-1"}\n\n`));
-        controller.enqueue(new TextEncoder().encode(`event: snapshot\ndata: ${snapshot}\n\n`));
-        controller.close();
-      },
-    });
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      body,
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    const onSnapshot = vi.fn();
-    const onHeartbeat = vi.fn();
-
-    await streamWorkflowProgress('job-1', onSnapshot, undefined, onHeartbeat);
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v2/runs/job-1/workflow-progress/stream', {
-      headers: {},
-      signal: undefined,
-    });
-    expect(console.error).toHaveBeenCalledWith(
-      'streamWorkflowProgress(job-1) JSON parse failed:',
-      expect.any(SyntaxError),
-    );
-    expect(onHeartbeat).toHaveBeenCalledTimes(1);
-    expect(onSnapshot).toHaveBeenCalledTimes(1);
-    expect(onSnapshot).toHaveBeenCalledWith(expect.objectContaining({
-      job_id: 'job-1',
-      workflow_id: 'workflow-1',
-      status: 'running',
-    }));
-  });
-
-  it('normalizes wrapped workflow progress stream snapshots', async () => {
-    vi.stubGlobal('EventSource', undefined);
-    const snapshot = JSON.stringify({
-      event: 'snapshot',
-      data: {
-        workflow_progress: {
-          jobId: 'job-stream',
-          workflowId: 'stream-workflow',
-          currentStepId: 'run',
-          steps: [{ id: 'run', label: 'Run', state: 'working' }],
-        },
-      },
-    });
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode(`event: snapshot\ndata: ${snapshot}\n\n`));
-        controller.close();
-      },
-    });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      body,
-    }));
-    const onSnapshot = vi.fn();
-
-    await streamWorkflowProgress('job-stream', onSnapshot);
-
-    expect(onSnapshot).toHaveBeenCalledWith(expect.objectContaining({
-      job_id: 'job-stream',
-      workflow_id: 'stream-workflow',
-      current_step_id: 'run',
-      steps: [expect.objectContaining({ id: 'run', status: 'running', current: true })],
-    }));
-  });
-});
-
-describe('isServiceJob', () => {
-  it('detects explicit service summaries', () => {
-    expect(isServiceJob({ job_id: 'batch-job', graph_id: 'daily-run' }, { job_type: 'service' })).toBe(true);
-  });
-
-  it('detects service jobs from job fields', () => {
-    expect(isServiceJob({ job_id: 'price-monitor', graph_id: 'stream', type: 'service' })).toBe(true);
-    expect(isServiceJob({ job_id: 'job-1', graph_id: 'batch-flow', job_type: 'service' })).toBe(true);
-  });
-
-  it('detects live stream policies as service jobs', () => {
-    expect(isServiceJob({ job_id: 'watcher', graph_id: 'stream' }, { stream_mode: 'live' })).toBe(true);
-    expect(isServiceJob({ job_id: 'watcher', graph_id: 'stream' }, { policies: { stream_mode: 'live' } })).toBe(true);
-  });
-
-  it('does not mark normal batch jobs as service jobs by name', () => {
-    expect(isServiceJob({ job_id: 'price-monitor', graph_id: 'stream' })).toBe(false);
-    expect(isServiceJob({ job_id: 'job-1', graph_id: 'batch-flow' })).toBe(false);
-    expect(isServiceJob(null)).toBe(false);
+  it('uses canonical infrastructure resources and paginated models', async () => {
+    mockApi.post.mockResolvedValue({ data: { ok: true, node_name: 'mn@10.0.0.2', status: 'connected' } });
+    mockApi.delete.mockResolvedValue({ data: { ok: true, node_name: 'mn@10.0.0.2', status: 'deleted' } });
+    mockApi.get.mockResolvedValue({ data: { items: [], next_page_token: null } });
+    await addClusterNode({ host: '10.0.0.2', token: 'join-token' });
+    await removeClusterNode('mn@10.0.0.2');
+    await expect(fetchRuntimeModels()).resolves.toEqual(expect.objectContaining({ items: [], next_page_token: null }));
+    expect(mockApi.post).toHaveBeenCalledWith('/nodes', { host: '10.0.0.2', token: 'join-token' });
+    expect(mockApi.delete).toHaveBeenCalledWith('/nodes/mn%4010.0.0.2');
+    expect(mockApi.get).toHaveBeenCalledWith('/models');
   });
 });

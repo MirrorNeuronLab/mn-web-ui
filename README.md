@@ -6,10 +6,10 @@ artifacts, runtime resources, and models through `mn-api`.
 
 The main lifecycle surfaces are intentionally separate:
 
-- **Jobs** use `/api/v2` and own reusable configuration, schedules, shared data,
+- **Jobs** use `/api/v1` and own reusable configuration, schedules, shared data,
   and run history.
 - **Runs** are individual executions. Lifecycle controls, live progress,
-  monitor snapshots, agent graphs, events, and artifacts use `/api/v2`.
+  monitor snapshots, agent graphs, events, and artifacts use `/api/v1`.
 
 The run monitor defaults to a selectable public-step list and can switch to the
 equivalent workflow graph. Both modes consume the same workflow-progress
@@ -49,9 +49,9 @@ http://localhost:55173
 ## Notes
 
 - Start `mn-api` before using live runtime screens.
-- The configured API base may still point at `/api/v2` for runtime-wide
+- The configured API base may still point at `/api/v1` for runtime-wide
   inventory endpoints; all job and execution monitoring derives and uses the
-  sibling `/api/v2` base.
+  sibling `/api/v1` base.
 - Set `MN_WEB_API_TOKEN` when connecting to a protected API instance.
 - Blueprint-owned run interfaces use the `json-render` adapter.
 
@@ -94,7 +94,7 @@ export MN_HOME=/var/lib/mirrorneuron
 export MN_LOG_LEVEL=info
 export MN_API_HOST=0.0.0.0
 export MN_API_PORT=8080
-export MN_WEB_API_BASE_URL=/api/v2
+export MN_WEB_API_BASE_URL=/api/v1
 npm run build
 ```
 

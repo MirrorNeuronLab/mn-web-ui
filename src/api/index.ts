@@ -1,15 +1,11 @@
 import api from './client';
 import { z } from 'zod';
 import { parseArrayOrEmpty, parseOrFallback } from './parsing';
-import { apiPathFromUrl, jobPath, launchProgressPath, modelPath, operationPath, runPath, runtimeRunPath } from './routes';
+import { blueprintPath, jobPath, modelPath, operationPath, runPath } from './routes';
 import { createWorkflowProgressStreamer } from './streaming';
 import { normalizeWorkflowProgressPayload } from './workflowProgress';
 import { isRecord } from '../utils/records';
 
-const InterfaceVersionSchema = z
-  .literal(2)
-  .optional()
-  .default(2) as unknown as z.ZodOptional<z.ZodNumber>;
 const arrayFromEnvelope = (data: unknown, keys: string[]) => {
   if (Array.isArray(data)) return data;
   if (!isRecord(data)) return [];
@@ -20,18 +16,7 @@ const arrayFromEnvelope = (data: unknown, keys: string[]) => {
   return [];
 };
 
-const withInterfaceVersion = <T>(payload: T): T | (Record<string, unknown> & { version: number }) => {
-  if (
-    !payload ||
-    typeof payload !== 'object' ||
-    Array.isArray(payload) ||
-    (typeof FormData !== 'undefined' && payload instanceof FormData)
-  ) return payload;
-  return { version: 2, ...(payload as Record<string, unknown>) };
-};
-
 export const ErrorEnvelopeSchema = z.object({
-  version: InterfaceVersionSchema,
   schema_version: z.string().optional().default('mn.error.v1'),
   code: z.string().optional().default('runtime.failure'),
   desc: z.string().optional().default('Runtime failure'),
@@ -52,7 +37,6 @@ export const ErrorEnvelopeSchema = z.object({
 export const ObservabilitySummarySchema = z.record(z.string(), z.unknown()).optional();
 
 export const AgentSchema = z.object({
-  version: InterfaceVersionSchema,
   agent_id: z.string().optional().default('unknown'),
   alias: z.string().optional(),
   display_name: z.string().optional(),
@@ -73,7 +57,6 @@ export const AgentSchema = z.object({
 }).passthrough();
 
 export const JobEventSchema = z.object({
-  version: InterfaceVersionSchema,
   timestamp: z.string().optional().default('unknown'),
   type: z.string().optional().default('unknown'),
   agent_id: z.string().optional(),
@@ -83,7 +66,6 @@ export const JobEventSchema = z.object({
 }).passthrough();
 
 export const JobSchema = z.object({
-  version: InterfaceVersionSchema,
   job_id: z.string().optional().default('unknown'),
   graph_id: z.string().nullable().optional().default('unknown'),
   status: z.string().optional().default('unknown'),
@@ -104,7 +86,6 @@ export const JobSchema = z.object({
 }).passthrough();
 
 export const StableJobSchema = z.object({
-  version: InterfaceVersionSchema,
   job_id: z.string(),
   blueprint_id: z.string().nullable().optional(),
   graph_id: z.string().nullable().optional(),
@@ -125,7 +106,6 @@ export const StableJobSchema = z.object({
 }).passthrough();
 
 export const StableRunSchema = z.object({
-  version: InterfaceVersionSchema,
   run_id: z.string(),
   job_id: z.string().nullable().optional(),
   graph_id: z.string().nullable().optional(),
@@ -147,7 +127,6 @@ export const StableRunSchema = z.object({
 }).passthrough();
 
 export const JobDetailsSchema = z.object({
-  version: InterfaceVersionSchema,
   job: JobSchema.optional(),
   summary: z.record(z.string(), z.unknown()).optional(),
   agents: z.array(AgentSchema).optional().default([]),
@@ -164,7 +143,6 @@ export const JobDetailsSchema = z.object({
 }).passthrough();
 
 export const AgentGraphNodeSchema = z.object({
-  version: InterfaceVersionSchema,
   id: z.string(),
   alias: z.string().optional(),
   display_name: z.string().optional(),
@@ -179,7 +157,6 @@ export const AgentGraphNodeSchema = z.object({
 }).passthrough();
 
 export const AgentGraphEdgeSchema = z.object({
-  version: InterfaceVersionSchema,
   id: z.string(),
   source: z.string(),
   target: z.string(),
@@ -190,7 +167,6 @@ export const AgentGraphEdgeSchema = z.object({
 }).passthrough();
 
 export const AgentGraphSchema = z.object({
-  version: InterfaceVersionSchema,
   job_id: z.string(),
   graph_id: z.string().nullable().optional(),
   status: z.string().optional().default('unknown'),
@@ -205,7 +181,6 @@ export const AgentGraphSchema = z.object({
 }).passthrough();
 
 export const SystemSummarySchema = z.object({
-  version: InterfaceVersionSchema,
   nodes: z.array(z.object({
     name: z.string().optional().default('unknown'),
     connected_nodes: z.array(z.string()).optional().default([]),
@@ -225,7 +200,6 @@ export const SystemSummarySchema = z.object({
 }).passthrough();
 
 export const RuntimeModelCompatibilitySchema = z.object({
-  version: InterfaceVersionSchema,
   status: z.string().optional().default('unknown'),
   ok: z.boolean().optional().default(false),
   message: z.string().optional().default(''),
@@ -233,7 +207,6 @@ export const RuntimeModelCompatibilitySchema = z.object({
 }).passthrough().nullable();
 
 export const RuntimeModelSchema = z.object({
-  version: InterfaceVersionSchema,
   id: z.string().optional().default('unknown'),
   name: z.string().optional().default('Runtime model'),
   provider: z.string().optional().default('docker_model_runner'),
@@ -252,15 +225,14 @@ export const RuntimeModelSchema = z.object({
 }).passthrough();
 
 export const RuntimeModelListResponseSchema = z.object({
-  version: InterfaceVersionSchema,
-  models: z.array(RuntimeModelSchema).optional().default([]),
+  items: z.array(RuntimeModelSchema).optional().default([]),
+  next_page_token: z.string().nullable().optional().default(null),
   node: z.string().optional().default('local'),
   runner_available: z.boolean().optional().default(false),
   warnings: z.array(z.string()).optional().default([]),
 }).passthrough();
 
 export const RuntimeModelBenchmarkSchema = z.object({
-  version: InterfaceVersionSchema,
   model: z.string().optional().default('unknown'),
   name: z.string().optional().default('Runtime model'),
   docker_model: z.string().optional().default('unknown'),
@@ -275,7 +247,6 @@ export const RuntimeModelBenchmarkSchema = z.object({
 }).passthrough();
 
 export const ClusterNodeAddResponseSchema = z.object({
-  version: InterfaceVersionSchema,
   ok: z.boolean().optional().default(true),
   host: z.string().optional().default(''),
   node_name: z.string().optional().default(''),
@@ -284,7 +255,6 @@ export const ClusterNodeAddResponseSchema = z.object({
 }).passthrough();
 
 export const ClusterNodeRemoveResponseSchema = z.object({
-  version: InterfaceVersionSchema,
   ok: z.boolean().optional().default(true),
   node_name: z.string().optional().default(''),
   status: z.string().optional().default('unknown'),
@@ -292,7 +262,6 @@ export const ClusterNodeRemoveResponseSchema = z.object({
 }).passthrough();
 
 export const RunUiComponentSchema = z.object({
-  version: InterfaceVersionSchema,
   type: z.string().optional().default('events'),
   label: z.string().optional(),
   source: z.string().optional(),
@@ -301,7 +270,6 @@ export const RunUiComponentSchema = z.object({
 }).passthrough();
 
 export const RunUiDefinitionSchema = z.object({
-  version: InterfaceVersionSchema,
   schema_version: z.number().optional().default(1),
   adapter: z.string().optional().default('json-render'),
   kind: z.string().optional().default('output'),
@@ -315,7 +283,6 @@ export const RunUiDefinitionSchema = z.object({
 }).passthrough();
 
 export const WebUiHandleSchema = z.object({
-  version: InterfaceVersionSchema,
   adapter: z.string().optional().default('json-render'),
   kind: z.string().optional().default('output'),
   url: z.string().optional().default(''),
@@ -328,7 +295,6 @@ export const WebUiHandleSchema = z.object({
 const DefaultWebUiHandle = WebUiHandleSchema.parse({});
 
 export const RunUiResponseSchema = z.object({
-  version: InterfaceVersionSchema,
   run_id: z.string(),
   run_dir: z.string().optional(),
   ui: RunUiDefinitionSchema,
@@ -339,7 +305,6 @@ export const RunUiResponseSchema = z.object({
 }).passthrough();
 
 export const BlueprintSchema = z.object({
-  version: InterfaceVersionSchema,
   id: z.string(),
   name: z.string().optional(),
   description: z.string().optional().default(''),
@@ -349,14 +314,11 @@ export const BlueprintSchema = z.object({
 }).passthrough();
 
 export const BlueprintListResponseSchema = z.object({
-  version: InterfaceVersionSchema,
-  repo_dir: z.string().optional(),
-  blueprints: z.array(BlueprintSchema).optional().default([]),
-  categories: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+  items: z.array(BlueprintSchema).optional().default([]),
+  next_page_token: z.string().nullable().optional().default(null),
 }).passthrough();
 
 export const BlueprintLaunchResponseSchema = z.object({
-  version: InterfaceVersionSchema,
   id: z.string().nullable().optional(),
   job_id: z.string().nullable().optional(),
   run_id: z.string().optional().nullable(),
@@ -371,10 +333,15 @@ export const BlueprintLaunchResponseSchema = z.object({
 }).passthrough();
 
 export const UploadedBundleSchema = z.object({
-  version: InterfaceVersionSchema,
-  bundle_path: z.string().optional().default(''),
-  manifest: z.record(z.string(), z.unknown()).optional().default({}),
+  bundle_id: z.string(),
 }).passthrough();
+
+export const PageSchema = <T extends z.ZodType>(item: T) => z.object({
+  items: z.array(item).optional().default([]),
+  next_page_token: z.string().nullable().optional().default(null),
+});
+
+export type Page<T> = { items: T[]; next_page_token: string | null };
 
 export const OperationCountersSchema = z.object({
   total: z.number().optional().default(0),
@@ -386,7 +353,6 @@ export const OperationCountersSchema = z.object({
 }).passthrough();
 
 export const OperationSchema = z.object({
-  version: InterfaceVersionSchema,
   operation_id: z.string(),
   kind: z.string().optional().default('operation'),
   status: z.string().optional().default('running'),
@@ -401,21 +367,18 @@ export const OperationSchema = z.object({
 }).passthrough();
 
 export const StableJobActionResponseSchema = z.object({
-  version: InterfaceVersionSchema,
   job_id: z.string(),
   status: z.string().optional().default('active'),
   data_generation: z.number().optional(),
 }).passthrough();
 
 export const StableRunActionResponseSchema = z.object({
-  version: InterfaceVersionSchema,
   run_id: z.string(),
   job_id: z.string().nullable().optional(),
   status: z.string().optional().default('unknown'),
 }).passthrough();
 
 export const RevealArtifactResponseSchema = z.object({
-  version: InterfaceVersionSchema,
   ok: z.boolean().optional(),
   path: z.string().optional(),
   folder: z.string().optional(),
@@ -423,7 +386,6 @@ export const RevealArtifactResponseSchema = z.object({
 }).passthrough();
 
 export const LaunchProgressEventSchema = z.object({
-  version: InterfaceVersionSchema,
   ts: z.string().optional(),
   phase: z.string().optional().default('launch'),
   status: z.string().optional().default('pending'),
@@ -432,7 +394,6 @@ export const LaunchProgressEventSchema = z.object({
 }).passthrough();
 
 export const LaunchProgressPhaseSchema = z.object({
-  version: InterfaceVersionSchema,
   id: z.string().optional(),
   phase: z.string().optional(),
   label: z.string().optional(),
@@ -446,7 +407,6 @@ export const LaunchProgressPhaseSchema = z.object({
 }).passthrough();
 
 export const LaunchProgressResponseSchema = z.object({
-  version: InterfaceVersionSchema,
   progress_id: z.string(),
   run_id: z.string().nullable().optional(),
   job_id: z.string().nullable().optional(),
@@ -460,7 +420,6 @@ export const LaunchProgressResponseSchema = z.object({
 }).passthrough();
 
 export const WorkflowActivitySchema = z.object({
-  version: InterfaceVersionSchema,
   timestamp: z.string().optional(),
   type: z.string().optional(),
   category: z.string().optional(),
@@ -478,7 +437,6 @@ export const WorkflowActivitySchema = z.object({
 }).passthrough();
 
 export const WorkflowProgressAgentSchema = z.object({
-  version: InterfaceVersionSchema,
   id: z.string().optional().default('unknown'),
   alias: z.string().optional(),
   display_name: z.string().optional(),
@@ -514,7 +472,6 @@ export const WorkflowProgressAgentSchema = z.object({
 }).passthrough();
 
 export const WorkflowProgressStepSchema = z.object({
-  version: InterfaceVersionSchema,
   id: z.string().optional().default('step'),
   label: z.string().optional().default('Step'),
   goal: z.string().optional().default(''),
@@ -551,7 +508,6 @@ export const WorkflowProgressStepSchema = z.object({
 }).passthrough();
 
 const WorkflowProgressObjectSchema = z.object({
-  version: InterfaceVersionSchema,
   schema_version: z.union([z.number(), z.string()]).optional().default(1),
   job_id: z.string().optional().default('unknown'),
   workflow_id: z.string().optional().default('blueprint'),
@@ -646,82 +602,121 @@ export const fetchRuntimeModels = () => api.get('/models').then(r => (
 ));
 
 export const benchmarkRuntimeModel = (model: string, payload: { prompt?: string; max_tokens?: number } = {}) => (
-  api.post(modelPath(model, '/benchmark'), withInterfaceVersion(payload)).then(r => (
+  api.post(modelPath(model, '/benchmarks'), payload).then(r => (
     parseOrFallback(RuntimeModelBenchmarkSchema, r.data, { model }, `benchmarkRuntimeModel(${model})`)
   ))
 );
 
-export const addClusterNode = (payload: { host: string; token: string }) => api.post('/system/cluster/nodes:add', withInterfaceVersion(payload)).then(r => (
+export const addClusterNode = (payload: { host: string; token: string }) => api.post('/nodes', payload).then(r => (
   parseOrFallback(ClusterNodeAddResponseSchema, r.data, {}, 'addClusterNode')
 ));
 
-export const removeClusterNode = (nodeName: string) => api.post('/system/cluster/nodes:remove', withInterfaceVersion({ node_name: nodeName })).then(r => (
-  parseOrFallback(ClusterNodeRemoveResponseSchema, r.data, { node_name: nodeName }, 'removeClusterNode')
+export const removeClusterNode = (nodeName: string) => api.delete(`/nodes/${encodeURIComponent(nodeName)}`).then(r => (
+  parseOrFallback(ClusterNodeRemoveResponseSchema, r.data, { node_name: nodeName, status: 'deleted' }, 'removeClusterNode')
 ));
 
 export type FetchJobsOptions = {
   includeTerminal?: boolean;
+  pageSize?: number;
+  pageToken?: string | null;
 };
 
 export const fetchJobs = async (options: FetchJobsOptions = {}) => {
   const request =
     typeof options.includeTerminal === 'boolean'
-      ? api.get('/runs', { params: { include_terminal: options.includeTerminal } })
-      : api.get('/runs');
+      ? api.get('/runs', { params: { include_terminal: options.includeTerminal, page_size: options.pageSize, page_token: options.pageToken } })
+      : api.get('/runs', { params: { page_size: options.pageSize, page_token: options.pageToken } });
   const r = await request;
-  const data = arrayFromEnvelope(r.data, ['data', 'runs']).map((run) => (
+  const data = arrayFromEnvelope(r.data, ['items', 'data', 'runs']).map((run) => (
     isRecord(run) && typeof run.run_id === 'string'
       ? { ...run, job_id: run.run_id }
       : run
   ));
-  return parseArrayOrEmpty(JobSchema, data, 'fetchJobs', true);
+  return {
+    items: parseArrayOrEmpty(JobSchema, data, 'fetchJobs', true),
+    next_page_token: isRecord(r.data) && typeof r.data.next_page_token === 'string' ? r.data.next_page_token : null,
+  };
 };
 
 export type FetchStableJobsOptions = {
   includeArchived?: boolean;
+  pageSize?: number;
+  pageToken?: string | null;
 };
 
 export const fetchStableJobs = async (options: FetchStableJobsOptions = {}) => {
   const response = await api.get('/jobs', {
-    params: { include_archived: options.includeArchived ?? false },
+    params: {
+      include_archived: options.includeArchived ?? false,
+      page_size: options.pageSize,
+      page_token: options.pageToken,
+    },
   });
-  return parseArrayOrEmpty(
-    StableJobSchema,
-    arrayFromEnvelope(response.data, ['data', 'jobs']),
-    'fetchStableJobs',
-    true,
-  );
+  return {
+    items: parseArrayOrEmpty(
+      StableJobSchema,
+      arrayFromEnvelope(response.data, ['items']),
+      'fetchStableJobs',
+      true,
+    ),
+    next_page_token: isRecord(response.data) && typeof response.data.next_page_token === 'string'
+      ? response.data.next_page_token
+      : null,
+  };
 };
 
-export const fetchStableJob = (id: string) => api.get(jobPath(id)).then((response) => (
-  StableJobSchema.parse(response.data)
-));
+const stableJobEtags = new Map<string, string>();
 
-export const fetchStableJobRuns = (id: string) => api.get(jobPath(id, '/runs')).then((response) => (
-  parseArrayOrEmpty(
-    StableRunSchema,
-    arrayFromEnvelope(response.data, ['data', 'runs']),
-    `fetchStableJobRuns(${id})`,
-    true,
-  )
-));
+export const fetchStableJob = (id: string) => api.get(jobPath(id)).then((response) => {
+  const etag = response.headers.etag;
+  if (typeof etag === 'string' && etag) stableJobEtags.set(id, etag);
+  return StableJobSchema.parse(response.data);
+});
+
+export const fetchStableJobRuns = (id: string, pageToken?: string | null) => api.get(jobPath(id, '/runs'), {
+  params: { page_token: pageToken },
+}).then((response) => ({
+  items: parseArrayOrEmpty(StableRunSchema, arrayFromEnvelope(response.data, ['items']), `fetchStableJobRuns(${id})`, true),
+  next_page_token: isRecord(response.data) && typeof response.data.next_page_token === 'string' ? response.data.next_page_token : null,
+}));
 
 export const startStableJobRun = (id: string, inputs: Record<string, unknown> = {}) => (
-  api.post(jobPath(id, '/runs'), { version: 2, inputs }).then((response) => StableRunActionResponseSchema.parse(response.data))
+  api.post(jobPath(id, '/runs'), { inputs }, {
+    headers: { 'Idempotency-Key': crypto.randomUUID() },
+  }).then((response) => StableRunActionResponseSchema.parse(response.data))
 );
 
-export const archiveStableJob = (id: string) => api.post(jobPath(id, '/archive')).then((response) => (
-  StableJobActionResponseSchema.parse(response.data)
+const withStableJobEtag = async <T>(id: string, action: (etag: string) => Promise<T>): Promise<T> => {
+  let etag = stableJobEtags.get(id);
+  if (!etag) {
+    await fetchStableJob(id);
+    etag = stableJobEtags.get(id);
+  }
+  if (!etag) throw new Error('The server did not provide an ETag for this job.');
+  return action(etag);
+};
+
+export const archiveStableJob = (id: string) => withStableJobEtag(id, (etag) => (
+  api.patch(jobPath(id), { status: 'archived' }, {
+    headers: { 'If-Match': etag },
+  }).then((response) => {
+    const nextEtag = response.headers.etag;
+    if (typeof nextEtag === 'string' && nextEtag) stableJobEtags.set(id, nextEtag);
+    return StableJobActionResponseSchema.parse(response.data);
+  })
 ));
 
-export const resetStableJobData = (id: string) => api.post(jobPath(id, '/data:reset')).then((response) => (
-  StableJobActionResponseSchema.parse(response.data)
-));
-
-export const deleteStableJob = (id: string) => api.delete(jobPath(id), {
-  data: { version: 2, confirmed: true },
+export const resetStableJobData = (id: string) => api.post(jobPath(id, '/data-resets'), {}, {
+  headers: { 'Idempotency-Key': crypto.randomUUID() },
 }).then((response) => (
-  StableJobActionResponseSchema.parse(response.data)
+  OperationSchema.parse(response.data)
+));
+
+export const deleteStableJob = (id: string) => withStableJobEtag(id, (etag) => (
+  api.delete(jobPath(id), { headers: { 'If-Match': etag } }).then((response) => {
+    stableJobEtags.delete(id);
+    return response.status === 204 ? undefined : StableJobActionResponseSchema.parse(response.data);
+  })
 ));
 
 export const fetchStableRun = (id: string) => api.get(runPath(id)).then((response) => (
@@ -729,7 +724,7 @@ export const fetchStableRun = (id: string) => api.get(runPath(id)).then((respons
 ));
 
 const runAction = (id: string, action: 'pause' | 'resume' | 'cancel') => (
-  api.post(runPath(id, `/${action}`)).then((response) => (
+  api.patch(runPath(id), { desired_state: action === 'resume' ? 'running' : action === 'cancel' ? 'cancelled' : 'paused' }).then((response) => (
     StableRunActionResponseSchema.parse(response.data)
   ))
 );
@@ -738,10 +733,8 @@ export const pauseRun = (id: string) => runAction(id, 'pause');
 export const resumeRun = (id: string) => runAction(id, 'resume');
 export const cancelRun = (id: string) => runAction(id, 'cancel');
 
-export const deleteRun = (id: string) => api.delete(runPath(id), {
-  data: { version: 2, confirmed: true },
-}).then((response) => (
-  StableRunActionResponseSchema.parse(response.data)
+export const deleteRun = (id: string) => api.delete(runPath(id)).then((response) => (
+  response.status === 204 ? undefined : StableRunActionResponseSchema.parse(response.data)
 ));
 
 export type FetchJobDetailsOptions = {
@@ -757,40 +750,30 @@ export const fetchJobDetails = (id: string, options: FetchJobDetailsOptions = {}
   ));
 };
 
-export const fetchJobEvents = (id: string) => api.get(runPath(id, '/monitor')).then(r => (
-  parseArrayOrEmpty(JobEventSchema, arrayFromEnvelope(r.data, ['data', 'events', 'recent_events']), `fetchJobEvents(${id})`)
+export const fetchJobEvents = (id: string) => api.get(runPath(id, '/events')).then(r => (
+  parseArrayOrEmpty(JobEventSchema, arrayFromEnvelope(r.data, ['items', 'data', 'events', 'recent_events']), `fetchJobEvents(${id})`)
 ));
-export const fetchJobAgentGraph = (id: string) => api.get(runPath(id, '/monitor')).then(r => (
-  parseOrFallback(AgentGraphSchema, r.data?.agent_graph, { job_id: id, nodes: [], edges: [] }, `fetchJobAgentGraph(${id})`)
+export const fetchJobAgentGraph = (id: string) => api.get(runPath(id, '/agent-graph')).then(r => (
+  parseOrFallback(AgentGraphSchema, r.data, { job_id: id, nodes: [], edges: [] }, `fetchJobAgentGraph(${id})`)
 ));
-export const fetchRunUi = (id: string) => api.get(runtimeRunPath(id, '/ui')).then(r => (
+export const fetchRunUi = (id: string) => api.get(runPath(id, '/ui')).then(r => (
   parseOrFallback(RunUiResponseSchema, r.data, { run_id: id, ui: { run_id: id, title: 'Blueprint Run' } }, `fetchRunUi(${id})`)
 ));
-export const fetchBlueprints = () => api.get('/blueprints').then(r => (
+export const fetchBlueprints = (pageToken?: string | null) => api.get('/blueprints', {
+  params: { page_token: pageToken },
+}).then(r => (
   parseOrFallback(BlueprintListResponseSchema, r.data, {}, 'fetchBlueprints')
 ));
 export const fetchWorkflowProgress = (id: string) => api.get(runPath(id, '/workflow-progress')).then(r => (
   parseOrFallback(WorkflowProgressSchema, r.data, { job_id: id, workflow_id: id, name: id }, `fetchWorkflowProgress(${id})`)
 ));
 
-const apiBaseUrl = () => String(api.defaults.baseURL || '/api/v2').replace(/\/$/, '');
+const apiBaseUrl = () => String(api.defaults.baseURL || '/api/v1').replace(/\/$/, '');
 const authHeader = (): Record<string, string> => {
   const header = api.defaults.headers.common.Authorization;
   return typeof header === 'string' && header ? { Authorization: header } : {};
 };
-const workflowProgressStreamUrl = (id: string) => `${apiBaseUrl()}${runPath(id, '/workflow-progress/stream')}`;
-
-export const revealArtifact = (revealUrl: string) => {
-  let path: string;
-  try {
-    path = apiPathFromUrl(revealUrl, apiBaseUrl());
-  } catch (error) {
-    return Promise.reject(error);
-  }
-  return api.post(path).then(r => (
-    parseOrFallback(RevealArtifactResponseSchema, r.data, {}, 'revealArtifact')
-  ));
-};
+const workflowProgressStreamUrl = (id: string) => `${apiBaseUrl()}${runPath(id, '/events/stream')}`;
 
 export const streamWorkflowProgress = createWorkflowProgressStreamer({
   schema: WorkflowProgressSchema,
@@ -801,22 +784,24 @@ export const streamWorkflowProgress = createWorkflowProgressStreamer({
 export const fetchOperation = (id: string) => api.get(operationPath(id)).then(r => (
   OperationSchema.parse(r.data)
 ));
-export const clearJobs = () => api.post('/runs:cleanup').then(r => (
+export const clearJobs = () => api.post('/run-cleanups', {}, { headers: { 'Idempotency-Key': crypto.randomUUID() } }).then(r => (
   OperationSchema.parse(r.data)
 ));
-export const cancelAllJobs = () => api.post('/runs:cancel-all').then(r => (
+export const cancelAllJobs = () => api.post('/run-cancellations', {}, { headers: { 'Idempotency-Key': crypto.randomUUID() } }).then(r => (
   OperationSchema.parse(r.data)
 ));
 export const uploadBundle = (file: File) => {
   const formData = new FormData();
   formData.append('bundle', file);
-  return api.post('/bundles/upload', formData, {
+  return api.post('/bundles', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }).then(r => (
     parseOrFallback(UploadedBundleSchema, r.data, {}, 'uploadBundle')
   ));
 };
-export const createJob = (payload: unknown) => api.post('/jobs', withInterfaceVersion(payload)).then(r => r.data);
+export const createJob = (payload: unknown) => api.post('/jobs', payload, {
+  headers: { 'Idempotency-Key': crypto.randomUUID() },
+}).then(r => r.data);
 
 const parseLaunchResponse = (data: unknown) => {
   const result = BlueprintLaunchResponseSchema.safeParse(data);
@@ -834,11 +819,20 @@ export const launchBlueprintJob = (payload: unknown) => {
     if (!blueprintId) return Promise.reject(new Error('Catalog blueprint launch requires a blueprint id.'));
   }
 
-  return api.post('/blueprints/launch/runs', withInterfaceVersion(payload)).then(r => (
-    parseLaunchResponse(r.data)
-  ));
-};
+  if (record.source === 'bundle') {
+    const bundleId = typeof record.bundle_id === 'string' ? record.bundle_id.trim() : '';
+    if (!bundleId) return Promise.reject(new Error('Bundle launch requires a bundle id.'));
+    return createJob({ bundle_id: bundleId }).then((job) => {
+      const jobId = isRecord(job) && typeof job.job_id === 'string' ? job.job_id : '';
+      if (!jobId) throw new Error('Job creation did not return a job id.');
+      return startStableJobRun(jobId).then((run) => parseLaunchResponse(run));
+    });
+  }
+  if (record.source !== 'catalog') return Promise.reject(new Error('Host filesystem paths are not accepted by the REST API.'));
 
-export const fetchLaunchProgress = (progressId: string) => api.get(launchProgressPath(progressId)).then(r => {
-  return parseOrFallback(LaunchProgressResponseSchema, r.data, { progress_id: progressId, events: [] }, `fetchLaunchProgress(${progressId})`);
-});
+  const blueprintId = typeof record.blueprint_id === 'string' ? record.blueprint_id.trim() : '';
+  const body = { config_overrides: isRecord(record.config_overrides) ? record.config_overrides : {} };
+  return api.post(blueprintPath(blueprintId, '/runs'), body, {
+    headers: { 'Idempotency-Key': crypto.randomUUID() },
+  }).then(r => parseLaunchResponse(r.data));
+};

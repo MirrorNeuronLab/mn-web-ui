@@ -21,7 +21,10 @@ const handleWorkflowProgressStreamData = <T>(
     return;
   }
 
-  const parsed = options.schema.safeParse(payload);
+  const candidate = payload && typeof payload === 'object' && !Array.isArray(payload) && 'data' in payload
+    ? (payload as { data: unknown }).data
+    : payload;
+  const parsed = options.schema.safeParse(candidate);
   if (parsed.success) {
     onSnapshot(parsed.data);
   } else {
@@ -52,6 +55,13 @@ export const createWorkflowProgressStreamer = <T>(options: StreamOptions<T>) => 
       source.addEventListener('snapshot', (event) => {
         handleWorkflowProgressStreamData(options, id, event.data, onSnapshot);
       });
+      source.addEventListener('run.snapshot', (event) => {
+        handleWorkflowProgressStreamData(options, id, event.data, onSnapshot);
+      });
+      source.addEventListener('run.completed', (event) => {
+        handleWorkflowProgressStreamData(options, id, event.data, onSnapshot);
+        finish();
+      });
       source.addEventListener('heartbeat', () => {
         onHeartbeat?.();
       });
@@ -64,35 +74,67 @@ export const createWorkflowProgressStreamer = <T>(options: StreamOptions<T>) => 
     return;
   }
 
-  const response = await fetch(options.streamUrl(id), {
-    headers,
-    signal,
-  });
-  if (!response.ok || !response.body) {
-    throw new Error(`workflow progress stream failed: ${response.status}`);
-  }
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const chunks = buffer.split(/\n\n/);
-    buffer = chunks.pop() || '';
-    for (const chunk of chunks) {
-      const eventName = chunk.split('\n').find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message';
-      const data = chunk
-        .split('\n')
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).trimStart())
-        .join('\n');
-      if (eventName === 'heartbeat') {
-        onHeartbeat?.();
-        continue;
+  let lastEventId = '';
+  let reconnectDelayMs = 250;
+  while (!signal?.aborted) {
+    try {
+      const response = await fetch(options.streamUrl(id), {
+        headers: lastEventId ? { ...headers, 'Last-Event-ID': lastEventId } : headers,
+        signal,
+      });
+      if (!response.ok || !response.body) {
+        throw new Error(`workflow progress stream failed: ${response.status}`);
       }
-      if (eventName !== 'snapshot' || !data) continue;
-      handleWorkflowProgressStreamData(options, id, data, onSnapshot);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let completed = false;
+      while (!signal?.aborted) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split(/\n\n/);
+        buffer = chunks.pop() || '';
+        for (const chunk of chunks) {
+          const lines = chunk.split('\n');
+          const eventId = lines.find((line) => line.startsWith('id:'))?.slice(3).trim();
+          if (eventId) lastEventId = eventId;
+          if (lines.every((line) => line.startsWith(':'))) {
+            onHeartbeat?.();
+            continue;
+          }
+          const eventName = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message';
+          const data = lines
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).trimStart())
+            .join('\n');
+          if (eventName === 'heartbeat') {
+            onHeartbeat?.();
+            continue;
+          }
+          if (!['snapshot', 'run.snapshot', 'run.completed'].includes(eventName) || !data) continue;
+          handleWorkflowProgressStreamData(options, id, data, onSnapshot);
+          if (eventName === 'run.completed') {
+            completed = true;
+            break;
+          }
+        }
+        if (completed) break;
+      }
+      if (completed) return;
+      reconnectDelayMs = 250;
+    } catch (error) {
+      if (signal?.aborted) return;
+      if (error instanceof Error && error.name === 'AbortError') return;
     }
+    if (signal?.aborted) return;
+    await new Promise<void>((resolve) => {
+      const timeout = window.setTimeout(resolve, reconnectDelayMs);
+      signal?.addEventListener('abort', () => {
+        window.clearTimeout(timeout);
+        resolve();
+      }, { once: true });
+    });
+    reconnectDelayMs = Math.min(reconnectDelayMs * 2, 5_000);
   }
 };

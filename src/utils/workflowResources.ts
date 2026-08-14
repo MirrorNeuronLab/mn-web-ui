@@ -7,7 +7,6 @@ export type ProgressResource = {
   label: string;
   value: string;
   href?: string;
-  revealUrl?: string;
   kind: 'file' | 'url' | 'input' | 'text';
 };
 
@@ -16,7 +15,6 @@ export type FailureArtifact = {
   relative_path?: string;
   path?: string;
   url?: string;
-  reveal_url?: string;
   size_bytes?: number;
 };
 
@@ -68,7 +66,6 @@ const resourceFromRecord = (
     relative_path: stringProp(value, 'relative_path'),
     path: stringProp(value, 'path'),
     url: stringProp(value, 'url'),
-    reveal_url: stringProp(value, 'reveal_url'),
     label: stringProp(value, 'label'),
     title: stringProp(value, 'title'),
     name: stringProp(value, 'name'),
@@ -93,7 +90,6 @@ const resourceFromRecord = (
     label: artifactDisplayName(artifact, fallbackLabel || displayNameFromPath(text)),
     value: text,
     href: isOpenableHref(hrefValue) ? hrefValue : isOpenableHref(text) ? text : undefined,
-    revealUrl: artifact.reveal_url,
     kind: isUrl(hrefValue || text) ? 'url' : 'file',
   };
 };
@@ -133,7 +129,7 @@ const collectResources = (source: unknown, keys: string[], prefix: string): Prog
 const uniqueResources = (resources: ProgressResource[]) => {
   const seen = new Set<string>();
   return resources.filter((resource) => {
-    const key = `${resource.kind}:${resource.revealUrl || resource.href || resource.value}`;
+    const key = `${resource.kind}:${resource.href || resource.value}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

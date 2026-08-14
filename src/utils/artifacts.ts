@@ -3,7 +3,6 @@ export type ArtifactLike = {
   relative_path?: string;
   path?: string;
   url?: string;
-  reveal_url?: string;
   label?: string;
   title?: string;
   name?: string;

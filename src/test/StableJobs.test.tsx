@@ -20,7 +20,7 @@ describe('StableJobs', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('renders persistent job identity and lifecycle counts', async () => {
-    vi.mocked(fetchStableJobs).mockResolvedValue([{
+    vi.mocked(fetchStableJobs).mockResolvedValue({ items: [{
       job_id: 'job-stable-1',
       job_name: 'Research workspace',
       graph_id: 'research_graph',
@@ -34,7 +34,7 @@ describe('StableJobs', () => {
       schedules: [],
       schedule_ids: [],
       storage: {},
-    }]);
+    }], next_page_token: null });
 
     renderPage();
 
@@ -46,8 +46,8 @@ describe('StableJobs', () => {
     expect(fetchStableJobs).toHaveBeenCalledWith({ includeArchived: false });
   });
 
-  it('reloads through v2 with archived definitions included', async () => {
-    vi.mocked(fetchStableJobs).mockImplementation(async ({ includeArchived } = {}) => includeArchived ? [{
+  it('reloads the canonical collection with archived definitions included', async () => {
+    vi.mocked(fetchStableJobs).mockImplementation(async ({ includeArchived } = {}) => includeArchived ? { items: [{
         job_id: 'job-archived',
         status: 'archived',
         data_generation: 1,
@@ -57,7 +57,7 @@ describe('StableJobs', () => {
         schedules: [],
         schedule_ids: [],
         storage: {},
-      }] : []);
+      }], next_page_token: null } : { items: [], next_page_token: null });
 
     renderPage();
     expect(await screen.findByText('No persistent jobs found')).toBeInTheDocument();

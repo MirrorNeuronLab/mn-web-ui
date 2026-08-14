@@ -30,6 +30,11 @@ const renderWithRouter = (ui: React.ReactElement) => {
   );
 };
 
+const jobsPage = (items: Awaited<ReturnType<typeof fetchJobs>>['items']) => ({
+  items,
+  next_page_token: null,
+});
+
 describe('Runs Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -45,7 +50,7 @@ describe('Runs Component', () => {
   });
 
   it('renders an empty execution history', async () => {
-    vi.mocked(fetchJobs).mockResolvedValue([]);
+    vi.mocked(fetchJobs).mockResolvedValue(jobsPage([]));
 
     renderWithRouter(<Runs />);
 
@@ -66,7 +71,7 @@ describe('Runs Component', () => {
       }
     ];
 
-    vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
+    vi.mocked(fetchJobs).mockResolvedValue(jobsPage(mockJobs));
 
     renderWithRouter(<Runs />);
 
@@ -83,7 +88,7 @@ describe('Runs Component', () => {
 
   it('reloads with active jobs when the active-only switch is enabled', async () => {
     vi.mocked(fetchJobs)
-      .mockResolvedValueOnce([
+      .mockResolvedValueOnce(jobsPage([
         {
           job_id: 'done-job-1',
           graph_id: 'tax-graph',
@@ -92,8 +97,8 @@ describe('Runs Component', () => {
           active_executors: 0,
           executor_count: 0,
         },
-      ])
-      .mockResolvedValueOnce([
+      ]))
+      .mockResolvedValueOnce(jobsPage([
         {
           job_id: 'running-job-1',
           graph_id: 'tax-graph',
@@ -102,7 +107,7 @@ describe('Runs Component', () => {
           active_executors: 1,
           executor_count: 2,
         },
-      ]);
+      ]));
 
     renderWithRouter(<Runs />);
 
@@ -141,7 +146,7 @@ describe('Runs Component', () => {
       }
     ];
 
-    vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
+    vi.mocked(fetchJobs).mockResolvedValue(jobsPage(mockJobs));
     vi.mocked(pauseRun).mockResolvedValue({ run_id: 'job-1', status: 'paused' });
 
     renderWithRouter(<Runs />);
@@ -193,7 +198,7 @@ describe('Runs Component', () => {
       }
     ];
 
-    vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
+    vi.mocked(fetchJobs).mockResolvedValue(jobsPage(mockJobs));
     vi.mocked(cancelRun).mockResolvedValue({ run_id: 'job-1', status: 'cancelled' });
 
     renderWithRouter(<Runs />);
@@ -228,7 +233,7 @@ describe('Runs Component', () => {
       },
     ];
 
-    vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
+    vi.mocked(fetchJobs).mockResolvedValue(jobsPage(mockJobs));
     vi.mocked(cancelAllJobs).mockResolvedValue({
       operation_id: 'op-cancel-1',
       kind: 'cancel_all_jobs',
@@ -255,14 +260,14 @@ describe('Runs Component', () => {
   });
 
   it('does not cancel all jobs when the confirmation is dismissed', async () => {
-    vi.mocked(fetchJobs).mockResolvedValue([{
+    vi.mocked(fetchJobs).mockResolvedValue(jobsPage([{
       job_id: 'job-1',
       graph_id: 'graph-1',
       status: 'running',
       submitted_at: '2026-04-16T12:00:00Z',
       active_executors: 1,
       executor_count: 2,
-    }]);
+    }]));
 
     renderWithRouter(<Runs />);
 
@@ -293,7 +298,7 @@ describe('Runs Component', () => {
       }
     ];
 
-    vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
+    vi.mocked(fetchJobs).mockResolvedValue(jobsPage(mockJobs));
     vi.mocked(cancelRun).mockResolvedValue({ run_id: 'job-1', status: 'cancelled' });
 
     renderWithRouter(<Runs />);
@@ -327,8 +332,8 @@ describe('Runs Component', () => {
     ];
 
     vi.mocked(fetchJobs)
-      .mockResolvedValueOnce(mockJobs)
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce(jobsPage(mockJobs))
+      .mockResolvedValueOnce(jobsPage([]));
     vi.mocked(clearJobs).mockResolvedValue({
       operation_id: 'op-clean-1',
       kind: 'clear_jobs',
@@ -376,7 +381,7 @@ describe('Runs Component', () => {
       }
     ];
 
-    vi.mocked(fetchJobs).mockResolvedValue(mockJobs);
+    vi.mocked(fetchJobs).mockResolvedValue(jobsPage(mockJobs));
     vi.mocked(clearJobs).mockRejectedValue({
       response: {
         data: {

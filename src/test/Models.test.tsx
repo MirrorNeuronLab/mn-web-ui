@@ -25,7 +25,7 @@ describe('Models Component', () => {
       node: 'mn1@local',
       runner_available: true,
       warnings: [],
-      models: [
+      items: [
         {
           id: 'gemma4:e2b',
           name: 'Gemma 4 E2B',
@@ -71,6 +71,7 @@ describe('Models Component', () => {
           },
         },
       ],
+      next_page_token: null,
     });
     vi.mocked(benchmarkRuntimeModel).mockResolvedValue({
       model: 'gemma4:e2b',
@@ -112,7 +113,8 @@ describe('Models Component', () => {
       node: 'mn1@local',
       runner_available: true,
       warnings: [],
-      models: [],
+      items: [],
+      next_page_token: null,
     });
 
     renderModels();

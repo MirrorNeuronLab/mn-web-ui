@@ -56,7 +56,7 @@ export default function StableJobDetails() {
         fetchStableJobRuns(jobId),
       ]);
       setJob(nextJob);
-      setRuns(nextRuns);
+      setRuns(nextRuns.items);
       setError('');
     } catch (err) {
       setError(apiErrorMessage(err, 'Failed to load this job.'));

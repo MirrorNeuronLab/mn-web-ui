@@ -51,7 +51,7 @@ export default function Models() {
 
   usePollingEffect(loadModels, { intervalMs: 10000 });
 
-  const models = useMemo(() => modelState?.models || [], [modelState]);
+  const models = useMemo(() => modelState?.items || [], [modelState]);
 
   const runBenchmark = useCallback(async (model: RuntimeModel) => {
     setSelectedModel(model);
