@@ -1,16 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { isActiveJobStatus, isTerminalJobStatus, jobStatusBadgeClass } from '../utils/jobStatus';
+import {
+  isActiveRunStatus,
+  isTerminalRunStatus,
+  jobLifecycleStatusBadgeClass,
+  jobLifecycleStatusLabel,
+  runStatusBadgeClass,
+  runStatusLabel,
+} from '../utils/jobStatus';
 
 describe('job status helpers', () => {
   it('detects active and terminal statuses case-insensitively', () => {
-    expect(isActiveJobStatus('RUNNING')).toBe(true);
-    expect(isActiveJobStatus('completed')).toBe(false);
-    expect(isTerminalJobStatus('SUCCESS')).toBe(true);
-    expect(isTerminalJobStatus('paused')).toBe(false);
+    expect(isActiveRunStatus('RUNNING')).toBe(true);
+    expect(isActiveRunStatus('completed')).toBe(false);
+    expect(isTerminalRunStatus('SUCCESS')).toBe(true);
+    expect(isTerminalRunStatus('paused')).toBe(false);
   });
 
-  it('keeps the existing badge class grouping', () => {
-    expect(jobStatusBadgeClass('running')).toBe('bg-neutral-100 text-neutral-950 border-neutral-300');
-    expect(jobStatusBadgeClass('unknown')).toBe('bg-neutral-50 text-neutral-700 border-neutral-200');
+  it('keeps job lifecycle and run execution presentation separate', () => {
+    expect(jobLifecycleStatusLabel('active')).toBe('Active');
+    expect(jobLifecycleStatusBadgeClass('active')).toContain('emerald');
+    expect(runStatusLabel(undefined)).toBe('Not started');
+    expect(runStatusLabel('waiting_for_input')).toBe('Waiting for input');
+    expect(runStatusBadgeClass('running')).toContain('sky');
+    expect(runStatusBadgeClass('failed')).toContain('red');
   });
 });

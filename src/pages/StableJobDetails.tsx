@@ -28,9 +28,15 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { Tooltip } from '../components/ui/tooltip';
-import { cn } from '../lib/utils';
 import { apiErrorMessage } from '../utils/apiErrors';
-import { isActiveJobStatus, isTerminalJobStatus, jobStatusBadgeClass } from '../utils/jobStatus';
+import {
+  isActiveRunStatus,
+  isTerminalRunStatus,
+  jobLifecycleStatusBadgeClass,
+  jobLifecycleStatusLabel,
+  runStatusBadgeClass,
+  runStatusLabel,
+} from '../utils/jobStatus';
 
 const timestamp = (...values: Array<string | null | undefined>) => {
   const value = values.find((item) => typeof item === 'string' && item.trim());
@@ -72,8 +78,11 @@ export default function StableJobDetails() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  const activeRuns = useMemo(() => runs.filter((run) => isActiveJobStatus(run.status)), [runs]);
+  const activeRuns = useMemo(() => runs.filter((run) => isActiveRunStatus(run.status)), [runs]);
   const hasActiveRuns = activeRuns.length > 0;
+  const latestRun = useMemo(() => (
+    runs.find((run) => run.run_id === job?.latest_run_id) || runs.at(-1) || null
+  ), [job?.latest_run_id, runs]);
 
   const confirmStart = () => {
     if (!job) return;
@@ -211,9 +220,22 @@ export default function StableJobDetails() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-semibold text-neutral-950">{job.job_name || job.graph_id || job.job_id}</h2>
-              <Badge variant="outline" className={cn('capitalize', jobStatusBadgeClass(job.status))}>{job.status}</Badge>
             </div>
             <div className="mt-1 break-all font-mono text-xs text-neutral-500">{job.job_id}</div>
+            <div className="mt-3 flex flex-wrap gap-2" aria-label="Job and run status">
+              <div className="inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-2.5 py-1.5">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Job status</span>
+                <Badge variant="outline" className={jobLifecycleStatusBadgeClass(job.status)}>
+                  {jobLifecycleStatusLabel(job.status)}
+                </Badge>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-2.5 py-1.5">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Latest run</span>
+                <Badge variant="outline" className={runStatusBadgeClass(latestRun?.status)}>
+                  {runStatusLabel(latestRun?.status)}
+                </Badge>
+              </div>
+            </div>
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-neutral-600">
               <span>Workflow <strong className="text-neutral-950">{job.graph_id || 'Not reported'}</strong></span>
               <span>Owner <strong className="text-neutral-950">{job.owner_node || 'Not reported'}</strong></span>
@@ -258,7 +280,7 @@ export default function StableJobDetails() {
             <TableHeader>
               <TableRow className="bg-neutral-50 text-[11px] uppercase tracking-wide text-neutral-500">
                 <TableHead className="px-4 py-2">Run ID</TableHead>
-                <TableHead className="px-4 py-2">Status</TableHead>
+                <TableHead className="px-4 py-2">Run status</TableHead>
                 <TableHead className="px-4 py-2">Started</TableHead>
                 <TableHead className="px-4 py-2">Attempt</TableHead>
                 <TableHead className="px-4 py-2">Data access</TableHead>
@@ -273,7 +295,7 @@ export default function StableJobDetails() {
                 return (
                   <TableRow key={run.run_id} className="hover:bg-neutral-50">
                     <TableCell className="px-4 py-3 font-mono text-xs font-medium text-neutral-950">{run.run_id}</TableCell>
-                    <TableCell className="px-4 py-3"><Badge variant="outline" className={cn('capitalize', jobStatusBadgeClass(run.status))}>{run.status}</Badge></TableCell>
+                    <TableCell className="px-4 py-3"><Badge variant="outline" className={runStatusBadgeClass(run.status)}>{runStatusLabel(run.status)}</Badge></TableCell>
                     <TableCell className="px-4 py-3 text-xs text-neutral-500"><Clock3 className="mr-1 inline h-3.5 w-3.5" />{timestamp(run.started_at, run.submitted_at)}</TableCell>
                     <TableCell className="px-4 py-3 text-xs text-neutral-600">{run.attempt}</TableCell>
                     <TableCell className="px-4 py-3 text-xs capitalize text-neutral-600">{run.job_data_access || 'Not reported'}</TableCell>
@@ -284,8 +306,8 @@ export default function StableJobDetails() {
                         </Tooltip>
                         {run.status === 'running' ? <Button variant="outline" size="icon" className="h-7 w-7" disabled={busy} aria-label={`Pause run ${run.run_id}`} onClick={() => confirmRunAction(run, 'pause')}><Pause className="h-3.5 w-3.5" /></Button> : null}
                         {run.status === 'paused' ? <Button variant="outline" size="icon" className="h-7 w-7" disabled={busy} aria-label={`Resume run ${run.run_id}`} onClick={() => confirmRunAction(run, 'resume')}><RotateCcw className="h-3.5 w-3.5" /></Button> : null}
-                        {isActiveJobStatus(run.status) ? <Button variant="outline" size="icon" className="h-7 w-7 border-red-200 text-red-700" disabled={busy} aria-label={`Cancel run ${run.run_id}`} onClick={() => confirmRunAction(run, 'cancel')}><Ban className="h-3.5 w-3.5" /></Button> : null}
-                        {isTerminalJobStatus(run.status) ? <Button variant="outline" size="icon" className="h-7 w-7 border-red-200 text-red-700" disabled={busy} aria-label={`Delete run ${run.run_id}`} onClick={() => confirmRunAction(run, 'delete')}><Trash2 className="h-3.5 w-3.5" /></Button> : null}
+                        {isActiveRunStatus(run.status) ? <Button variant="outline" size="icon" className="h-7 w-7 border-red-200 text-red-700" disabled={busy} aria-label={`Cancel run ${run.run_id}`} onClick={() => confirmRunAction(run, 'cancel')}><Ban className="h-3.5 w-3.5" /></Button> : null}
+                        {isTerminalRunStatus(run.status) ? <Button variant="outline" size="icon" className="h-7 w-7 border-red-200 text-red-700" disabled={busy} aria-label={`Delete run ${run.run_id}`} onClick={() => confirmRunAction(run, 'delete')}><Trash2 className="h-3.5 w-3.5" /></Button> : null}
                       </div>
                     </TableCell>
                   </TableRow>

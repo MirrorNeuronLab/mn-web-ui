@@ -84,6 +84,8 @@ describe('StableJobDetails', () => {
     expect(await screen.findByText('Research workspace')).toBeInTheDocument();
     expect(screen.getByText('job-stable-1')).toBeInTheDocument();
     expect(screen.getByText('run-old')).toBeInTheDocument();
+    expect(screen.getByLabelText('Job and run status')).toHaveTextContent('Job statusActive');
+    expect(screen.getByLabelText('Job and run status')).toHaveTextContent('Latest runCompleted');
     expect(screen.getByText('Data generation')).toBeInTheDocument();
     expect(screen.getByLabelText('View run run-old')).toHaveAttribute('href', '/runs/run-old');
     expect(fetchStableJob).toHaveBeenCalledWith('job-stable-1');
@@ -104,6 +106,21 @@ describe('StableJobDetails', () => {
 
     expect(await screen.findByText('Run destination')).toBeInTheDocument();
     expect(startStableJobRun).toHaveBeenCalledWith('job-stable-1');
+  });
+
+  it('keeps an active job startable when it has no run', async () => {
+    vi.mocked(fetchStableJob).mockResolvedValue({
+      ...stableJob,
+      latest_run_id: null,
+      run_count: 0,
+    });
+    vi.mocked(fetchStableJobRuns).mockResolvedValue({ items: [], next_page_token: null });
+    renderPage();
+
+    const statuses = await screen.findByLabelText('Job and run status');
+    expect(statuses).toHaveTextContent('Job statusActive');
+    expect(statuses).toHaveTextContent('Latest runNot started');
+    expect(screen.getByRole('button', { name: 'Start run' })).toBeEnabled();
   });
 
   it('archives and resets only after explicit confirmation', async () => {

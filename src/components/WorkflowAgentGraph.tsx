@@ -7,7 +7,7 @@ import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
 import type { Agent, AgentGraph, WorkflowProgress } from '../api';
 import { buildDisplayGraph } from '../utils/agentGraph';
-import { jobStatusBadgeClass } from '../utils/jobStatus';
+import { runStatusBadgeClass } from '../utils/jobStatus';
 import { Tooltip } from './ui/tooltip';
 
 type AgentNodeData = {
@@ -94,7 +94,7 @@ export function WorkflowAgentGraph({
             <div className="truncate text-sm font-semibold text-neutral-950">{agent.label || agent.id}</div>
             <div className="flex items-center justify-between gap-3 text-xs text-neutral-500">
               <span className="truncate">{agent.agent_type || 'unknown'}</span>
-              <span className={`rounded-full border px-2 py-0.5 capitalize ${jobStatusBadgeClass(agent.status)}`}>{agent.status || 'unknown'}</span>
+              <span className={`rounded-full border px-2 py-0.5 capitalize ${runStatusBadgeClass(agent.status)}`}>{agent.status || 'unknown'}</span>
             </div>
             <div className="text-xs text-neutral-400">{agent.processed_messages ?? 0} processed / {agent.mailbox_depth ?? 0} queued</div>
           </div>

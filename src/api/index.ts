@@ -126,6 +126,17 @@ export const StableRunSchema = z.object({
   cancelled_at: z.string().nullable().optional(),
 }).passthrough();
 
+export const RunSummarySchema = StableRunSchema.extend({
+  executor_count: z.number().optional(),
+  active_executors: z.number().optional(),
+  live: z.boolean().optional(),
+  'live?': z.boolean().optional(),
+  recovery_status: z.string().nullable().optional(),
+  recovery_requires_review: z.boolean().optional(),
+  recovery: z.record(z.string(), z.unknown()).optional(),
+  failure: ErrorEnvelopeSchema.optional(),
+}).passthrough();
+
 export const JobDetailsSchema = z.object({
   job: JobSchema.optional(),
   summary: z.record(z.string(), z.unknown()).optional(),
@@ -555,6 +566,7 @@ export type JobEvent = z.infer<typeof JobEventSchema>;
 export type Job = z.infer<typeof JobSchema>;
 export type StableJob = z.infer<typeof StableJobSchema>;
 export type StableRun = z.infer<typeof StableRunSchema>;
+export type RunSummary = z.infer<typeof RunSummarySchema>;
 export type JobDetails = z.infer<typeof JobDetailsSchema>;
 export type AgentGraph = z.infer<typeof AgentGraphSchema>;
 export type SystemSummary = z.infer<typeof SystemSummarySchema>;
@@ -583,7 +595,7 @@ export type WorkflowProgressAgent = z.infer<typeof WorkflowProgressAgentSchema>;
 export type WorkflowProgressStep = z.infer<typeof WorkflowProgressStepSchema>;
 export type WorkflowProgress = z.infer<typeof WorkflowProgressSchema>;
 
-export const isServiceJob = (job: Partial<Job> | null | undefined, summary?: { type?: unknown; job_type?: unknown; stream_mode?: unknown; policies?: unknown }): boolean => {
+export const isServiceJob = (job: Partial<Job | RunSummary> | null | undefined, summary?: { type?: unknown; job_type?: unknown; stream_mode?: unknown; policies?: unknown }): boolean => {
   const summaryType = typeof summary?.job_type === 'string' ? summary.job_type : typeof summary?.type === 'string' ? summary.type : '';
   const jobType = job?.job_type || job?.type || '';
   const summaryStreamMode = typeof summary?.stream_mode === 'string' ? summary.stream_mode : '';
@@ -615,28 +627,30 @@ export const removeClusterNode = (nodeName: string) => api.delete(`/nodes/${enco
   parseOrFallback(ClusterNodeRemoveResponseSchema, r.data, { node_name: nodeName, status: 'deleted' }, 'removeClusterNode')
 ));
 
-export type FetchJobsOptions = {
+export type FetchRunsOptions = {
   includeTerminal?: boolean;
   pageSize?: number;
   pageToken?: string | null;
 };
 
-export const fetchJobs = async (options: FetchJobsOptions = {}) => {
+/** @deprecated Use FetchRunsOptions; retained for API consumers during the UI rename. */
+export type FetchJobsOptions = FetchRunsOptions;
+
+export const fetchRuns = async (options: FetchRunsOptions = {}) => {
   const request =
     typeof options.includeTerminal === 'boolean'
       ? api.get('/runs', { params: { include_terminal: options.includeTerminal, page_size: options.pageSize, page_token: options.pageToken } })
       : api.get('/runs', { params: { page_size: options.pageSize, page_token: options.pageToken } });
   const r = await request;
-  const data = arrayFromEnvelope(r.data, ['items', 'data', 'runs']).map((run) => (
-    isRecord(run) && typeof run.run_id === 'string'
-      ? { ...run, job_id: run.run_id }
-      : run
-  ));
+  const data = arrayFromEnvelope(r.data, ['items', 'data', 'runs']);
   return {
-    items: parseArrayOrEmpty(JobSchema, data, 'fetchJobs', true),
+    items: parseArrayOrEmpty(RunSummarySchema, data, 'fetchRuns', true),
     next_page_token: isRecord(r.data) && typeof r.data.next_page_token === 'string' ? r.data.next_page_token : null,
   };
 };
+
+/** @deprecated Use fetchRuns; retained for API consumers during the UI rename. */
+export const fetchJobs = fetchRuns;
 
 export type FetchStableJobsOptions = {
   includeArchived?: boolean;

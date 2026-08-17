@@ -7,7 +7,7 @@ import {
   clearJobs,
   deleteStableJob,
   fetchJobEvents,
-  fetchJobs,
+  fetchRuns,
   fetchRuntimeModels,
   fetchStableJobRuns,
   fetchStableJobs,
@@ -53,9 +53,9 @@ describe('canonical REST v1 client', () => {
       },
     });
 
-    await expect(fetchJobs({ includeTerminal: false, pageSize: 20, pageToken: 'opaque-current' }))
+    await expect(fetchRuns({ includeTerminal: false, pageSize: 20, pageToken: 'opaque-current' }))
       .resolves.toEqual({
-        items: [expect.objectContaining({ job_id: 'run-1', status: 'running' })],
+        items: [expect.objectContaining({ run_id: 'run-1', status: 'running' })],
         next_page_token: 'opaque-next',
       });
     expect(mockApi.get).toHaveBeenCalledWith('/runs', {
@@ -77,8 +77,8 @@ describe('canonical REST v1 client', () => {
         next_page_token: null,
       },
     });
-    await expect(fetchJobs()).resolves.toEqual({
-      items: [expect.objectContaining({ job_id: 'valid-run' })],
+    await expect(fetchRuns()).resolves.toEqual({
+      items: [expect.objectContaining({ run_id: 'valid-run' })],
       next_page_token: null,
     });
   });

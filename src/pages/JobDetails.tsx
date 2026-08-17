@@ -28,7 +28,7 @@ import { cn } from '../lib/utils';
 import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
 import { buildOutputResources } from '../utils/workflowResources';
 import { blueprintWebUiInfo, webUiInfoFromRecord } from '../utils/jobDetailsView';
-import { isTerminalJobStatus, jobStatusBadgeClass } from '../utils/jobStatus';
+import { isTerminalRunStatus, runStatusBadgeClass } from '../utils/jobStatus';
 import { isRecord } from '../utils/records';
 
 const StatusIcon = ({ status }: { status: string }) => {
@@ -128,7 +128,7 @@ const displayStatusFromSources = (
   graphStatus: unknown,
 ): string | undefined => {
   const progress = normalizedStatus(progressStatus);
-  if (progress && isTerminalJobStatus(progress)) return progress;
+  if (progress && isTerminalRunStatus(progress)) return progress;
   const action = normalizedStatus(actionStatus);
   if (action) return action;
   const job = normalizedStatus(jobStatus);
@@ -139,7 +139,7 @@ const displayStatusFromSources = (
 const inferredTerminalStatusFromProgress = (progress: WorkflowProgress | null | undefined): string | undefined => {
   if (!progress) return undefined;
   const status = normalizedStatus(progress.status);
-  if (status && isTerminalJobStatus(status)) return status;
+  if (status && isTerminalRunStatus(status)) return status;
 
   const total = progress.agent_count?.total || 0;
   const done = progress.agent_count?.done || 0;
@@ -294,7 +294,7 @@ export default function JobDetails() {
     }, 0);
     streamWorkflowProgress(id, (snapshot) => {
       if (cancelled) return;
-      if (isTerminalJobStatus(snapshot.status)) {
+      if (isTerminalRunStatus(snapshot.status)) {
         terminalObserved = true;
         clearHealthTimers();
         setProgressStreamState('closed');
@@ -303,7 +303,7 @@ export default function JobDetails() {
         markLive();
       }
       setWorkflowProgress(snapshot);
-      if (isTerminalJobStatus(snapshot.status) && terminalRefreshRef.current !== snapshot.status) {
+      if (isTerminalRunStatus(snapshot.status) && terminalRefreshRef.current !== snapshot.status) {
         terminalRefreshRef.current = snapshot.status || 'terminal';
         void load();
       }
@@ -484,7 +484,7 @@ export default function JobDetails() {
           <div className="mb-2 flex flex-wrap items-center gap-2.5">
             <h2 className="break-all text-lg font-bold leading-6 text-neutral-950">{jobId}</h2>
             {displayStatus ? (
-              <Badge variant="outline" className={cn('gap-1.5 capitalize', jobStatusBadgeClass(displayStatus))}>
+              <Badge variant="outline" className={cn('gap-1.5 capitalize', runStatusBadgeClass(displayStatus))}>
                 <StatusIcon status={displayStatus} />
                 {displayStatus}
               </Badge>
@@ -673,7 +673,7 @@ export default function JobDetails() {
                               <TableCell className="px-4 py-2 font-mono text-xs font-medium text-neutral-950">{agent.label || agent.id || 'unknown'}</TableCell>
                               <TableCell className="px-4 py-2 text-xs text-neutral-600">{agent.agent_type || 'unknown'} / {agent.type || 'unknown'}</TableCell>
                               <TableCell className="px-4 py-2 text-xs">
-                                <Badge variant="outline" className={cn('capitalize', jobStatusBadgeClass(agent.status))}>{agent.status || 'unknown'}</Badge>
+                                <Badge variant="outline" className={cn('capitalize', runStatusBadgeClass(agent.status))}>{agent.status || 'unknown'}</Badge>
                               </TableCell>
                               <TableCell className="px-4 py-2 text-xs text-neutral-600">{agent.processed_messages ?? 0} processed, {agent.mailbox_depth ?? 0} in queue</TableCell>
                               <TableCell className="px-4 py-2 text-xs text-neutral-500">{agent.assigned_node || 'unassigned'}</TableCell>

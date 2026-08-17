@@ -42,6 +42,8 @@ describe('StableJobs', () => {
     expect(screen.getByText('job-stable-1')).toBeInTheDocument();
     expect(screen.getByText('4').parentElement).toHaveTextContent('4 total');
     expect(screen.getByText('Generation 2')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Job status' })).toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getByLabelText('View job job-stable-1')).toHaveAttribute('href', '/jobs/job-stable-1');
     expect(fetchStableJobs).toHaveBeenCalledWith({ includeArchived: false });
   });

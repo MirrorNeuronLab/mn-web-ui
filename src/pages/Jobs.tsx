@@ -2,8 +2,8 @@ import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { AlertCircle, Ban, CheckCircle, Clock, Eye, Loader2, PauseCircle, PlayCircle, Trash2, XCircle } from 'lucide-react';
-import { cancelAllJobs, cancelRun, clearJobs, fetchJobs, isServiceJob, pauseRun } from '../api';
-import type { Job } from '../api';
+import { cancelAllJobs, cancelRun, clearJobs, fetchRuns, isServiceJob, pauseRun } from '../api';
+import type { RunSummary } from '../api';
 import { confirmActionDialog } from '../components/ui/confirm-action';
 import { Tooltip } from '../components/ui/tooltip';
 import { Badge } from '../components/ui/badge';
@@ -32,10 +32,8 @@ const StatusIcon = ({ status }: { status: string }) => {
   }
 };
 
-const executionId = (job: Job) => job.run_id || job.job_id;
-
 export default function Runs() {
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<'pause' | 'cancel' | null>(null);
@@ -45,35 +43,35 @@ export default function Runs() {
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const applyJobs = useCallback((data: Job[]) => {
-    setJobs(data);
+  const applyRuns = useCallback((data: RunSummary[]) => {
+    setRuns(data);
     setSelectedJobIds((current) => {
-      const availableIds = new Set(data.map(executionId));
+      const availableIds = new Set(data.map((run) => run.run_id));
       return new Set([...current].filter((jobId) => availableIds.has(jobId)));
     });
   }, []);
 
-  const loadJobs = useCallback(async () => {
+  const loadRuns = useCallback(async () => {
     try {
-      const page = await fetchJobs({ includeTerminal: !activeOnly });
-      applyJobs(page.items);
+      const page = await fetchRuns({ includeTerminal: !activeOnly });
+      applyRuns(page.items);
       setNextPageToken(page.next_page_token);
     } catch (e) {
-      console.error('Failed to load jobs', e);
+      console.error('Failed to load runs', e);
     } finally {
       setLoading(false);
     }
-  }, [activeOnly, applyJobs]);
+  }, [activeOnly, applyRuns]);
 
   const markInitialLoading = useCallback(() => {
     setLoading(true);
   }, []);
 
-  usePollingEffect(loadJobs, { intervalMs: 5000, onInitialPoll: markInitialLoading });
+  usePollingEffect(loadRuns, { intervalMs: 5000, onInitialPoll: markInitialLoading });
 
-  const refreshJobs = async () => {
-    const page = await fetchJobs({ includeTerminal: !activeOnly });
-    applyJobs(page.items);
+  const refreshRuns = async () => {
+    const page = await fetchRuns({ includeTerminal: !activeOnly });
+    applyRuns(page.items);
     setNextPageToken(page.next_page_token);
   };
 
@@ -81,8 +79,8 @@ export default function Runs() {
     if (!nextPageToken || loadingMore) return;
     setLoadingMore(true);
     try {
-      const page = await fetchJobs({ includeTerminal: !activeOnly, pageToken: nextPageToken });
-      applyJobs([...jobs, ...page.items]);
+      const page = await fetchRuns({ includeTerminal: !activeOnly, pageToken: nextPageToken });
+      applyRuns([...runs, ...page.items]);
       setNextPageToken(page.next_page_token);
     } finally {
       setLoadingMore(false);
@@ -103,8 +101,8 @@ export default function Runs() {
 
   const toggleAllJobs = () => {
     setSelectedJobIds((current) => {
-      if (current.size === jobs.length) return new Set();
-      return new Set(jobs.map(executionId));
+      if (current.size === runs.length) return new Set();
+      return new Set(runs.map((run) => run.run_id));
     });
   };
 
@@ -143,7 +141,7 @@ export default function Runs() {
           setBulkAction(action);
           await Promise.all(jobIds.map((jobId) => runner(jobId)));
           setSelectedJobIds(new Set());
-          await refreshJobs();
+          await refreshRuns();
         } catch (e) {
           console.error(`Failed to ${action} selected runs`, e);
           throw e;
@@ -155,7 +153,7 @@ export default function Runs() {
   };
 
   const confirmCancelAllJobs = () => {
-    if (jobs.length === 0) return;
+    if (runs.length === 0) return;
 
     confirmActionDialog({
       tone: 'danger',
@@ -181,7 +179,7 @@ export default function Runs() {
           setIsCancellingAll(true);
           const result = await cancelAllJobs();
           setSelectedJobIds(new Set());
-          await refreshJobs();
+          await refreshRuns();
           return result;
         } catch (e) {
           console.error('Failed to cancel all active runs', e);
@@ -218,7 +216,7 @@ export default function Runs() {
           setIsClearing(true);
           const result = await clearJobs();
           setSelectedJobIds(new Set());
-          await refreshJobs();
+          await refreshRuns();
           return result;
         } catch (e) {
           console.error('Failed to start execution cleanup', e);
@@ -232,7 +230,7 @@ export default function Runs() {
 
   const selectedCount = selectedJobIds.size;
   const hasSelection = selectedCount > 0;
-  const allSelected = jobs.length > 0 && selectedCount === jobs.length;
+  const allSelected = runs.length > 0 && selectedCount === runs.length;
 
   return (
     <Card>
@@ -242,7 +240,7 @@ export default function Runs() {
             ? 'Loading runs…'
             : selectedCount > 0
             ? `${selectedCount} run${selectedCount === 1 ? '' : 's'} selected`
-            : `${jobs.length} run${jobs.length === 1 ? '' : 's'}`}
+            : `${runs.length} run${runs.length === 1 ? '' : 's'}`}
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <button
@@ -301,7 +299,7 @@ export default function Runs() {
                 variant="outline"
                 className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
                 size="sm"
-                disabled={jobs.length === 0 || isCancellingAll || bulkAction !== null}
+                disabled={runs.length === 0 || isCancellingAll || bulkAction !== null}
                 onClick={confirmCancelAllJobs}
               >
                 {isCancellingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
@@ -340,7 +338,7 @@ export default function Runs() {
                   aria-label="Select all runs"
                   checked={allSelected}
                   onChange={toggleAllJobs}
-                  disabled={loading || jobs.length === 0}
+                  disabled={loading || runs.length === 0}
                   className="h-4 w-4 rounded border-neutral-300 text-neutral-950 focus:ring-neutral-950 disabled:opacity-40"
                 />
               </TableHead>
@@ -365,15 +363,15 @@ export default function Runs() {
                   <TableCell className="px-4 py-2.5"><Skeleton className="h-7 w-7" /></TableCell>
                 </TableRow>
               ))
-            ) : jobs.length === 0 ? (
+            ) : runs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="px-4 py-8 text-center text-xs text-neutral-500">
                   No execution runs found.
                 </TableCell>
               </TableRow>
             ) : (
-              jobs.map((job) => {
-                const runId = executionId(job);
+              runs.map((run) => {
+                const runId = run.run_id;
                 const selected = selectedJobIds.has(runId);
                 return (
                 <TableRow
@@ -391,8 +389,8 @@ export default function Runs() {
                   </TableCell>
                   <TableCell className="px-4 py-2.5">
                     <Badge variant="outline" className="gap-1.5 capitalize">
-                      <StatusIcon status={job.status} />
-                      {job.status}
+                      <StatusIcon status={run.status} />
+                      {run.status}
                     </Badge>
                   </TableCell>
                   <TableCell className="px-4 py-2.5">
@@ -400,12 +398,12 @@ export default function Runs() {
                       {runId}
                     </span>
                   </TableCell>
-                  <TableCell className="px-4 py-2.5 text-xs text-neutral-600">{job.graph_id}</TableCell>
+                  <TableCell className="px-4 py-2.5 text-xs text-neutral-600">{run.graph_id}</TableCell>
                   <TableCell className="px-4 py-2.5 text-xs text-neutral-500">
-                    {job.submitted_at ? format(new Date(job.submitted_at), 'MMM d, HH:mm:ss') : 'Unknown'}
+                    {run.submitted_at ? format(new Date(run.submitted_at), 'MMM d, HH:mm:ss') : 'Unknown'}
                   </TableCell>
                   <TableCell className="px-4 py-2.5 text-xs text-neutral-600">
-                    {isServiceJob(job) ? '∞' : `${job.active_executors ?? 0} / ${job.executor_count ?? 0}`}
+                    {isServiceJob(run) ? '∞' : `${run.active_executors ?? 0} / ${run.executor_count ?? 0}`}
                   </TableCell>
                   <TableCell className="px-4 py-2.5">
                     <Tooltip content="Open run details and live progress.">

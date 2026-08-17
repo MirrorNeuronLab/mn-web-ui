@@ -19,7 +19,7 @@ import {
 import { Tooltip } from '../components/ui/tooltip';
 import { usePollingEffect } from '../hooks/usePollingEffect';
 import { apiErrorMessage } from '../utils/apiErrors';
-import { jobStatusBadgeClass } from '../utils/jobStatus';
+import { jobLifecycleStatusBadgeClass, jobLifecycleStatusLabel } from '../utils/jobStatus';
 import { cn } from '../lib/utils';
 
 const timestamp = (value?: string | null) => {
@@ -107,7 +107,7 @@ export default function StableJobs() {
           <TableHeader>
             <TableRow className="bg-neutral-50 text-[11px] uppercase tracking-wide text-neutral-500">
               <TableHead className="px-4 py-2">Job</TableHead>
-              <TableHead className="px-4 py-2">Status</TableHead>
+              <TableHead className="px-4 py-2">Job status</TableHead>
               <TableHead className="px-4 py-2">Runs</TableHead>
               <TableHead className="px-4 py-2">Schedules</TableHead>
               <TableHead className="px-4 py-2">Data</TableHead>
@@ -143,9 +143,9 @@ export default function StableJobs() {
                   <div className="mt-1 font-mono text-[11px] text-neutral-500">{job.job_id}</div>
                 </TableCell>
                 <TableCell className="px-4 py-3">
-                  <Badge variant="outline" className={cn('gap-1.5 capitalize', jobStatusBadgeClass(job.status))}>
+                  <Badge variant="outline" className={cn('gap-1.5', jobLifecycleStatusBadgeClass(job.status))}>
                     {job.status === 'archived' ? <Archive className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                    {job.status}
+                    {jobLifecycleStatusLabel(job.status)}
                   </Badge>
                 </TableCell>
                 <TableCell className="px-4 py-3 text-xs text-neutral-600">

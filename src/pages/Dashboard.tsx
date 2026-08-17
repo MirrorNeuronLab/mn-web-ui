@@ -7,7 +7,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Skeleton } from '../components/ui/skeleton';
 import { usePollingEffect } from '../hooks/usePollingEffect';
 import { cn } from '../lib/utils';
-import { isActiveJobStatus } from '../utils/jobStatus';
+import { isActiveRunStatus } from '../utils/jobStatus';
 import {
   formatMemoryPair,
   formatPercent,
@@ -39,7 +39,7 @@ export default function Dashboard() {
   const resources = useMemo(() => summarizeRuntimeResources(summary), [summary]);
 
   const totalRuns = metricJobs.length;
-  const activeRuns = metricJobs.filter((job) => isActiveJobStatus(job.status)).length;
+  const activeRuns = metricJobs.filter((run) => isActiveRunStatus(run.status)).length;
   const clusterNodes = summary?.nodes.length || 0;
 
   if (loading) {

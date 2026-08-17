@@ -9,7 +9,7 @@ const navItems = [
   { name: 'Jobs', path: '/jobs', icon: List },
   { name: 'Runs', path: '/runs', icon: History },
   { name: 'Models', path: '/models', icon: Boxes },
-  { name: 'Run a job', path: '/run', icon: Play },
+  { name: 'Start a run', path: '/run', icon: Play },
 ];
 
 export default function Layout() {
@@ -27,7 +27,7 @@ export default function Layout() {
           <Button asChild className="w-full justify-start">
             <NavLink to="/run">
               <Plus className="h-4 w-4" />
-              Run a job
+              Start a run
             </NavLink>
           </Button>
         </div>
@@ -73,7 +73,7 @@ function pageTitle(pathname: string) {
   if (pathname === '/runs') return 'Runs';
   if (pathname.startsWith('/runs/') && !pathname.endsWith('/ui')) return 'Run details';
   if (pathname === '/models') return 'Models';
-  if (pathname === '/run') return 'Run a job';
+  if (pathname === '/run') return 'Start a run';
   if (pathname.startsWith('/runs/')) return 'Blueprint UI';
   return 'MirrorNeuron';
 }
