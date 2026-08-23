@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, streamWorkflowProgress, cancelRun, pauseRun, resumeRun } from '../api';
 import type { AgentGraph, ErrorEnvelope, JobDetails as JobDetailsType, JobEvent, WebUiHandle, WorkflowProgress } from '../api';
 import { format } from 'date-fns';
-import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, MessageSquare, ExternalLink, List, Code2, FileText } from 'lucide-react';
+import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, MessageSquare, List, Code2, FileText } from 'lucide-react';
 import { WorkflowAgentGraph } from '../components/WorkflowAgentGraph';
 import { WorkflowProgressPanel } from '../components/WorkflowProgressPanel';
 import FailurePanel from '../components/FailurePanel';
@@ -497,26 +497,9 @@ export default function JobDetails() {
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs leading-5 text-neutral-500">
             {graphId ? <span>Workflow: <strong className="text-neutral-700">{graphId}</strong></span> : null}
             {submittedAt ? <span>Submitted: <strong className="text-neutral-700">{submittedAt}</strong></span> : null}
-            {webUi ? (
-              <span>
-                Web UI:{' '}
-                <a className="font-medium text-neutral-950 underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-950" href={webUi.url} target="_blank" rel="noreferrer">
-                  {webUi.title}
-                </a>
-              </span>
-            ) : null}
           </div>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-          {webUi ? (
-            <Tooltip content={webUi.status ? `${webUi.title} (${webUi.status})` : webUi.title}>
-              <Button asChild size="sm">
-                <a href={webUi.url} target="_blank" rel="noreferrer">
-                  <ExternalLink className="h-3.5 w-3.5" /> Web UI
-                </a>
-              </Button>
-            </Tooltip>
-          ) : null}
           {displayStatus === 'running' ? (
             <Tooltip content="Pause this run after confirmation.">
               <span className="inline-flex">

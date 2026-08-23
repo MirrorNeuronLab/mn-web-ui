@@ -4,6 +4,58 @@ import WorkflowProgressPanel from '../components/WorkflowProgressPanel';
 import type { WorkflowProgress } from '../api';
 
 describe('WorkflowProgressPanel activity timeline', () => {
+  it('shows the blueprint web UI as a link only when one is available', () => {
+    const progress = {
+      schema_version: 2,
+      job_id: 'job-web-ui',
+      workflow_id: 'web-ui-workflow',
+      name: 'Web UI Workflow',
+      description: '',
+      status: 'running',
+      workflow_kind: 'batch',
+      elapsed_seconds: 1,
+      agent_count: { done: 0, running: 1, idle: 0, ready: 0, failed: 0, total: 1 },
+      current_step_id: 'serve',
+      current_step: null,
+      steps: [{
+        id: 'serve',
+        label: 'Serve',
+        goal: 'Serve the blueprint UI',
+        status: 'running',
+        current: true,
+        done_count: 0,
+        running_count: 1,
+        idle_count: 0,
+        ready_count: 0,
+        failed_count: 0,
+        total_count: 1,
+        live: false,
+        elapsed_seconds: 1,
+        agents: [],
+      }],
+      messages: [],
+      recent_events: [],
+    } as WorkflowProgress;
+
+    const { rerender } = render(
+      <WorkflowProgressPanel
+        progress={progress}
+        details={null}
+        webUi={{ url: 'https://example.com/blueprint', title: 'Blueprint Dashboard' }}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute(
+      'href',
+      'https://example.com/blueprint',
+    );
+
+    rerender(<WorkflowProgressPanel progress={progress} details={null} webUi={null} />);
+
+    expect(screen.queryByText('Web UI:')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Blueprint Dashboard' })).not.toBeInTheDocument();
+  });
+
   it('shows a blueprint-agnostic public step list and can switch to the graph', () => {
     const steps = Array.from({ length: 10 }, (_, index) => ({
       id: `public-step-${index + 1}`,

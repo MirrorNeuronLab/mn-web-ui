@@ -184,7 +184,7 @@ describe('JobDetails Component', () => {
     });
     expect(fetchJobDetails).toHaveBeenCalledWith('test-job-1', { include: 'full' });
     expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute('href', 'http://localhost:61000/');
-    expect(screen.getByRole('link', { name: 'Web UI' })).toHaveAttribute('href', 'http://localhost:61000/');
+    expect(screen.queryByRole('link', { name: 'Web UI' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Executors:/i)).not.toBeInTheDocument();
 
     // Default tab is Progress

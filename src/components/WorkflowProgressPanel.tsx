@@ -5,6 +5,7 @@ import { displayAgentName } from '../utils/agentGraph';
 import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
 import { artifactsFromDetails } from '../utils/workflowResources';
 import { firstString, isRecord, uniqueStrings } from '../utils/records';
+import type { WebUiInfo } from '../utils/jobDetailsView';
 import {
   activityCategory,
   activityDetailText,
@@ -22,7 +23,7 @@ type WorkflowProgressPanelProps = {
   status?: string;
   details?: JobDetails | null;
   showFailurePanel?: boolean;
-  webUi?: unknown;
+  webUi?: WebUiInfo | null;
 };
 
 const statusTone = (status: string | undefined) => {
@@ -295,7 +296,7 @@ const ActivityList = ({ activities, fallbackMessages }: { activities: WorkflowAc
   );
 };
 
-export function WorkflowProgressPanel({ progress, details, showFailurePanel = true }: WorkflowProgressPanelProps) {
+export function WorkflowProgressPanel({ progress, details, webUi, showFailurePanel = true }: WorkflowProgressPanelProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'graph'>('list');
 
@@ -379,6 +380,19 @@ export function WorkflowProgressPanel({ progress, details, showFailurePanel = tr
                   <span>Current: <strong className="font-medium text-neutral-700">{currentLabel}</strong></span>
                   <span className={`capitalize ${statusTone(progress.status)}`}>{progress.status || 'unknown'}</span>
                   {progress.progress_source ? <span>Source: {progress.progress_source}</span> : null}
+                  {webUi ? (
+                    <span>
+                      Web UI:{' '}
+                      <a
+                        className="font-medium text-neutral-950 underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-950"
+                        href={webUi.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {webUi.title}
+                      </a>
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
