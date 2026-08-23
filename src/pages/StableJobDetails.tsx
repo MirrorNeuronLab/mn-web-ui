@@ -83,6 +83,10 @@ export default function StableJobDetails() {
   const latestRun = useMemo(() => (
     runs.find((run) => run.run_id === job?.latest_run_id) || runs.at(-1) || null
   ), [job?.latest_run_id, runs]);
+  const serviceJob = job?.type === 'service';
+  const serviceHasRun = Boolean(
+    serviceJob && (runs.length > 0 || job?.run_count || job?.latest_run_id),
+  );
 
   const confirmStart = () => {
     if (!job) return;
@@ -99,6 +103,37 @@ export default function StableJobDetails() {
         setBusyAction('start');
         try {
           const run = await startStableJobRun(job.job_id);
+          if (!run.run_id || run.run_id === 'unknown') throw new Error('The API did not return a run id.');
+          navigate(`/runs/${encodeURIComponent(run.run_id)}`);
+          return run;
+        } finally {
+          setBusyAction('');
+        }
+      },
+    });
+  };
+
+  const confirmReplace = () => {
+    if (!job) return;
+    confirmActionDialog({
+      tone: 'danger',
+      id: `stable-job-replace-${job.job_id}`,
+      title: 'Replace the service run?',
+      description: 'Active work will be cancelled. The old run history and run-scoped artifacts will be permanently removed. Shared job data, configuration, and schedules remain. Cleanup may continue if a runtime node is offline.',
+      confirmLabel: 'Replace run',
+      cancelLabel: 'Keep current run',
+      loading: { title: 'Replacing service run', description: job.job_id },
+      success: (run) => ({
+        title: 'Service run replaced',
+        description: run.cleanup_deferred
+          ? `Started ${run.run_id}; cleanup is still pending on ${(run.cleanup_pending_nodes || []).join(', ') || 'an offline node'}.`
+          : run.run_id,
+      }),
+      error: (err) => ({ title: 'Replacement failed', description: apiErrorMessage(err, 'Failed to replace the service run.') }),
+      onConfirm: async () => {
+        setBusyAction('replace');
+        try {
+          const run = await startStableJobRun(job.job_id, {}, true);
           if (!run.run_id || run.run_id === 'unknown') throw new Error('The API did not return a run id.');
           navigate(`/runs/${encodeURIComponent(run.run_id)}`);
           return run;
@@ -244,9 +279,20 @@ export default function StableJobDetails() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {job.status !== 'archived' ? (
+            {job.status !== 'archived' && !serviceHasRun ? (
               <Button size="sm" onClick={confirmStart} disabled={Boolean(busyAction)}>
                 {busyAction === 'start' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Start run
+              </Button>
+            ) : null}
+            {job.status !== 'archived' && serviceHasRun ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-red-200 text-red-700 hover:bg-red-50"
+                onClick={confirmReplace}
+                disabled={Boolean(busyAction)}
+              >
+                {busyAction === 'replace' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Replace run…
               </Button>
             ) : null}
             {job.status !== 'archived' ? (

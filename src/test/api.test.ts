@@ -119,7 +119,19 @@ describe('canonical REST v1 client', () => {
     await expect(startStableJobRun('job-1', { query: 'test' })).resolves.toEqual(
       expect.objectContaining({ run_id: 'run-new' }),
     );
-    expect(mockApi.post).toHaveBeenCalledWith('/jobs/job-1/runs', { inputs: { query: 'test' } }, {
+    expect(mockApi.post).toHaveBeenCalledWith('/jobs/job-1/runs', {
+      inputs: { query: 'test' },
+      replace_existing_run: false,
+    }, {
+      headers: { 'Idempotency-Key': 'idem-test-key' },
+    });
+
+    await startStableJobRun('job-1', {}, true);
+    expect(mockApi.post).toHaveBeenLastCalledWith('/jobs/job-1/runs', {
+      inputs: {},
+      replace_existing_run: true,
+      run_id: 'service-idem-test-key',
+    }, {
       headers: { 'Idempotency-Key': 'idem-test-key' },
     });
   });

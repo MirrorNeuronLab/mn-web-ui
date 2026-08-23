@@ -97,6 +97,9 @@ describe('StableJobDetails', () => {
       run_id: 'run-new',
       job_id: 'job-stable-1',
       status: 'pending',
+      replaced_run_ids: [],
+      cleanup_deferred: false,
+      cleanup_pending_nodes: [],
     });
     renderPage();
 
@@ -106,6 +109,43 @@ describe('StableJobDetails', () => {
 
     expect(await screen.findByText('Run destination')).toBeInTheDocument();
     expect(startStableJobRun).toHaveBeenCalledWith('job-stable-1');
+  });
+
+  it('offers destructive replacement instead of Start when a service run exists', async () => {
+    vi.mocked(fetchStableJob).mockResolvedValue({
+      ...stableJob,
+      type: 'service',
+    });
+    vi.mocked(startStableJobRun).mockResolvedValue({
+      run_id: 'run-replacement',
+      job_id: 'job-stable-1',
+      status: 'pending',
+      replaced_run_ids: ['run-old'],
+      cleanup_deferred: true,
+      cleanup_pending_nodes: ['mn@offline'],
+    });
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Replace run…' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Start run' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Replace run…' }));
+    expect(await screen.findByText('Replace the service run?')).toBeInTheDocument();
+    expect(screen.getByText(/Active work will be cancelled/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Replace run' }));
+
+    expect(await screen.findByText('Run destination')).toBeInTheDocument();
+    expect(startStableJobRun).toHaveBeenCalledWith('job-stable-1', {}, true);
+  });
+
+  it('uses only type service for the single-run UI', async () => {
+    vi.mocked(fetchStableJob).mockResolvedValue({
+      ...stableJob,
+      stream_mode: 'live',
+    });
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Start run' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Replace run…' })).not.toBeInTheDocument();
   });
 
   it('keeps an active job startable when it has no run', async () => {

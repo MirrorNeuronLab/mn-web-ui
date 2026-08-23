@@ -87,6 +87,7 @@ export const JobSchema = z.object({
 
 export const StableJobSchema = z.object({
   job_id: z.string(),
+  type: z.string().nullable().optional(),
   blueprint_id: z.string().nullable().optional(),
   graph_id: z.string().nullable().optional(),
   job_name: z.string().nullable().optional(),
@@ -387,6 +388,9 @@ export const StableRunActionResponseSchema = z.object({
   run_id: z.string(),
   job_id: z.string().nullable().optional(),
   status: z.string().optional().default('unknown'),
+  replaced_run_ids: z.array(z.string()).optional(),
+  cleanup_deferred: z.boolean().optional(),
+  cleanup_pending_nodes: z.array(z.string()).optional(),
 }).passthrough();
 
 export const RevealArtifactResponseSchema = z.object({
@@ -694,11 +698,20 @@ export const fetchStableJobRuns = (id: string, pageToken?: string | null) => api
   next_page_token: isRecord(response.data) && typeof response.data.next_page_token === 'string' ? response.data.next_page_token : null,
 }));
 
-export const startStableJobRun = (id: string, inputs: Record<string, unknown> = {}) => (
-  api.post(jobPath(id, '/runs'), { inputs }, {
+export const startStableJobRun = (
+  id: string,
+  inputs: Record<string, unknown> = {},
+  replaceExistingRun = false,
+) => {
+  const runId = replaceExistingRun ? `service-${crypto.randomUUID()}` : undefined;
+  return api.post(jobPath(id, '/runs'), {
+    inputs,
+    replace_existing_run: replaceExistingRun,
+    ...(runId ? { run_id: runId } : {}),
+  }, {
     headers: { 'Idempotency-Key': crypto.randomUUID() },
   }).then((response) => StableRunActionResponseSchema.parse(response.data))
-);
+};
 
 const withStableJobEtag = async <T>(id: string, action: (etag: string) => Promise<T>): Promise<T> => {
   let etag = stableJobEtags.get(id);

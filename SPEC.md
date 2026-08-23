@@ -50,6 +50,14 @@ avoids duplicate events or stale-state overwrites.
 - Every user action produces immediate visible feedback.
 - Long-running operations show their current state and a clear terminal result.
 - Destructive or broad mutations require explicit confirmation.
+- Stable-job controls use the projected executable `job.type` as their sole
+  lifecycle classifier. A `type: service` job shows Start only with no attached
+  run, exposes view/pause/resume/cancel controls for its existing run, and uses
+  a separate danger-styled Replace action for active or terminal history.
+  Replacement confirmation explains cancellation, permanent run-scoped
+  history/artifact removal, preserved job data/configuration/schedules, and
+  possible deferred cleanup on offline nodes. Compatibility `stream_mode`
+  values never enable this single-run behavior.
 - Failure messages explain the failed action and a useful next step without
   exposing internal secrets or raw errors.
 - Workflow views make status, current activity, evidence/artifacts, failure
