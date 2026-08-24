@@ -17,21 +17,11 @@ const renderJobUi = (path = '/jobs/job-1/ui') => render(
 );
 
 describe('JobUi', () => {
-  let replaceLocation: ReturnType<typeof vi.fn>;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    replaceLocation = vi.fn();
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: {
-        ...window.location,
-        replace: replaceLocation,
-      },
-    });
   });
 
-  it('resolves the job web UI through mn-api before redirecting', async () => {
+  it('resolves the job web UI through mn-api and keeps its service behind the local proxy', async () => {
     vi.mocked(fetchJobUi).mockResolvedValue({
       job_id: 'job-1',
       ui: {
@@ -56,11 +46,14 @@ describe('JobUi', () => {
 
     await waitFor(() => {
       expect(fetchJobUi).toHaveBeenCalledWith('job-1');
-      expect(replaceLocation).toHaveBeenCalledWith('http://127.0.0.1:61000/dashboard?panel=events');
     });
-    expect(screen.getByRole('link', { name: /open web ui/i })).toHaveAttribute(
+    expect(screen.getByTitle('Blueprint Dashboard')).toHaveAttribute(
+      'src',
+      '/job-ui-proxy/job-1/61000/dashboard?panel=events',
+    );
+    expect(screen.getByRole('link', { name: /open in tab/i })).toHaveAttribute(
       'href',
-      'http://127.0.0.1:61000/dashboard?panel=events',
+      '/job-ui-proxy/job-1/61000/dashboard?panel=events',
     );
   });
 
@@ -88,6 +81,5 @@ describe('JobUi', () => {
     renderJobUi();
 
     expect(await screen.findByText('No web UI is registered for this job yet.')).toBeInTheDocument();
-    expect(replaceLocation).not.toHaveBeenCalled();
   });
 });

@@ -33,8 +33,12 @@ progress, and execution artifacts use `/api/v1`. Runtime-wide inventory
 surfaces may continue to use the configured base. When
 `MN_WEB_API_TOKEN` is set, requests send it as a bearer token. The token is
 sensitive and is never printed or included in diagnostics.
-Job-specific UI definitions use the `json-render` adapter; Gradio adapters and
-configuration are not supported.
+Job-specific UI definitions use `json-render` or an `external-url` service
+adapter; Gradio adapters and configuration are not supported. An external
+service UI remains rendered at `/jobs/:jobId/ui` in a same-origin frame. Its
+remote host is resolved by the local Web UI server from the authenticated job
+handle, which proxies only the explicitly allowlisted dashboard/companion
+ports. The browser must not navigate directly to a remote runtime node.
 
 API and streaming payloads are unknown input until parsed. Zod schemas and
 focused adapters convert them into stable UI models. Invalid collections may

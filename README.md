@@ -53,7 +53,11 @@ http://localhost:55173
   inventory endpoints; all job and execution monitoring derives and uses the
   sibling `/api/v1` base.
 - Set `MN_WEB_API_TOKEN` when connecting to a protected API instance.
-- Blueprint-owned run interfaces use the `json-render` adapter.
+- Blueprint-owned interfaces use either the `json-render` adapter or an
+  `external-url` service handle. External service pages remain under the local
+  `/jobs/:jobId/ui` route: the local Web UI server proxies only the job's
+  declared dashboard, video, and WebSocket companion ports, so the browser
+  never needs to navigate directly to a remote runtime node.
 
 ## Configuration
 
