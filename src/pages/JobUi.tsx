@@ -1,25 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { AlertCircle, ExternalLink, Loader2 } from 'lucide-react';
-import { fetchRunUi } from '../api';
+import { fetchJobUi } from '../api';
 import { apiErrorMessage } from '../utils/apiErrors';
 
-export default function RunUi() {
-  const { runId } = useParams();
+// This route is the single job-scoped entry point for a blueprint web UI.
+export default function JobUi() {
+  const { jobId } = useParams();
   const location = useLocation();
   const [targetUrl, setTargetUrl] = useState('');
   const [error, setError] = useState('');
   const query = useMemo(() => location.search || '', [location.search]);
 
   useEffect(() => {
-    if (!runId) return undefined;
+    if (!jobId) return undefined;
     let cancelled = false;
-    fetchRunUi(runId)
+    fetchJobUi(jobId)
       .then((response) => {
         if (cancelled) return;
         const url = response.web_ui?.url?.trim();
         if (!url) {
-          setError('No web UI is registered for this run yet.');
+          setError('No web UI is registered for this job yet.');
           return;
         }
         const separator = url.includes('?') ? '&' : '?';
@@ -28,12 +29,12 @@ export default function RunUi() {
         window.location.replace(nextUrl);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(apiErrorMessage(err, 'Failed to load run web UI.'));
+        if (!cancelled) setError(apiErrorMessage(err, 'Failed to load job web UI.'));
       });
     return () => {
       cancelled = true;
     };
-  }, [query, runId]);
+  }, [jobId, query]);
 
   return (
     <div className="flex min-h-[420px] items-center justify-center">

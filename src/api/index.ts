@@ -273,24 +273,12 @@ export const ClusterNodeRemoveResponseSchema = z.object({
   message: z.string().optional().default(''),
 }).passthrough();
 
-export const RunUiComponentSchema = z.object({
-  type: z.string().optional().default('events'),
-  label: z.string().optional(),
-  source: z.string().optional(),
-  event_types: z.array(z.string()).optional().default([]),
-  max_events: z.number().optional(),
-}).passthrough();
-
-export const RunUiDefinitionSchema = z.object({
-  schema_version: z.number().optional().default(1),
-  adapter: z.string().optional().default('json-render'),
-  kind: z.string().optional().default('output'),
-  title: z.string().optional().default('Blueprint Run'),
-  run_id: z.string().optional(),
-  blueprint_id: z.string().optional(),
-  events_path: z.string().optional(),
-  refresh_seconds: z.number().optional().default(2),
-  components: z.array(RunUiComponentSchema).optional().default([]),
+export const JobUiDefinitionSchema = z.object({
+  schema_version: z.string().optional().default('mn.web_ui.json_render.v1'),
+  renderer: z.string().optional().default('json-render'),
+  job_id: z.string().optional(),
+  title: z.string().optional().default('Blueprint Web UI'),
+  spec: z.record(z.string(), z.unknown()).optional().default({}),
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
 }).passthrough();
 
@@ -306,14 +294,10 @@ export const WebUiHandleSchema = z.object({
 
 const DefaultWebUiHandle = WebUiHandleSchema.parse({});
 
-export const RunUiResponseSchema = z.object({
-  run_id: z.string(),
-  run_dir: z.string().optional(),
-  ui: RunUiDefinitionSchema,
+export const JobUiResponseSchema = z.object({
+  job_id: z.string(),
+  ui: JobUiDefinitionSchema,
   web_ui: WebUiHandleSchema.optional().default(DefaultWebUiHandle),
-  job: z.record(z.string(), z.unknown()).optional().default({}),
-  run: z.record(z.string(), z.unknown()).optional().default({}),
-  events: z.array(JobEventSchema).optional().default([]),
 }).passthrough();
 
 export const BlueprintSchema = z.object({
@@ -579,10 +563,9 @@ export type RuntimeModelListResponse = z.infer<typeof RuntimeModelListResponseSc
 export type RuntimeModelBenchmark = z.infer<typeof RuntimeModelBenchmarkSchema>;
 export type ClusterNodeAddResponse = z.infer<typeof ClusterNodeAddResponseSchema>;
 export type ClusterNodeRemoveResponse = z.infer<typeof ClusterNodeRemoveResponseSchema>;
-export type RunUiComponent = z.infer<typeof RunUiComponentSchema>;
-export type RunUiDefinition = z.infer<typeof RunUiDefinitionSchema>;
+export type JobUiDefinition = z.infer<typeof JobUiDefinitionSchema>;
 export type WebUiHandle = z.infer<typeof WebUiHandleSchema>;
-export type RunUiResponse = z.infer<typeof RunUiResponseSchema>;
+export type JobUiResponse = z.infer<typeof JobUiResponseSchema>;
 export type Blueprint = z.infer<typeof BlueprintSchema>;
 export type BlueprintListResponse = z.infer<typeof BlueprintListResponseSchema>;
 export type BlueprintLaunchResponse = z.infer<typeof BlueprintLaunchResponseSchema>;
@@ -783,8 +766,8 @@ export const fetchJobEvents = (id: string) => api.get(runPath(id, '/events')).th
 export const fetchJobAgentGraph = (id: string) => api.get(runPath(id, '/agent-graph')).then(r => (
   parseOrFallback(AgentGraphSchema, r.data, { job_id: id, nodes: [], edges: [] }, `fetchJobAgentGraph(${id})`)
 ));
-export const fetchRunUi = (id: string) => api.get(runPath(id, '/ui')).then(r => (
-  parseOrFallback(RunUiResponseSchema, r.data, { run_id: id, ui: { run_id: id, title: 'Blueprint Run' } }, `fetchRunUi(${id})`)
+export const fetchJobUi = (id: string) => api.get(jobPath(id, '/ui')).then(r => (
+  parseOrFallback(JobUiResponseSchema, r.data, { job_id: id, ui: { job_id: id, title: 'Blueprint Web UI' } }, `fetchJobUi(${id})`)
 ));
 export const fetchBlueprints = (pageToken?: string | null) => api.get('/blueprints', {
   params: { page_token: pageToken },

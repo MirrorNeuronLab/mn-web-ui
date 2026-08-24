@@ -20,7 +20,7 @@ The application routes currently include:
 - `/runs/:id`: run activity, topology, progress, artifacts, and controls;
 - `/models`: model inventory and state;
 - `/run`: manifest/job submission; and
-- `/runs/:runId/ui`: run-specific generated/operator UI.
+- `/jobs/:jobId/ui`: job-specific generated/operator UI shared by every run.
 
 `src/App.tsx` is authoritative for route registration. Pages must remain
 direct-linkable and survive refresh with the same route parameters.
@@ -33,7 +33,7 @@ progress, and execution artifacts use `/api/v1`. Runtime-wide inventory
 surfaces may continue to use the configured base. When
 `MN_WEB_API_TOKEN` is set, requests send it as a bearer token. The token is
 sensitive and is never printed or included in diagnostics.
-Run-specific UI definitions use the `json-render` adapter; Gradio adapters and
+Job-specific UI definitions use the `json-render` adapter; Gradio adapters and
 configuration are not supported.
 
 API and streaming payloads are unknown input until parsed. Zod schemas and

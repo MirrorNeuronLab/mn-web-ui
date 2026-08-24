@@ -91,12 +91,13 @@ const installRunRoutes = async (
       body: JSON.stringify({ job_id: runId, status: status(), nodes: [], edges: [], stats: {} }),
     });
   });
-  await page.route(`**/api/v1/runs/${runId}/ui`, async (route) => {
+  await page.route(/\/api\/v1\/jobs\/[^/]+\/ui$/, async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
-        run_id: runId,
-        ui: { schema_version: 1, adapter: 'json-render', kind: 'output', title: 'Blueprint Run', components: [] },
+        job_id: runId,
+        ui: { schema_version: 'mn.web_ui.json_render.v1', renderer: 'json-render', job_id: runId, title: 'Blueprint Web UI', spec: {} },
+        web_ui: { adapter: 'json-render', kind: 'output', title: 'Blueprint Web UI', url: '', status: 'unknown', metadata: {} },
       }),
     });
   });

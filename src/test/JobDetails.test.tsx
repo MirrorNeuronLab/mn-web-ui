@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { toast } from 'sonner';
 import JobDetails from '../pages/JobDetails';
-import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, fetchWorkflowProgress, streamWorkflowProgress, cancelRun, pauseRun, resumeRun } from '../api';
+import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchJobUi, fetchWorkflowProgress, streamWorkflowProgress, cancelRun, pauseRun, resumeRun } from '../api';
 import type { WorkflowProgress } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
@@ -16,7 +16,7 @@ vi.mock('../api', async (importOriginal) => {
     fetchJobDetails: vi.fn(),
     fetchJobEvents: vi.fn(),
     fetchJobAgentGraph: vi.fn(),
-    fetchRunUi: vi.fn(),
+    fetchJobUi: vi.fn(),
     fetchWorkflowProgress: vi.fn(),
     streamWorkflowProgress: vi.fn(),
     cancelRun: vi.fn(),
@@ -62,13 +62,10 @@ describe('JobDetails Component', () => {
       edges: [],
       stats: { agent_count: 0, edge_count: 0, message_count: 0, event_count: 0 },
     });
-    vi.mocked(fetchRunUi).mockResolvedValue({
-      run_id: 'test-job-1',
-      ui: { schema_version: 1, adapter: 'json-render', kind: 'output', title: 'Blueprint Run', refresh_seconds: 2, components: [], metadata: {} },
-      web_ui: { adapter: 'json-render', kind: 'output', url: '', title: 'Blueprint Run', status: 'unknown', metadata: {} },
-      job: {},
-      run: {},
-      events: [],
+    vi.mocked(fetchJobUi).mockResolvedValue({
+      job_id: 'test-job-1',
+      ui: { schema_version: 'mn.web_ui.json_render.v1', renderer: 'json-render', job_id: 'test-job-1', title: 'Blueprint Web UI', spec: {}, metadata: {} },
+      web_ui: { adapter: 'json-render', kind: 'output', url: '', title: 'Blueprint Web UI', status: 'unknown', metadata: {} },
     });
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
@@ -156,11 +153,6 @@ describe('JobDetails Component', () => {
       ],
       sandboxes: [],
       recent_events: [],
-      web_ui: {
-        url: 'http://localhost:61000',
-        title: 'Blueprint Dashboard',
-        status: 'running',
-      },
     };
 
     const mockEvents = [
@@ -169,6 +161,11 @@ describe('JobDetails Component', () => {
 
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue(mockEvents);
+    vi.mocked(fetchJobUi).mockResolvedValue({
+      job_id: 'test-job-1',
+      ui: { schema_version: 'mn.web_ui.json_render.v1', renderer: 'json-render', job_id: 'test-job-1', title: 'Blueprint Web UI', spec: {}, metadata: {} },
+      web_ui: { adapter: 'json-render', kind: 'output', url: 'http://localhost:61000', title: 'Blueprint Dashboard', status: 'running', metadata: {} },
+    });
     vi.mocked(fetchJobAgentGraph).mockResolvedValue({
       job_id: 'test-job-1',
       status: 'running',
@@ -183,7 +180,7 @@ describe('JobDetails Component', () => {
       expect(screen.getByText('test-job-1')).toBeInTheDocument();
     });
     expect(fetchJobDetails).toHaveBeenCalledWith('test-job-1', { include: 'full' });
-    expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute('href', 'http://localhost:61000/');
+    expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute('href', '/jobs/test-job-1/ui');
     expect(screen.queryByRole('link', { name: 'Web UI' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Executors:/i)).not.toBeInTheDocument();
 
@@ -1224,7 +1221,7 @@ describe('JobDetails Component', () => {
     expect(screen.getAllByText('reconcile').length).toBeGreaterThan(0);
   });
 
-  it('shows blueprint web ui from the run ui endpoint when job details are compact', async () => {
+  it('shows blueprint web ui from the job ui endpoint when job details are compact', async () => {
     const mockDetails = {
       runtime_run_id: 'blueprint-run-1',
       job: {
@@ -1241,9 +1238,9 @@ describe('JobDetails Component', () => {
 
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
-    vi.mocked(fetchRunUi).mockResolvedValue({
-      run_id: 'blueprint-run-1',
-      ui: { schema_version: 1, adapter: 'json-render', kind: 'output', title: 'Blueprint Run', refresh_seconds: 2, components: [], metadata: {} },
+    vi.mocked(fetchJobUi).mockResolvedValue({
+      job_id: 'test-job-1',
+      ui: { schema_version: 'mn.web_ui.json_render.v1', renderer: 'json-render', job_id: 'test-job-1', title: 'Blueprint Web UI', spec: {}, metadata: {} },
       web_ui: {
         adapter: 'json-render',
         kind: 'output',
@@ -1252,20 +1249,17 @@ describe('JobDetails Component', () => {
         status: 'running',
         metadata: {},
       },
-      job: {},
-      run: {},
-      events: [],
     });
 
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute('href', 'http://localhost:61000/');
+      expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute('href', '/jobs/test-job-1/ui');
     });
-    expect(fetchRunUi).toHaveBeenCalledWith('blueprint-run-1');
+    expect(fetchJobUi).toHaveBeenCalledWith('test-job-1');
   });
 
-  it('treats a missing optional run web ui as a normal progress-only run', async () => {
+  it('treats a missing optional job web ui as a normal progress-only run', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.mocked(fetchJobDetails).mockResolvedValue({
       runtime_run_id: 'progress-only-runtime',
@@ -1279,15 +1273,15 @@ describe('JobDetails Component', () => {
       sandboxes: [],
       recent_events: [],
     });
-    vi.mocked(fetchRunUi).mockRejectedValue({ response: { status: 404 } });
+    vi.mocked(fetchJobUi).mockRejectedValue({ response: { status: 404 } });
 
     try {
       renderWithRouter(<JobDetails />);
 
       await waitFor(() => {
-        expect(fetchRunUi).toHaveBeenCalledWith('progress-only-runtime');
+        expect(fetchJobUi).toHaveBeenCalledWith('test-job-1');
       });
-      expect(consoleError).not.toHaveBeenCalledWith('Failed to load run web UI', expect.anything());
+      expect(consoleError).not.toHaveBeenCalledWith('Failed to load job web UI', expect.anything());
     } finally {
       consoleError.mockRestore();
     }

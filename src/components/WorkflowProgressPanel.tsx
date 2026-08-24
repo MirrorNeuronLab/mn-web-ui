@@ -385,7 +385,7 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
                       Web UI:{' '}
                       <a
                         className="font-medium text-neutral-950 underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-950"
-                        href={webUi.url}
+                        href={webUi.href || webUi.url}
                         target="_blank"
                         rel="noreferrer"
                       >

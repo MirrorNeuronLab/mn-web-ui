@@ -69,11 +69,11 @@ export default function Layout() {
 function pageTitle(pathname: string) {
   if (pathname === '/') return 'Dashboard';
   if (pathname === '/jobs') return 'Jobs';
+  if (pathname.startsWith('/jobs/') && pathname.endsWith('/ui')) return 'Blueprint UI';
   if (pathname.startsWith('/jobs/')) return 'Job details';
   if (pathname === '/runs') return 'Runs';
-  if (pathname.startsWith('/runs/') && !pathname.endsWith('/ui')) return 'Run details';
+  if (pathname.startsWith('/runs/')) return 'Run details';
   if (pathname === '/models') return 'Models';
   if (pathname === '/run') return 'Start a run';
-  if (pathname.startsWith('/runs/')) return 'Blueprint UI';
   return 'MirrorNeuron';
 }

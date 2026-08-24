@@ -1,22 +1,22 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import RunUi from '../pages/RunUi';
-import { fetchRunUi } from '../api';
+import JobUi from '../pages/JobUi';
+import { fetchJobUi } from '../api';
 
 vi.mock('../api', () => ({
-  fetchRunUi: vi.fn(),
+  fetchJobUi: vi.fn(),
 }));
 
-const renderRunUi = (path = '/runs/run-1/ui') => render(
+const renderJobUi = (path = '/jobs/job-1/ui') => render(
   <MemoryRouter initialEntries={[path]}>
     <Routes>
-      <Route path="/runs/:runId/ui" element={<RunUi />} />
+      <Route path="/jobs/:jobId/ui" element={<JobUi />} />
     </Routes>
   </MemoryRouter>,
 );
 
-describe('RunUi', () => {
+describe('JobUi', () => {
   let replaceLocation: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -31,16 +31,15 @@ describe('RunUi', () => {
     });
   });
 
-  it('resolves the run web UI through mn-api before redirecting', async () => {
-    vi.mocked(fetchRunUi).mockResolvedValue({
-      run_id: 'run-1',
+  it('resolves the job web UI through mn-api before redirecting', async () => {
+    vi.mocked(fetchJobUi).mockResolvedValue({
+      job_id: 'job-1',
       ui: {
-        schema_version: 1,
-        adapter: 'json-render',
-        kind: 'output',
-        title: 'Blueprint Run',
-        refresh_seconds: 2,
-        components: [],
+        schema_version: 'mn.web_ui.json_render.v1',
+        renderer: 'json-render',
+        job_id: 'job-1',
+        title: 'Blueprint Web UI',
+        spec: {},
         metadata: {},
       },
       web_ui: {
@@ -51,15 +50,12 @@ describe('RunUi', () => {
         status: 'running',
         metadata: {},
       },
-      job: {},
-      run: {},
-      events: [],
     });
 
-    renderRunUi('/runs/run-1/ui?panel=events');
+    renderJobUi('/jobs/job-1/ui?panel=events');
 
     await waitFor(() => {
-      expect(fetchRunUi).toHaveBeenCalledWith('run-1');
+      expect(fetchJobUi).toHaveBeenCalledWith('job-1');
       expect(replaceLocation).toHaveBeenCalledWith('http://127.0.0.1:61000/dashboard?panel=events');
     });
     expect(screen.getByRole('link', { name: /open web ui/i })).toHaveAttribute(
@@ -69,15 +65,14 @@ describe('RunUi', () => {
   });
 
   it('shows a recoverable message when mn-api has no registered web UI URL', async () => {
-    vi.mocked(fetchRunUi).mockResolvedValue({
-      run_id: 'run-1',
+    vi.mocked(fetchJobUi).mockResolvedValue({
+      job_id: 'job-1',
       ui: {
-        schema_version: 1,
-        adapter: 'json-render',
-        kind: 'output',
-        title: 'Blueprint Run',
-        refresh_seconds: 2,
-        components: [],
+        schema_version: 'mn.web_ui.json_render.v1',
+        renderer: 'json-render',
+        job_id: 'job-1',
+        title: 'Blueprint Web UI',
+        spec: {},
         metadata: {},
       },
       web_ui: {
@@ -88,14 +83,11 @@ describe('RunUi', () => {
         status: 'starting',
         metadata: {},
       },
-      job: {},
-      run: {},
-      events: [],
     });
 
-    renderRunUi();
+    renderJobUi();
 
-    expect(await screen.findByText('No web UI is registered for this run yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No web UI is registered for this job yet.')).toBeInTheDocument();
     expect(replaceLocation).not.toHaveBeenCalled();
   });
 });

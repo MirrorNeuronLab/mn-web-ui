@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchRunUi, streamWorkflowProgress, cancelRun, pauseRun, resumeRun } from '../api';
+import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchJobUi, streamWorkflowProgress, cancelRun, pauseRun, resumeRun } from '../api';
 import type { AgentGraph, ErrorEnvelope, JobDetails as JobDetailsType, JobEvent, WebUiHandle, WorkflowProgress } from '../api';
 import { format } from 'date-fns';
 import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, MessageSquare, List, Code2, FileText } from 'lucide-react';
@@ -27,7 +27,7 @@ import {
 import { cn } from '../lib/utils';
 import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
 import { buildOutputResources } from '../utils/workflowResources';
-import { blueprintWebUiInfo, webUiInfoFromRecord } from '../utils/jobDetailsView';
+import { webUiInfoFromRecord } from '../utils/jobDetailsView';
 import { isTerminalRunStatus, runStatusBadgeClass } from '../utils/jobStatus';
 import { isRecord } from '../utils/records';
 
@@ -184,7 +184,7 @@ export default function JobDetails() {
   const [events, setEvents] = useState<JobEvent[]>([]);
   const [graph, setGraph] = useState<AgentGraph | null>(null);
   const [workflowProgress, setWorkflowProgress] = useState<WorkflowProgress | null>(null);
-  const [runWebUi, setRunWebUi] = useState<WebUiHandle | null>(null);
+  const [jobWebUi, setJobWebUi] = useState<WebUiHandle | null>(null);
   const [activeTab, setActiveTab] = useState<'progress' | 'agents' | 'logs'>('progress');
   const [agentView, setAgentView] = useState<'list' | 'graph' | 'code'>('list');
   
@@ -203,19 +203,22 @@ export default function JobDetails() {
     try {
       const d = await fetchJobDetails(id, { include: 'full' });
       setDetails(d);
-      const runId = stringValue(d.runtime_run_id, isRecord(d.summary) ? d.summary.runtime_run_id : undefined);
-      if (blueprintWebUiInfo(d) || !runId) {
-        setRunWebUi(null);
+      const root = d as Record<string, unknown>;
+      const job: Record<string, unknown> = isRecord(d.job) ? d.job : {};
+      const summary: Record<string, unknown> = isRecord(d.summary) ? d.summary : {};
+      const jobId = stringValue(job.job_id, job.id, root.job_id, summary.job_id);
+      if (!jobId) {
+        setJobWebUi(null);
       } else {
-        const runUi = await fetchRunUi(runId).catch((err) => {
-          // A workflow run does not need to publish a separate blueprint dashboard.
+        const jobUi = await fetchJobUi(jobId).catch((err) => {
+          // A Job does not need to publish a dedicated blueprint dashboard.
           // Keep the progress UI quiet when that optional resource is absent.
           if (responseStatusFromError(err) !== 404) {
-            console.error('Failed to load run web UI', err);
+            console.error('Failed to load job web UI', err);
           }
           return null;
         });
-        setRunWebUi(runUi?.web_ui || null);
+        setJobWebUi(jobUi?.web_ui || null);
       }
 
     } catch (err) {
@@ -328,7 +331,12 @@ export default function JobDetails() {
   }, [id, load]);
 
   if (!details || !details.job) return <div className="p-5 text-sm text-neutral-500">Loading run…</div>;
-  const webUi = blueprintWebUiInfo(details) || webUiInfoFromRecord(runWebUi);
+  const jobRecord: Record<string, unknown> = isRecord(details.job) ? details.job : {};
+  const durableJobId = knownStringValue(jobRecord.job_id, (details as Record<string, unknown>).job_id);
+  const resolvedWebUi = webUiInfoFromRecord(jobWebUi);
+  const webUi = resolvedWebUi && durableJobId
+    ? { ...resolvedWebUi, href: `/jobs/${encodeURIComponent(durableJobId)}/ui` }
+    : resolvedWebUi;
   const jobId = knownStringValue(details.job.run_id, details.job.job_id, id) || id || 'run';
   const progressTerminalStatus = inferredTerminalStatusFromProgress(workflowProgress);
   const displayStatus = displayStatusFromSources(actionStatus, progressTerminalStatus || workflowProgress?.status, details.job.status, graph?.status);
