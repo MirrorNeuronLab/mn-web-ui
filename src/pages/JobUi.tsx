@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
-import { AlertCircle, ExternalLink, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { fetchJobUi } from '../api';
 import { apiErrorMessage } from '../utils/apiErrors';
 
@@ -62,26 +62,14 @@ export default function JobUi() {
 
   if (targetUrl) {
     return (
-      <div className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-4 py-2.5">
-          <div className="truncate text-sm font-medium text-neutral-950">{title}</div>
-          <a
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
-            href={targetUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open in tab
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        </div>
-        <iframe className="min-h-[580px] w-full flex-1 border-0" src={targetUrl} title={title} />
+      <div className="h-screen w-screen overflow-hidden bg-white">
+        <iframe className="block h-full w-full border-0" src={targetUrl} title={title} />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-[420px] items-center justify-center">
+    <div className="flex h-screen w-screen items-center justify-center bg-white">
       <div className="rounded-lg border border-neutral-200 bg-white p-5 text-center shadow-sm">
         {error ? (
           <AlertCircle className="mx-auto mb-3 h-5 w-5 text-red-600" />

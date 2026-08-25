@@ -16,10 +16,10 @@ function App() {
   return (
     <TooltipProvider delayDuration={250}>
       <Routes>
+        <Route path="/jobs/:jobId/ui" element={<JobUi />} />
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="jobs" element={<StableJobs />} />
-          <Route path="jobs/:jobId/ui" element={<JobUi />} />
           <Route path="jobs/:jobId" element={<StableJobDetails />} />
           <Route path="runs" element={<Runs />} />
           <Route path="runs/:id" element={<JobDetails />} />

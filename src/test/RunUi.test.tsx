@@ -51,10 +51,8 @@ describe('JobUi', () => {
       'src',
       '/job-ui-proxy/job-1/61000/dashboard?panel=events',
     );
-    expect(screen.getByRole('link', { name: /open in tab/i })).toHaveAttribute(
-      'href',
-      '/job-ui-proxy/job-1/61000/dashboard?panel=events',
-    );
+    expect(screen.getByTitle('Blueprint Dashboard')).toHaveClass('h-full', 'w-full', 'border-0');
+    expect(screen.queryByRole('link', { name: /open in tab/i })).not.toBeInTheDocument();
   });
 
   it('shows a recoverable message when mn-api has no registered web UI URL', async () => {
