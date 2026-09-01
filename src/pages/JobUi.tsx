@@ -17,7 +17,10 @@ function localProxyUrl(jobId: string, serviceUrl: string, query: string): string
   if (!Number.isInteger(port) || port < 1 || port > 65535) return '';
 
   const remotePath = remote.pathname.replace(/^\/+/, '');
-  const proxyPath = `/job-ui-proxy/${encodeURIComponent(jobId)}/${port}${remotePath ? `/${remotePath}` : ''}`;
+  const proxyRoot = `/job-ui-proxy/${encodeURIComponent(jobId)}/${port}`;
+  // A root service must retain its trailing slash. Relative bundle URLs in
+  // the framed page otherwise resolve outside the port-scoped proxy route.
+  const proxyPath = remotePath ? `${proxyRoot}/${remotePath}` : `${proxyRoot}/`;
   const parameters = new URLSearchParams(remote.search);
   new URLSearchParams(query).forEach((value, key) => parameters.set(key, value));
   const suffix = parameters.toString();

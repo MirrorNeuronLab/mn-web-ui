@@ -55,6 +55,35 @@ describe('JobUi', () => {
     expect(screen.queryByRole('link', { name: /open in tab/i })).not.toBeInTheDocument();
   });
 
+  it('keeps the root slash and service query when framing a root dashboard', async () => {
+    vi.mocked(fetchJobUi).mockResolvedValue({
+      job_id: 'job-1',
+      ui: {
+        schema_version: 'mn.web_ui.json_render.v1',
+        renderer: 'json-render',
+        job_id: 'job-1',
+        title: 'Blueprint Web UI',
+        spec: {},
+        metadata: {},
+      },
+      web_ui: {
+        adapter: 'json-render',
+        kind: 'output',
+        url: 'http://mn-dw-job-example:61001/?control=1',
+        title: 'Simulator',
+        status: 'running',
+        metadata: {},
+      },
+    });
+
+    renderJobUi();
+
+    expect(await screen.findByTitle('Simulator')).toHaveAttribute(
+      'src',
+      '/job-ui-proxy/job-1/61001/?control=1',
+    );
+  });
+
   it('shows a recoverable message when mn-api has no registered web UI URL', async () => {
     vi.mocked(fetchJobUi).mockResolvedValue({
       job_id: 'job-1',
