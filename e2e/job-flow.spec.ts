@@ -96,8 +96,8 @@ const installRunRoutes = async (
       contentType: 'application/json',
       body: JSON.stringify({
         job_id: runId,
-        ui: { schema_version: 'mn.web_ui.json_render.v1', renderer: 'json-render', job_id: runId, title: 'Blueprint Web UI', spec: {} },
-        web_ui: { adapter: 'json-render', kind: 'output', title: 'Blueprint Web UI', url: '', status: 'unknown', metadata: {} },
+        ui: { schema_version: 'mn.web_ui.external.v1', renderer: 'external-url', job_id: runId, title: 'Blueprint Web UI' },
+        web_ui: { adapter: 'external-url', kind: 'service', title: 'Blueprint Web UI', url: '', status: 'unknown', metadata: {} },
       }),
     });
   });

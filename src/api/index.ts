@@ -274,17 +274,16 @@ export const ClusterNodeRemoveResponseSchema = z.object({
 }).passthrough();
 
 export const JobUiDefinitionSchema = z.object({
-  schema_version: z.string().optional().default('mn.web_ui.json_render.v1'),
-  renderer: z.string().optional().default('json-render'),
+  schema_version: z.string().optional().default('mn.web_ui.external.v1'),
+  renderer: z.string().optional().default('external-url'),
   job_id: z.string().optional(),
   title: z.string().optional().default('Blueprint Web UI'),
-  spec: z.record(z.string(), z.unknown()).optional().default({}),
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
 }).passthrough();
 
 export const WebUiHandleSchema = z.object({
-  adapter: z.string().optional().default('json-render'),
-  kind: z.string().optional().default('output'),
+  adapter: z.string().optional().default('external-url'),
+  kind: z.string().optional().default('service'),
   url: z.string().optional().default(''),
   title: z.string().optional().default('Blueprint Run'),
   status: z.string().optional().default('unknown'),

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { fetchJobUi } from '../api';
@@ -27,6 +27,22 @@ function localProxyUrl(jobId: string, serviceUrl: string, query: string): string
   return suffix ? `${proxyPath}?${suffix}` : proxyPath;
 }
 
+function unavailableMessage(status: string | undefined): string {
+  switch (status?.trim().toLowerCase()) {
+    case 'paused':
+      return 'This job is paused. Resume it to reopen its web UI.';
+    case 'cancelled':
+    case 'canceled':
+      return 'This job was cancelled, so its web UI is no longer available.';
+    case 'stopped':
+      return 'This service has stopped, so its web UI is no longer available.';
+    case 'failed':
+      return 'This service failed, so its web UI is no longer available.';
+    default:
+      return '';
+  }
+}
+
 // This route is the single job-scoped entry point for a blueprint web UI.
 export default function JobUi() {
   const { jobId } = useParams();
@@ -34,32 +50,54 @@ export default function JobUi() {
   const [targetUrl, setTargetUrl] = useState('');
   const [title, setTitle] = useState('Blueprint Web UI');
   const [error, setError] = useState('');
+  const targetUrlRef = useRef('');
   const query = useMemo(() => location.search || '', [location.search]);
 
   useEffect(() => {
     if (!jobId) return undefined;
     let cancelled = false;
-    fetchJobUi(jobId)
+    targetUrlRef.current = '';
+    setTargetUrl('');
+    setError('');
+    const updateTargetUrl = (nextUrl: string) => {
+      targetUrlRef.current = nextUrl;
+      setTargetUrl(nextUrl);
+    };
+    const load = () => fetchJobUi(jobId)
       .then((response) => {
         if (cancelled) return;
+        setTitle(response.web_ui?.title?.trim() || 'Blueprint Web UI');
+        const unavailable = unavailableMessage(response.web_ui?.status);
+        if (unavailable) {
+          updateTargetUrl('');
+          setError(unavailable);
+          return;
+        }
         const url = response.web_ui?.url?.trim();
         if (!url) {
+          updateTargetUrl('');
           setError('No web UI is registered for this job yet.');
           return;
         }
         const nextUrl = localProxyUrl(jobId, url, query);
         if (!nextUrl) {
+          updateTargetUrl('');
           setError('The registered web UI URL is invalid.');
           return;
         }
-        setTitle(response.web_ui?.title?.trim() || 'Blueprint Web UI');
-        setTargetUrl(nextUrl);
+        setError('');
+        updateTargetUrl(nextUrl);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(apiErrorMessage(err, 'Failed to load job web UI.'));
+        if (!cancelled && !targetUrlRef.current) {
+          setError(apiErrorMessage(err, 'Failed to load job web UI.'));
+        }
       });
+    void load();
+    const poll = window.setInterval(() => void load(), 2_000);
     return () => {
       cancelled = true;
+      window.clearInterval(poll);
     };
   }, [jobId, query]);
 

@@ -64,8 +64,8 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobUi).mockResolvedValue({
       job_id: 'test-job-1',
-      ui: { schema_version: 'mn.web_ui.json_render.v1', renderer: 'json-render', job_id: 'test-job-1', title: 'Blueprint Web UI', spec: {}, metadata: {} },
-      web_ui: { adapter: 'json-render', kind: 'output', url: '', title: 'Blueprint Web UI', status: 'unknown', metadata: {} },
+      ui: { schema_version: 'mn.web_ui.external.v1', renderer: 'external-url', job_id: 'test-job-1', title: 'Blueprint Web UI', metadata: {} },
+      web_ui: { adapter: 'external-url', kind: 'service', url: '', title: 'Blueprint Web UI', status: 'unknown', metadata: {} },
     });
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
@@ -163,8 +163,8 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue(mockEvents);
     vi.mocked(fetchJobUi).mockResolvedValue({
       job_id: 'test-job-1',
-      ui: { schema_version: 'mn.web_ui.json_render.v1', renderer: 'json-render', job_id: 'test-job-1', title: 'Blueprint Web UI', spec: {}, metadata: {} },
-      web_ui: { adapter: 'json-render', kind: 'output', url: 'http://localhost:61000', title: 'Blueprint Dashboard', status: 'running', metadata: {} },
+      ui: { schema_version: 'mn.web_ui.external.v1', renderer: 'external-url', job_id: 'test-job-1', title: 'Blueprint Web UI', metadata: {} },
+      web_ui: { adapter: 'external-url', kind: 'service', url: 'http://localhost:61000', title: 'Blueprint Dashboard', status: 'running', metadata: {} },
     });
     vi.mocked(fetchJobAgentGraph).mockResolvedValue({
       job_id: 'test-job-1',
@@ -1240,10 +1240,10 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchJobUi).mockResolvedValue({
       job_id: 'test-job-1',
-      ui: { schema_version: 'mn.web_ui.json_render.v1', renderer: 'json-render', job_id: 'test-job-1', title: 'Blueprint Web UI', spec: {}, metadata: {} },
+      ui: { schema_version: 'mn.web_ui.external.v1', renderer: 'external-url', job_id: 'test-job-1', title: 'Blueprint Web UI', metadata: {} },
       web_ui: {
-        adapter: 'json-render',
-        kind: 'output',
+        adapter: 'external-url',
+        kind: 'service',
         url: 'http://localhost:61000',
         title: 'Blueprint Dashboard',
         status: 'running',

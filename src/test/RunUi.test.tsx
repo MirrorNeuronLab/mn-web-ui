@@ -25,16 +25,15 @@ describe('JobUi', () => {
     vi.mocked(fetchJobUi).mockResolvedValue({
       job_id: 'job-1',
       ui: {
-        schema_version: 'mn.web_ui.json_render.v1',
-        renderer: 'json-render',
+        schema_version: 'mn.web_ui.external.v1',
+        renderer: 'external-url',
         job_id: 'job-1',
         title: 'Blueprint Web UI',
-        spec: {},
         metadata: {},
       },
       web_ui: {
-        adapter: 'json-render',
-        kind: 'output',
+        adapter: 'external-url',
+        kind: 'service',
         url: 'http://127.0.0.1:61000/dashboard',
         title: 'Blueprint Dashboard',
         status: 'running',
@@ -59,16 +58,15 @@ describe('JobUi', () => {
     vi.mocked(fetchJobUi).mockResolvedValue({
       job_id: 'job-1',
       ui: {
-        schema_version: 'mn.web_ui.json_render.v1',
-        renderer: 'json-render',
+        schema_version: 'mn.web_ui.external.v1',
+        renderer: 'external-url',
         job_id: 'job-1',
         title: 'Blueprint Web UI',
-        spec: {},
         metadata: {},
       },
       web_ui: {
-        adapter: 'json-render',
-        kind: 'output',
+        adapter: 'external-url',
+        kind: 'service',
         url: 'http://mn-dw-job-example:61001/?control=1',
         title: 'Simulator',
         status: 'running',
@@ -88,16 +86,15 @@ describe('JobUi', () => {
     vi.mocked(fetchJobUi).mockResolvedValue({
       job_id: 'job-1',
       ui: {
-        schema_version: 'mn.web_ui.json_render.v1',
-        renderer: 'json-render',
+        schema_version: 'mn.web_ui.external.v1',
+        renderer: 'external-url',
         job_id: 'job-1',
         title: 'Blueprint Web UI',
-        spec: {},
         metadata: {},
       },
       web_ui: {
-        adapter: 'json-render',
-        kind: 'output',
+        adapter: 'external-url',
+        kind: 'service',
         url: '',
         title: 'Blueprint Dashboard',
         status: 'starting',
@@ -108,5 +105,18 @@ describe('JobUi', () => {
     renderJobUi();
 
     expect(await screen.findByText('No web UI is registered for this job yet.')).toBeInTheDocument();
+  });
+
+  it('does not frame a paused service', async () => {
+    vi.mocked(fetchJobUi).mockResolvedValue({
+      job_id: 'job-1',
+      ui: { schema_version: 'mn.web_ui.external.v1', renderer: 'external-url', job_id: 'job-1', title: 'Blueprint Web UI', metadata: {} },
+      web_ui: { adapter: 'external-url', kind: 'service', url: 'http://127.0.0.1:61000/', title: 'Blueprint Dashboard', status: 'paused', metadata: {} },
+    });
+
+    renderJobUi();
+
+    expect(await screen.findByText('This job is paused. Resume it to reopen its web UI.')).toBeInTheDocument();
+    expect(screen.queryByTitle('Blueprint Dashboard')).not.toBeInTheDocument();
   });
 });
