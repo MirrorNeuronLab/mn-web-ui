@@ -22,7 +22,7 @@ type UploadedBundle = {
 
 const modeTabs: Array<{ id: LaunchMode; label: string; description: string }> = [
   { id: 'blueprint', label: 'Blueprint', description: 'Choose an installed blueprint from the catalog.' },
-  { id: 'bundle', label: 'ZIP bundle', description: 'Upload a zipped bundle with manifest.json and payloads/.' },
+  { id: 'bundle', label: 'ZIP blueprint', description: 'Upload a complete blueprint package.' },
 ];
 
 const launchPhases = [

@@ -111,3 +111,7 @@ npm run build
 Playwright E2E covers high-value routing and job flows when an appropriate API
 fixture/live environment is available. Unit/component tests remain deterministic
 and do not require network access.
+
+## Canonical blueprint descriptors
+
+Catalog rows are derived by the SDK from canonical packages and carry semantic release versions. Browser code consumes the API projection; it never parses or executes package source files. Package validation displays the owning document and JSON Pointer from structured errors, including ZIP upload errors. Folder and ZIP launches share the same server pipeline.

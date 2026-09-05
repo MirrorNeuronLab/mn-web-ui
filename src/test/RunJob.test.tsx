@@ -50,7 +50,7 @@ describe('RunJob Component', () => {
   it('offers only canonical blueprint and opaque bundle sources', async () => {
     renderRunJob();
     expect(screen.getByRole('tab', { name: 'Blueprint' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'ZIP bundle' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'ZIP blueprint' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'File system path' })).not.toBeInTheDocument();
     expect(await waitForBlueprintSelection()).toHaveValue('worker_one');
   });
@@ -117,7 +117,7 @@ describe('RunJob Component', () => {
       status: 'pending',
     });
     renderRunJob();
-    fireEvent.click(screen.getByRole('tab', { name: 'ZIP bundle' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'ZIP blueprint' }));
     const file = new File(['bundle'], 'bundle.zip', { type: 'application/zip' });
     fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
       target: { files: [file] },

@@ -106,3 +106,5 @@ npm run build
 Do not commit real `.env` files. Use `.env.example` for documented placeholders
 only, and provide secrets such as `MN_WEB_API_TOKEN` through deployment
 environment variables.
+
+Blueprint catalog information comes from the canonical package manifest and its role documents. Validation errors identify the document and JSON Pointer to correct. See the [blueprint format](../mn-docs/blueprint-standard.md).

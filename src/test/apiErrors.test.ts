@@ -89,6 +89,14 @@ describe('apiErrorMessage', () => {
     );
   });
 
+  it('shows canonical document filenames and JSON Pointers from upload errors', () => {
+    expect(apiErrorMessage({ response: { data: { detail: { errors: [{
+      code: 'blueprint.unknown_step', file: 'workflow.json', pointer: '/steps/1/needs',
+      message: 'Unknown dependency: missing', severity: 'error',
+    }] } } } }, 'Fallback')).toBe('workflow.json/steps/1/needs: Unknown dependency: missing');
+    expect(apiErrorMessage({ response: { data: { detail: { errors: 'invalid' } } } }, 'Fallback')).toBe('Fallback');
+  });
+
   it('falls back to response detail, error message, then default text', () => {
     expect(apiErrorMessage({ response: { data: { detail: { message: 'Nested detail' } } } }, 'Fallback')).toBe('Nested detail');
     expect(apiErrorMessage({ message: 'Network failed' }, 'Fallback')).toBe('Network failed');

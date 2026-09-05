@@ -301,6 +301,7 @@ export const JobUiResponseSchema = z.object({
 
 export const BlueprintSchema = z.object({
   id: z.string(),
+  version: z.string().optional(),
   name: z.string().optional(),
   description: z.string().optional().default(''),
   category: z.string().optional(),

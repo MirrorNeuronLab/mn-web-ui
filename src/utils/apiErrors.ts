@@ -4,7 +4,9 @@ type ValidationIssue = {
   code?: string;
   message?: string;
   help?: string;
-  location?: { source?: string; path?: string };
+  file?: string;
+  pointer?: string;
+  location?: { source?: string; file?: string; path?: string };
   expected?: unknown;
   actual?: unknown;
 };
@@ -18,7 +20,7 @@ type ApiError = {
 
 type ApiErrorData = {
   error?: string;
-  detail?: string | { error?: string; message?: string };
+  detail?: string | { error?: string; message?: string; errors?: ValidationIssue[] };
   message?: string;
   model_install?: {
     models?: Array<{ id?: string; model?: string }>;
@@ -42,7 +44,9 @@ const numberValue = (value: unknown) => {
 const stringValue = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 
 const issueText = (issue: ValidationIssue) => {
-  const path = issue.location?.path ? `${issue.location.path}: ` : '';
+  const file = stringValue(issue.file) || stringValue(issue.location?.file) || '';
+  const pointer = stringValue(issue.pointer) || stringValue(issue.location?.path) || '';
+  const path = file || pointer ? `${file}${pointer}: ` : '';
   return `${path}${issue.message || issue.help || 'Validation issue'}`;
 };
 
@@ -110,7 +114,9 @@ const hardwareRequirementText = (issue: ValidationIssue) => {
 export const apiErrorMessage = (err: unknown, fallback: string) => {
   const apiError = err as ApiError;
   const data = apiError.response?.data;
-  const validationIssues = data?.validation?.issues || data?.errors || [];
+  const detail = isRecord(data?.detail) ? data.detail : {};
+  const rawIssues = data?.validation?.issues || data?.errors || detail.errors;
+  const validationIssues = Array.isArray(rawIssues) ? rawIssues.filter(isRecord) as ValidationIssue[] : [];
   const hardwareIssue = validationIssues.find(isHardwareRequirementIssue);
   if (hardwareIssue) return hardwareRequirementText(hardwareIssue);
   const runtimeModelIssue = validationIssues.find(isRuntimeModelIssue);

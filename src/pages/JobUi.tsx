@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { fetchJobUi } from '../api';
@@ -47,18 +47,18 @@ function unavailableMessage(status: string | undefined): string {
 export default function JobUi() {
   const { jobId } = useParams();
   const location = useLocation();
+  return <JobUiView key={`${jobId}:${location.search}`} jobId={jobId} query={location.search || ''} />;
+}
+
+function JobUiView({ jobId, query }: { jobId?: string; query: string }) {
   const [targetUrl, setTargetUrl] = useState('');
   const [title, setTitle] = useState('Blueprint Web UI');
   const [error, setError] = useState('');
   const targetUrlRef = useRef('');
-  const query = useMemo(() => location.search || '', [location.search]);
 
   useEffect(() => {
     if (!jobId) return undefined;
     let cancelled = false;
-    targetUrlRef.current = '';
-    setTargetUrl('');
-    setError('');
     const updateTargetUrl = (nextUrl: string) => {
       targetUrlRef.current = nextUrl;
       setTargetUrl(nextUrl);
