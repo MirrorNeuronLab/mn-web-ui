@@ -140,7 +140,7 @@ test('submits an opaque bundle and controls its canonical Run', async ({ page })
   await installRunRoutes(page, 'browser-run-1', () => runStatus, (next) => { runStatus = next; });
 
   await page.goto('/run');
-  await page.getByRole('tab', { name: 'ZIP bundle' }).click();
+  await page.getByRole('tab', { name: 'ZIP blueprint' }).click();
   await page.setInputFiles('input[type="file"]', {
     name: 'bundle.zip', mimeType: 'application/zip', buffer: Buffer.from('fake zip contents'),
   });
