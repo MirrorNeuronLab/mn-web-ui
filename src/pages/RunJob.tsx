@@ -188,6 +188,11 @@ function LaunchProgressModal({
           </DialogDescription>
         </DialogHeader>
         <Progress value={progressValue} aria-label="Launch progress" />
+        {!progress ? (
+          <p className="text-[11px] leading-4 text-neutral-500">
+            Client-side steps. Server pipeline progress is shown on the run page after submission.
+          </p>
+        ) : null}
         <ol className="space-y-3">
           {items.map((phase) => {
             const status = normalizedStatus(phase.status);
@@ -475,13 +480,18 @@ export default function RunJob() {
                 <div className="space-y-4">
                   {!bundleData ? (
                     <Tooltip content="Choose a ZIP bundle, then confirm before it uploads.">
-                      <div className="relative rounded-lg border-2 border-dashed border-neutral-300 p-6 text-center transition-colors hover:bg-neutral-50">
+                      <div className="relative rounded-lg border-2 border-dashed border-neutral-300 p-6 text-center transition-colors hover:bg-neutral-50 focus-within:border-neutral-500 focus-within:ring-2 focus-within:ring-neutral-950 focus-within:ring-offset-2">
+                        <label htmlFor="blueprint-zip-upload" className="mb-2 block text-xs font-medium text-neutral-700">
+                          Blueprint ZIP bundle
+                        </label>
                         <input
+                          id="blueprint-zip-upload"
                           ref={fileInputRef}
                           type="file"
                           accept=".zip"
+                          aria-label="Upload blueprint ZIP bundle"
                           onChange={handleFileChange}
-                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0 focus:outline-none"
                           disabled={uploading || running}
                         />
                         <UploadCloud className={cn('mx-auto mb-3 h-10 w-10', uploading ? 'animate-bounce text-neutral-500' : 'text-neutral-400')} />

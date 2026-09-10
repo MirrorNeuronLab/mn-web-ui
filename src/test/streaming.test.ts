@@ -68,4 +68,45 @@ describe('authenticated SSE streaming', () => {
     expect(snapshots).toEqual([{ status: 'completed' }]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('deduplicates repeated SSE event ids instead of overwriting state twice', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(
+      'id: 9\nevent: run.snapshot\ndata: {"data":{"status":"running"}}\n\n'
+      + 'id: 9\nevent: run.snapshot\ndata: {"data":{"status":"running"}}\n\n'
+      + 'id: 10\nevent: run.completed\ndata: {"data":{"status":"completed"}}\n\n',
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('EventSource', undefined);
+    const snapshots: Array<{ status: string }> = [];
+    const stream = createWorkflowProgressStreamer({
+      schema: z.object({ status: z.string() }),
+      streamUrl: (id) => `/api/v1/runs/${id}/events/stream`,
+      authHeader: () => ({ Authorization: 'Bearer local' }),
+      validationLabel: () => 'run stream',
+    });
+
+    await stream('run-1', (snapshot) => snapshots.push(snapshot));
+
+    expect(snapshots).toEqual([{ status: 'running' }, { status: 'completed' }]);
+  });
+
+  it('bounds reconnects and reports the terminal failure via onError', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('boom'));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('EventSource', undefined);
+    const errors: unknown[] = [];
+    const stream = createWorkflowProgressStreamer({
+      schema: z.object({ status: z.string() }),
+      streamUrl: () => '/api/v1/runs/run-1/events/stream',
+      authHeader: () => ({ Authorization: 'Bearer local' }),
+      validationLabel: () => 'run stream',
+      maxReconnectAttempts: 2,
+      maxReconnectDelayMs: 1,
+      onError: (error) => errors.push(error),
+    });
+
+    await expect(stream('run-1', () => {})).rejects.toThrow('boom');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(errors.length).toBeGreaterThan(0);
+  });
 });

@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { toast } from 'sonner';
 import Runs from '../pages/Jobs';
@@ -42,6 +42,51 @@ describe('Runs Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     toast.dismiss();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows an error alert with retry when loading fails', async () => {
+    vi.mocked(fetchRuns).mockRejectedValue(new Error('down'));
+
+    renderWithRouter(<Runs />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/down/);
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('keeps load-more rows when a background poll returns the first page', async () => {
+    vi.useFakeTimers();
+    try {
+      const pageA = { items: [{ run_id: 'run-a', status: 'running', attempt: 1 }], next_page_token: 't1' };
+      const pageB = { items: [{ run_id: 'run-b', status: 'running', attempt: 1 }], next_page_token: null };
+      vi.mocked(fetchRuns)
+        .mockResolvedValueOnce(pageA)
+        .mockResolvedValueOnce(pageB)
+        .mockResolvedValue({ items: pageA.items, next_page_token: 't1' });
+
+      renderWithRouter(<Runs />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText('run-a')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText('run-b')).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(screen.getByText('run-a')).toBeInTheDocument();
+      expect(screen.getByText('run-b')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders skeleton loading state initially', () => {

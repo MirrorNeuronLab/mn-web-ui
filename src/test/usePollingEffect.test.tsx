@@ -106,4 +106,57 @@ describe('usePollingEffect', () => {
     expect(secondInitialPoll).not.toHaveBeenCalled();
     expect(onPoll).toHaveBeenCalledOnce();
   });
+
+  it('reports failures via onError without unhandled rejections and keeps polling', async () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    const onPoll = vi.fn()
+      .mockRejectedValueOnce(new Error('first failure'))
+      .mockResolvedValue(undefined);
+
+    function ErrorProbe() {
+      usePollingEffect(onPoll, { intervalMs: 1000, onError, maxDelayMs: 1000 });
+      return null;
+    }
+    render(<ErrorProbe />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onPoll).toHaveBeenCalledTimes(1);
+
+    // Backoff reschedules after the failure; the next poll succeeds and the
+    // regular interval resumes without further error reports.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1200);
+    });
+    expect(onPoll).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100);
+    });
+    expect(onPoll).toHaveBeenCalledTimes(3);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops scheduling after maxConsecutiveFailures', async () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    const onPoll = vi.fn().mockRejectedValue(new Error('always failing'));
+
+    function FailingProbe() {
+      usePollingEffect(onPoll, { intervalMs: 1000, onError, maxConsecutiveFailures: 2, maxDelayMs: 1000 });
+      return null;
+    }
+    render(<FailingProbe />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(onPoll).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledTimes(2);
+  });
 });

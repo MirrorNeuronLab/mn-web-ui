@@ -1,12 +1,25 @@
 import axios from 'axios';
-import { apiBaseUrl, config } from '../config/browser';
+import { apiBaseUrl, authToken } from '../config/browser';
 
 const api = axios.create({
   baseURL: apiBaseUrl(),
 });
 
-if (config.webApiToken) {
-  api.defaults.headers.common.Authorization = `Bearer ${config.webApiToken}`;
-}
+api.interceptors.request.use((request) => {
+  request.baseURL = apiBaseUrl();
+  const token = authToken();
+  if (token) {
+    request.headers.set('Authorization', `Bearer ${token}`);
+  } else {
+    request.headers.delete('Authorization');
+  }
+  return request;
+});
+
+export const getApiBaseUrl = () => apiBaseUrl();
+export const getAuthHeader = (): Record<string, string> => {
+  const token = authToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 export default api;

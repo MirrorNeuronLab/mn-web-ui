@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 import Dashboard from './pages/Dashboard';
 import Runs from './pages/Jobs';
 import JobDetails from './pages/JobDetails';
@@ -8,6 +9,7 @@ import StableJobDetails from './pages/StableJobDetails';
 import Models from './pages/Models';
 import RunJob from './pages/RunJob';
 import JobUi from './pages/JobUi';
+import NotFound from './pages/NotFound';
 import { Toaster } from './components/ui/sonner';
 import { TooltipProvider } from './components/ui/tooltip';
 import { ConfirmActionDialogHost } from './components/ui/confirm-action-dialog';
@@ -15,18 +17,22 @@ import { ConfirmActionDialogHost } from './components/ui/confirm-action-dialog';
 function App() {
   return (
     <TooltipProvider delayDuration={250}>
-      <Routes>
-        <Route path="/jobs/:jobId/ui" element={<JobUi />} />
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="jobs" element={<StableJobs />} />
-          <Route path="jobs/:jobId" element={<StableJobDetails />} />
-          <Route path="runs" element={<Runs />} />
-          <Route path="runs/:id" element={<JobDetails />} />
-          <Route path="models" element={<Models />} />
-          <Route path="run" element={<RunJob />} />
-        </Route>
-      </Routes>
+      <ErrorBoundary fallbackTitle="Something went wrong loading the application.">
+        <Routes>
+          <Route path="/jobs/:jobId/ui" element={<ErrorBoundary><JobUi /></ErrorBoundary>} />
+          <Route path="/" element={<Layout />}>
+            <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+            <Route path="jobs" element={<ErrorBoundary><StableJobs /></ErrorBoundary>} />
+            <Route path="jobs/:jobId" element={<ErrorBoundary><StableJobDetails /></ErrorBoundary>} />
+            <Route path="runs" element={<ErrorBoundary><Runs /></ErrorBoundary>} />
+            <Route path="runs/:id" element={<ErrorBoundary><JobDetails /></ErrorBoundary>} />
+            <Route path="models" element={<ErrorBoundary><Models /></ErrorBoundary>} />
+            <Route path="run" element={<ErrorBoundary><RunJob /></ErrorBoundary>} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </ErrorBoundary>
       <ConfirmActionDialogHost />
       <Toaster />
     </TooltipProvider>

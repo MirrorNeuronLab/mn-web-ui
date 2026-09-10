@@ -52,20 +52,24 @@ export default function StableJobDetails() {
   const [runs, setRuns] = useState<StableRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [runsError, setRunsError] = useState('');
   const [busyAction, setBusyAction] = useState('');
 
   const load = useCallback(async () => {
     if (!jobId) return;
     try {
-      const [nextJob, nextRuns] = await Promise.all([
-        fetchStableJob(jobId),
-        fetchStableJobRuns(jobId),
-      ]);
+      const nextJob = await fetchStableJob(jobId);
       setJob(nextJob);
-      setRuns(nextRuns.items);
       setError('');
     } catch (err) {
       setError(apiErrorMessage(err, 'Failed to load this job.'));
+    }
+    try {
+      const nextRuns = await fetchStableJobRuns(jobId);
+      setRuns(nextRuns.items);
+      setRunsError('');
+    } catch (err) {
+      setRunsError(apiErrorMessage(err, 'Failed to load run history. The job details above are still current.'));
     } finally {
       setLoading(false);
     }
@@ -266,8 +270,8 @@ export default function StableJobDetails() {
               </div>
               <div className="inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-2.5 py-1.5">
                 <span className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Latest run</span>
-                <Badge variant="outline" className={runStatusBadgeClass(latestRun?.status)}>
-                  {runStatusLabel(latestRun?.status)}
+                <Badge variant="outline" className={latestRun ? runStatusBadgeClass(latestRun.status) : 'border-dashed border-neutral-300 bg-transparent text-neutral-500'}>
+                  {latestRun ? runStatusLabel(latestRun.status) : 'No runs yet'}
                 </Badge>
               </div>
             </div>
@@ -321,6 +325,14 @@ export default function StableJobDetails() {
           <div className="text-sm font-semibold text-neutral-950">Run history</div>
           <div className="mt-1 text-xs text-neutral-500">{runs.length} execution{runs.length === 1 ? '' : 's'} · {activeRuns.length} active</div>
         </CardHeader>
+        {runsError ? (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-b border-red-200 bg-red-50 px-5 py-3 text-xs text-red-800">
+            <span>{runsError}</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
         <CardContent className="overflow-auto p-0">
           <Table className="min-w-[920px]">
             <TableHeader>

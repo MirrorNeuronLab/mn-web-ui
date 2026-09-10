@@ -93,10 +93,14 @@ export function WorkflowAgentGraph({
           <div className="flex flex-col gap-1">
             <div className="truncate text-sm font-semibold text-neutral-950">{agent.label || agent.id}</div>
             <div className="flex items-center justify-between gap-3 text-xs text-neutral-500">
-              <span className="truncate">{agent.agent_type || 'unknown'}</span>
-              <span className={`rounded-full border px-2 py-0.5 capitalize ${runStatusBadgeClass(agent.status)}`}>{agent.status || 'unknown'}</span>
+              <span className="truncate">{agent.agent_type || 'Not reported'}</span>
+              <span className={`rounded-full border px-2 py-0.5 capitalize ${runStatusBadgeClass(agent.status)}`}>{agent.status || 'Not reported'}</span>
             </div>
-            <div className="text-xs text-neutral-400">{agent.processed_messages ?? 0} processed / {agent.mailbox_depth ?? 0} queued</div>
+            <div className="text-xs text-neutral-400">{
+              (agent as { countsUnknown?: boolean }).countsUnknown
+                ? 'Activity not reported'
+                : `${agent.processed_messages ?? 0} processed / ${agent.mailbox_depth ?? 0} queued`
+            }</div>
           </div>
         )
       },
@@ -107,7 +111,7 @@ export function WorkflowAgentGraph({
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      label: edge.count > 0 ? `${edge.message_type} (${edge.count})` : `${edge.message_type} (possible)`,
+      label: edge.count > 0 ? `${edge.message_type} (${edge.count})` : `${edge.message_type} (unreported)`,
       animated: displayGraph.status === 'running',
       type: 'smoothstep',
       style: {

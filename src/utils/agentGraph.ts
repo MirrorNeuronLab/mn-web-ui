@@ -26,7 +26,7 @@ export const displayAgentName = (record: DisplayRecord | null | undefined): stri
   if (id === 'runtime' && !knownText(record?.alias, record?.display_name, record?.label, record?.role)) {
     return 'System Runtime';
   }
-  return knownText(record?.alias, record?.display_name, record?.label, record?.role, id) || 'unknown';
+  return knownText(record?.alias, record?.display_name, record?.label, record?.role, id) || 'Unnamed agent';
 };
 
 const buildProgressGraph = (
@@ -57,7 +57,10 @@ const buildProgressGraph = (
         status: agent.status || step.status || 'pending',
         processed_messages: 0,
         mailbox_depth: agent.mailbox_depth ?? 0,
-      });
+        // Counts are not reported by workflow-progress snapshots; mark them so
+        // the UI renders a labeled empty state instead of a measured zero.
+        countsUnknown: true,
+      } as AgentGraph['nodes'][number]);
     }
   }
 
@@ -93,20 +96,15 @@ const buildProgressGraph = (
   };
 };
 
-const shouldUseProgressGraph = (graph: AgentGraph | null, progressGraph: AgentGraph | null): boolean => {
-  if (!progressGraph) return false;
-  if (!graph?.nodes?.length) return true;
-  if (graph.nodes.every((node) => INFRASTRUCTURE_AGENT_IDS.has(node.id))) return true;
-  if (graph.nodes.some((node) => (
-    LOWERED_AGENT_TYPES.has(String(node.agent_type || '').toLowerCase())
-    || /__(?:start|end|fork(?:_\d+)?|join(?:_\d+)?)$/.test(node.id)
-    || node.id === 'workflow__terminal'
-  ))) return true;
-  // The runtime registry can be sparse while later workflow phases have not
-  // started. The public workflow snapshot already contains every declared
-  // agent, so prefer it whenever it is more complete than the live registry.
-  return progressGraph.nodes.length > graph.nodes.length;
-};
+const isLoweredNode = (node: { id: string; agent_type?: string | null }): boolean => (
+  LOWERED_AGENT_TYPES.has(String(node.agent_type || '').toLowerCase())
+  || /__(?:start|end|fork(?:_\d+)?|join(?:_\d+)?)$/.test(node.id)
+  || node.id === 'workflow__terminal'
+);
+
+const isPublicNode = (node: { id: string; agent_type?: string | null }): boolean => (
+  !INFRASTRUCTURE_AGENT_IDS.has(node.id) && !isLoweredNode(node)
+);
 
 export const buildDisplayGraph = (
   graph: AgentGraph | null,
@@ -117,7 +115,40 @@ export const buildDisplayGraph = (
   progress?: WorkflowProgress | null,
 ): AgentGraph => {
   const progressGraph = buildProgressGraph(progress, fallbackJobId, fallbackGraphId, fallbackStatus);
-  const sourceGraph = shouldUseProgressGraph(graph, progressGraph) ? progressGraph : graph;
+  // Union (by stable id) instead of length-based source flipping: the public
+  // workflow snapshot declares every agent while the live registry carries
+  // fresher status. Merging keeps node identity stable across polls so links
+  // never vanish when counts cross. Runtime-only control nodes stay hidden:
+  // live-registry ids scoped with `__` (e.g. `detect__watcher`) describe
+  // runtime internals, not public agents.
+  const liveNodes = (graph?.nodes ?? []).filter((node) => isPublicNode(node) && !node.id.includes('__'));
+  const progressNodes = progressGraph?.nodes ?? [];
+  const mergedById = new Map<string, (typeof liveNodes)[number]>();
+  for (const node of progressNodes) mergedById.set(node.id, node);
+  for (const node of liveNodes) mergedById.set(node.id, node);
+  const mergedNodes = [...mergedById.values()];
+  const mergedEdgesById = new Map<string, NonNullable<AgentGraph['edges']>[number]>();
+  for (const edge of progressGraph?.edges ?? []) mergedEdgesById.set(edge.id, edge);
+  for (const edge of graph?.edges ?? []) {
+    if (!mergedEdgesById.has(edge.id)) mergedEdgesById.set(edge.id, edge);
+  }
+  const mergedEdges = [...mergedEdgesById.values()];
+  const mergedSource: AgentGraph | null = (mergedNodes.length || graph || progressGraph)
+    ? {
+      job_id: graph?.job_id || progressGraph?.job_id || fallbackJobId,
+      graph_id: graph?.graph_id ?? progressGraph?.graph_id ?? fallbackGraphId ?? null,
+      status: graph?.status || progressGraph?.status || fallbackStatus,
+      nodes: mergedNodes,
+      edges: mergedEdges,
+      stats: {
+        agent_count: mergedNodes.length,
+        edge_count: mergedEdges.length,
+        message_count: graph?.stats?.message_count ?? progressGraph?.stats?.message_count ?? mergedEdges.reduce((total, edge) => total + (edge.count ?? 0), 0),
+        event_count: graph?.stats?.event_count ?? progressGraph?.stats?.event_count ?? 0,
+      },
+    }
+    : null;
+  const sourceGraph = mergedSource;
   const graphNodes = sourceGraph?.nodes.length ? sourceGraph.nodes.map(node => ({
     ...node,
     label: displayAgentName(node),

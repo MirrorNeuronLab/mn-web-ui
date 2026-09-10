@@ -36,17 +36,17 @@ const NODE_HEIGHT = 112;
 
 const nodeStatusClass = (status: string | undefined, current: boolean, selected: boolean) => {
   if (selected) return 'border-neutral-950 bg-neutral-950 text-white shadow-lg shadow-neutral-950/15';
-  if (['failed', 'cancelled', 'error'].includes(String(status || '').toLowerCase())) return 'border-red-300 bg-red-50 text-red-950';
+  if (['failed', 'cancelled', 'canceled', 'error'].includes(String(status || '').toLowerCase())) return 'border-red-300 bg-red-50 text-red-950';
   if (current || ['running', 'active'].includes(String(status || '').toLowerCase())) return 'border-sky-400 bg-sky-50 text-sky-950 shadow-sm';
-  if (['completed', 'done', 'succeeded'].includes(String(status || '').toLowerCase())) return 'border-emerald-300 bg-emerald-50 text-emerald-950';
+  if (['completed', 'done', 'succeeded', 'success', 'finished'].includes(String(status || '').toLowerCase())) return 'border-emerald-300 bg-emerald-50 text-emerald-950';
   return 'border-neutral-200 bg-white text-neutral-950 shadow-sm';
 };
 
 const statusDotClass = (status: string | undefined) => {
   const normalized = String(status || '').toLowerCase();
-  if (['failed', 'cancelled', 'error'].includes(normalized)) return 'bg-red-500';
+  if (['failed', 'cancelled', 'canceled', 'error'].includes(normalized)) return 'bg-red-500';
   if (['running', 'active'].includes(normalized)) return 'bg-sky-500';
-  if (['completed', 'done', 'succeeded'].includes(normalized)) return 'bg-emerald-500';
+  if (['completed', 'done', 'succeeded', 'success', 'finished'].includes(normalized)) return 'bg-emerald-500';
   if (['retry_wait', 'blocked', 'paused', 'queued'].includes(normalized)) return 'bg-amber-500';
   return 'bg-neutral-400';
 };
@@ -59,9 +59,18 @@ const WorkflowStepNode = ({ data }: NodeProps<Node<WorkflowStepNodeData>>) => {
 
   return (
     <div
-      aria-hidden="true"
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      aria-label={`Workflow step ${index + 1}: ${step.label}, status ${step.status || 'pending'}`}
       data-testid={`workflow-step-node-${step.id}`}
       onClick={() => onSelect(step.id)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect(step.id);
+        }
+      }}
       className={`nodrag nopan min-h-[112px] w-[224px] cursor-pointer rounded-lg border p-3 text-left outline-none transition hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 ${nodeStatusClass(step.status, step.current, selected)}`}
     >
       <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-0 !bg-neutral-400" />
@@ -138,8 +147,8 @@ const layoutTopology = (nodes: Node<WorkflowStepNodeData>[], edges: Edge[], laye
 
 const edgeTone = (status: string | undefined) => {
   const normalized = String(status || '').toLowerCase();
-  if (['failed', 'cancelled', 'error'].includes(normalized)) return '#ef4444';
-  if (['completed', 'done', 'succeeded'].includes(normalized)) return '#10b981';
+  if (['failed', 'cancelled', 'canceled', 'error'].includes(normalized)) return '#ef4444';
+  if (['completed', 'done', 'succeeded', 'success', 'finished'].includes(normalized)) return '#10b981';
   if (['running', 'active'].includes(normalized)) return '#0ea5e9';
   return '#a3a3a3';
 };
@@ -209,7 +218,7 @@ export function WorkflowTopologyGraph({ progress, selectedStepId, onSelectStep }
       <nav aria-label="Workflow step navigator" className="sr-only">
         {topology.steps.map((step, index) => (
           <button
-            key={step.id}
+            key={`${step.id}#${index}`}
             type="button"
             aria-pressed={step.id === selectedStepId}
             onClick={() => selectStep(step.id)}

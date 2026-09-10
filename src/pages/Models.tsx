@@ -328,13 +328,13 @@ function modelDisplayName(model: RuntimeModel) {
 
 function nodeLabel(model: RuntimeModel) {
   if (model.nodes.length > 0) return model.nodes.join(', ');
-  return model.node || 'local';
+  return model.node && model.node !== 'local' ? model.node : 'Not reported';
 }
 
 function ownerLabel(model: RuntimeModel) {
   if (model.used_by.length > 0) return model.used_by.join(', ');
   if (model.manual) return 'Manual install';
-  return 'Runtime';
+  return 'Not reported';
 }
 
 function modelStatus(model: RuntimeModel) {

@@ -31,7 +31,7 @@ const mockApi = vi.hoisted(() => ({
   delete: vi.fn(),
 }));
 
-vi.mock('../api/client', () => ({ default: mockApi }));
+vi.mock('../api/client', () => ({ default: mockApi, getApiBaseUrl: () => '/api/v1', getAuthHeader: () => ({}) }));
 
 describe('canonical REST v1 client', () => {
   beforeEach(() => {
@@ -213,9 +213,7 @@ describe('canonical REST v1 client', () => {
     mockApi.post.mockResolvedValue({ data: { bundle_id: 'bundle_01JABC' } });
     const file = new File(['bundle'], 'worker.zip', { type: 'application/zip' });
     await expect(uploadBundle(file)).resolves.toEqual({ bundle_id: 'bundle_01JABC' });
-    expect(mockApi.post).toHaveBeenCalledWith('/bundles', expect.any(FormData), {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    expect(mockApi.post).toHaveBeenCalledWith('/bundles', expect.any(FormData));
   });
 
   it('uses canonical infrastructure resources and paginated models', async () => {

@@ -1,18 +1,64 @@
-import api from './client';
+import api, { getApiBaseUrl, getAuthHeader } from './client';
 import { z } from 'zod';
-import { parseArrayOrEmpty, parseOrFallback } from './parsing';
+import { pageTokenFrom, parseArrayOrEmpty, parseOrFallback, parseOrThrow, ValidationError } from './parsing';
 import { blueprintPath, jobPath, modelPath, operationPath, runPath } from './routes';
 import { createWorkflowProgressStreamer } from './streaming';
 import { normalizeWorkflowProgressPayload } from './workflowProgress';
 import { isRecord } from '../utils/records';
 
+export class MissingEtagError extends Error {
+  constructor(action: string) {
+    super(`Couldn't verify the job version before ${action}. Reload the job and try again.`);
+    this.name = 'MissingEtagError';
+  }
+}
+
+let idempotencyCounter = 0;
+export const newIdempotencyKey = (): string => {
+  try {
+    const randomUUID = (globalThis.crypto as Crypto | undefined)?.randomUUID;
+    if (typeof randomUUID === 'function') return randomUUID.call(globalThis.crypto);
+    const bytes = (globalThis.crypto as Crypto | undefined)?.getRandomValues?.bind(globalThis.crypto);
+    if (bytes) {
+      const buffer = new Uint8Array(16);
+      bytes(buffer);
+      const hex = [...buffer].map((b) => b.toString(16).padStart(2, '0')).join('');
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+  } catch {
+    // fall through to counter fallback
+  }
+  idempotencyCounter += 1;
+  return `idempotency-${Date.now().toString(36)}-${idempotencyCounter}`;
+};
+
+const readEtag = (headers: unknown): string | null => {
+  if (!headers || typeof headers !== 'object') return null;
+  const record = headers as Record<string, unknown> & { get?: (name: string) => string | null };
+  const viaGet = typeof record.get === 'function' ? record.get('etag') : null;
+  const candidates = [viaGet, record.etag, record.ETag, record.Etag];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+  }
+  return null;
+};
+
+const CreateJobResponseSchema = z.object({ job_id: z.string().min(1) }).passthrough();
+const AddClusterNodeRequestSchema = z.object({ host: z.string().trim().min(1), token: z.string().trim().min(1) });
+const BenchmarkRequestSchema = z.object({ prompt: z.string().optional(), max_tokens: z.number().optional() }).passthrough();
+const LaunchBodySchema = z.object({ config_overrides: z.record(z.string(), z.unknown()) });
+
 const arrayFromEnvelope = (data: unknown, keys: string[]) => {
   if (Array.isArray(data)) return data;
-  if (!isRecord(data)) return [];
+  if (!isRecord(data)) {
+    console.error('arrayFromEnvelope: expected an array or envelope object, received', typeof data);
+    return [];
+  }
   for (const key of keys) {
     const value = data[key];
     if (Array.isArray(value)) return value;
   }
+  console.error(`arrayFromEnvelope: none of [${keys.join(', ')}] held an array; returning empty with diagnostic.`);
   return [];
 };
 
@@ -291,7 +337,11 @@ export const WebUiHandleSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
 }).passthrough();
 
-const DefaultWebUiHandle = WebUiHandleSchema.parse({});
+const DefaultWebUiHandle = (() => {
+  const parsed = WebUiHandleSchema.safeParse({});
+  if (!parsed.success) throw new Error('WebUiHandleSchema default is invalid.');
+  return parsed.data;
+})();
 
 export const JobUiResponseSchema = z.object({
   job_id: z.string(),
@@ -601,13 +651,13 @@ export const fetchRuntimeModels = () => api.get('/models').then(r => (
 ));
 
 export const benchmarkRuntimeModel = (model: string, payload: { prompt?: string; max_tokens?: number } = {}) => (
-  api.post(modelPath(model, '/benchmarks'), payload).then(r => (
+  api.post(modelPath(model, '/benchmarks'), BenchmarkRequestSchema.parse(payload)).then(r => (
     parseOrFallback(RuntimeModelBenchmarkSchema, r.data, { model }, `benchmarkRuntimeModel(${model})`)
   ))
 );
 
-export const addClusterNode = (payload: { host: string; token: string }) => api.post('/nodes', payload).then(r => (
-  parseOrFallback(ClusterNodeAddResponseSchema, r.data, {}, 'addClusterNode')
+export const addClusterNode = (payload: { host: string; token: string }) => api.post('/nodes', AddClusterNodeRequestSchema.parse(payload)).then(r => (
+  parseOrThrow(ClusterNodeAddResponseSchema, r.data, 'addClusterNode')
 ));
 
 export const removeClusterNode = (nodeName: string) => api.delete(`/nodes/${encodeURIComponent(nodeName)}`).then(r => (
@@ -632,7 +682,7 @@ export const fetchRuns = async (options: FetchRunsOptions = {}) => {
   const data = arrayFromEnvelope(r.data, ['items', 'data', 'runs']);
   return {
     items: parseArrayOrEmpty(RunSummarySchema, data, 'fetchRuns', true),
-    next_page_token: isRecord(r.data) && typeof r.data.next_page_token === 'string' ? r.data.next_page_token : null,
+    next_page_token: pageTokenFrom(r.data),
   };
 };
 
@@ -660,82 +710,81 @@ export const fetchStableJobs = async (options: FetchStableJobsOptions = {}) => {
       'fetchStableJobs',
       true,
     ),
-    next_page_token: isRecord(response.data) && typeof response.data.next_page_token === 'string'
-      ? response.data.next_page_token
-      : null,
+    next_page_token: pageTokenFrom(response.data),
   };
 };
 
 const stableJobEtags = new Map<string, string>();
 
 export const fetchStableJob = (id: string) => api.get(jobPath(id)).then((response) => {
-  const etag = response.headers.etag;
-  if (typeof etag === 'string' && etag) stableJobEtags.set(id, etag);
-  return StableJobSchema.parse(response.data);
+  const etag = readEtag(response.headers);
+  if (etag) stableJobEtags.set(id, etag);
+  return parseOrThrow(StableJobSchema, response.data, `fetchStableJob(${id})`);
 });
 
 export const fetchStableJobRuns = (id: string, pageToken?: string | null) => api.get(jobPath(id, '/runs'), {
   params: { page_token: pageToken },
 }).then((response) => ({
   items: parseArrayOrEmpty(StableRunSchema, arrayFromEnvelope(response.data, ['items']), `fetchStableJobRuns(${id})`, true),
-  next_page_token: isRecord(response.data) && typeof response.data.next_page_token === 'string' ? response.data.next_page_token : null,
+  next_page_token: pageTokenFrom(response.data),
 }));
 
 export const startStableJobRun = (
   id: string,
   inputs: Record<string, unknown> = {},
   replaceExistingRun = false,
+  idempotencyKey = newIdempotencyKey(),
 ) => {
-  const runId = replaceExistingRun ? `service-${crypto.randomUUID()}` : undefined;
+  const runId = replaceExistingRun ? `service-${newIdempotencyKey()}` : undefined;
   return api.post(jobPath(id, '/runs'), {
     inputs,
     replace_existing_run: replaceExistingRun,
     ...(runId ? { run_id: runId } : {}),
   }, {
-    headers: { 'Idempotency-Key': crypto.randomUUID() },
-  }).then((response) => StableRunActionResponseSchema.parse(response.data))
+    headers: { 'Idempotency-Key': idempotencyKey },
+  }).then((response) => parseOrThrow(StableRunActionResponseSchema, response.data, `startStableJobRun(${id})`))
 };
 
-const withStableJobEtag = async <T>(id: string, action: (etag: string) => Promise<T>): Promise<T> => {
+const withStableJobEtag = async <T>(id: string, actionName: string, action: (etag: string) => Promise<T>): Promise<T> => {
   let etag = stableJobEtags.get(id);
   if (!etag) {
     await fetchStableJob(id);
     etag = stableJobEtags.get(id);
   }
-  if (!etag) throw new Error('The server did not provide an ETag for this job.');
+  if (!etag) throw new MissingEtagError(actionName);
   return action(etag);
 };
 
-export const archiveStableJob = (id: string) => withStableJobEtag(id, (etag) => (
+export const archiveStableJob = (id: string) => withStableJobEtag(id, 'archiving', (etag) => (
   api.patch(jobPath(id), { status: 'archived' }, {
     headers: { 'If-Match': etag },
   }).then((response) => {
-    const nextEtag = response.headers.etag;
-    if (typeof nextEtag === 'string' && nextEtag) stableJobEtags.set(id, nextEtag);
-    return StableJobActionResponseSchema.parse(response.data);
+    const nextEtag = readEtag(response.headers);
+    if (nextEtag) stableJobEtags.set(id, nextEtag);
+    return parseOrThrow(StableJobActionResponseSchema, response.data, `archiveStableJob(${id})`);
   })
 ));
 
-export const resetStableJobData = (id: string) => api.post(jobPath(id, '/data-resets'), {}, {
-  headers: { 'Idempotency-Key': crypto.randomUUID() },
+export const resetStableJobData = (id: string, idempotencyKey = newIdempotencyKey()) => api.post(jobPath(id, '/data-resets'), {}, {
+  headers: { 'Idempotency-Key': idempotencyKey },
 }).then((response) => (
-  OperationSchema.parse(response.data)
+  parseOrThrow(OperationSchema, response.data, `resetStableJobData(${id})`)
 ));
 
-export const deleteStableJob = (id: string) => withStableJobEtag(id, (etag) => (
+export const deleteStableJob = (id: string) => withStableJobEtag(id, 'deleting', (etag) => (
   api.delete(jobPath(id), { headers: { 'If-Match': etag } }).then((response) => {
     stableJobEtags.delete(id);
-    return response.status === 204 ? undefined : StableJobActionResponseSchema.parse(response.data);
+    return response.status === 204 ? undefined : parseOrThrow(StableJobActionResponseSchema, response.data, `deleteStableJob(${id})`);
   })
 ));
 
 export const fetchStableRun = (id: string) => api.get(runPath(id)).then((response) => (
-  StableRunSchema.parse(response.data)
+  parseOrThrow(StableRunSchema, response.data, `fetchStableRun(${id})`)
 ));
 
 const runAction = (id: string, action: 'pause' | 'resume' | 'cancel') => (
   api.patch(runPath(id), { desired_state: action === 'resume' ? 'running' : action === 'cancel' ? 'cancelled' : 'paused' }).then((response) => (
-    StableRunActionResponseSchema.parse(response.data)
+    parseOrThrow(StableRunActionResponseSchema, response.data, `runAction(${id}, ${action})`)
   ))
 );
 
@@ -744,7 +793,7 @@ export const resumeRun = (id: string) => runAction(id, 'resume');
 export const cancelRun = (id: string) => runAction(id, 'cancel');
 
 export const deleteRun = (id: string) => api.delete(runPath(id)).then((response) => (
-  response.status === 204 ? undefined : StableRunActionResponseSchema.parse(response.data)
+  response.status === 204 ? undefined : parseOrThrow(StableRunActionResponseSchema, response.data, `deleteRun(${id})`)
 ));
 
 export type FetchJobDetailsOptions = {
@@ -778,46 +827,39 @@ export const fetchWorkflowProgress = (id: string) => api.get(runPath(id, '/workf
   parseOrFallback(WorkflowProgressSchema, r.data, { job_id: id, workflow_id: id, name: id }, `fetchWorkflowProgress(${id})`)
 ));
 
-const apiBaseUrl = () => String(api.defaults.baseURL || '/api/v1').replace(/\/$/, '');
-const authHeader = (): Record<string, string> => {
-  const header = api.defaults.headers.common.Authorization;
-  return typeof header === 'string' && header ? { Authorization: header } : {};
-};
-const workflowProgressStreamUrl = (id: string) => `${apiBaseUrl()}${runPath(id, '/events/stream')}`;
+const workflowProgressStreamUrl = (id: string) => `${getApiBaseUrl()}${runPath(id, '/events/stream')}`;
 
 export const streamWorkflowProgress = createWorkflowProgressStreamer({
   schema: WorkflowProgressSchema,
   streamUrl: workflowProgressStreamUrl,
-  authHeader,
+  authHeader: getAuthHeader,
   validationLabel: (id) => `streamWorkflowProgress(${id})`,
 });
 export const fetchOperation = (id: string) => api.get(operationPath(id)).then(r => (
-  OperationSchema.parse(r.data)
+  parseOrThrow(OperationSchema, r.data, `fetchOperation(${id})`)
 ));
-export const clearJobs = () => api.post('/run-cleanups', {}, { headers: { 'Idempotency-Key': crypto.randomUUID() } }).then(r => (
-  OperationSchema.parse(r.data)
+export const clearJobs = (idempotencyKey = newIdempotencyKey()) => api.post('/run-cleanups', {}, { headers: { 'Idempotency-Key': idempotencyKey } }).then(r => (
+  parseOrThrow(OperationSchema, r.data, 'clearJobs')
 ));
-export const cancelAllJobs = () => api.post('/run-cancellations', {}, { headers: { 'Idempotency-Key': crypto.randomUUID() } }).then(r => (
-  OperationSchema.parse(r.data)
+export const cancelAllJobs = (idempotencyKey = newIdempotencyKey()) => api.post('/run-cancellations', {}, { headers: { 'Idempotency-Key': idempotencyKey } }).then(r => (
+  parseOrThrow(OperationSchema, r.data, 'cancelAllJobs')
 ));
 export const uploadBundle = (file: File) => {
   const formData = new FormData();
   formData.append('bundle', file);
-  return api.post('/bundles', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  }).then(r => (
-    parseOrFallback(UploadedBundleSchema, r.data, {}, 'uploadBundle')
+  return api.post('/bundles', formData).then(r => (
+    parseOrThrow(UploadedBundleSchema, r.data, 'uploadBundle')
   ));
 };
-export const createJob = (payload: unknown) => api.post('/jobs', payload, {
-  headers: { 'Idempotency-Key': crypto.randomUUID() },
-}).then(r => r.data);
+export const createJob = (payload: unknown, idempotencyKey = newIdempotencyKey()) => api.post('/jobs', payload, {
+  headers: { 'Idempotency-Key': idempotencyKey },
+}).then(r => CreateJobResponseSchema.parse(r.data));
 
 const parseLaunchResponse = (data: unknown) => {
   const result = BlueprintLaunchResponseSchema.safeParse(data);
   if (!result.success) {
     console.error('launchBlueprintJob validation failed:', result.error);
-    return BlueprintLaunchResponseSchema.parse({});
+    throw new ValidationError('launchBlueprintJob', 'The server returned an invalid launch response. Try again.');
   }
   return result.data;
 };
@@ -841,8 +883,8 @@ export const launchBlueprintJob = (payload: unknown) => {
   if (record.source !== 'catalog') return Promise.reject(new Error('Host filesystem paths are not accepted by the REST API.'));
 
   const blueprintId = typeof record.blueprint_id === 'string' ? record.blueprint_id.trim() : '';
-  const body = { config_overrides: isRecord(record.config_overrides) ? record.config_overrides : {} };
+  const body = LaunchBodySchema.parse({ config_overrides: isRecord(record.config_overrides) ? record.config_overrides : {} });
   return api.post(blueprintPath(blueprintId, '/runs'), body, {
-    headers: { 'Idempotency-Key': crypto.randomUUID() },
+    headers: { 'Idempotency-Key': newIdempotencyKey() },
   }).then(r => parseLaunchResponse(r.data));
 };

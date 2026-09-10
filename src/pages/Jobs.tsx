@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { AlertCircle, Ban, CheckCircle, Clock, Eye, Loader2, PauseCircle, PlayCircle, Trash2, XCircle } from 'lucide-react';
@@ -23,11 +23,24 @@ import { cn } from '../lib/utils';
 import { apiErrorMessage } from '../utils/apiErrors';
 
 const StatusIcon = ({ status }: { status: string }) => {
-  switch (status) {
-    case 'running': return <PlayCircle className="h-4 w-4" />;
-    case 'completed': return <CheckCircle className="h-4 w-4" />;
-    case 'failed': return <XCircle className="h-4 w-4" />;
-    case 'pending': return <Clock className="h-4 w-4" />;
+  const normalized = status.trim().toLowerCase();
+  switch (normalized) {
+    case 'running':
+    case 'active': return <PlayCircle className="h-4 w-4" />;
+    case 'completed':
+    case 'done':
+    case 'finished':
+    case 'succeeded':
+    case 'success': return <CheckCircle className="h-4 w-4" />;
+    case 'failed':
+    case 'error': return <XCircle className="h-4 w-4" />;
+    case 'pending':
+    case 'scheduled':
+    case 'queued': return <Clock className="h-4 w-4" />;
+    case 'paused':
+    case 'pausing': return <PauseCircle className="h-4 w-4" />;
+    case 'cancelled':
+    case 'canceled': return <Ban className="h-4 w-4" />;
     default: return <AlertCircle className="h-4 w-4" />;
   }
 };
@@ -42,37 +55,60 @@ export default function Runs() {
   const [activeOnly, setActiveOnly] = useState(false);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState('');
+  const filterKeyRef = useRef<string>('');
 
-  const applyRuns = useCallback((data: RunSummary[]) => {
-    setRuns(data);
+  const mergeRuns = useCallback((fresh: RunSummary[], filterKey: string, preserveExtra: boolean) => {
+    // Background polls preserve user-expanded "Load more" pages: rows the
+    // fresh first page no longer contains are kept after it (deduped).
+    // Replacement happens on filter change, explicit refresh, or when the
+    // server reports no further pages (then missing rows are genuinely gone).
+    setRuns((prev) => {
+      if (filterKeyRef.current !== filterKey || prev.length === 0 || !preserveExtra) {
+        filterKeyRef.current = filterKey;
+        return fresh;
+      }
+      const freshIds = new Set(fresh.map((run) => run.run_id));
+      const extra = prev.filter((run) => !freshIds.has(run.run_id));
+      return [...fresh, ...extra];
+    });
     setSelectedJobIds((current) => {
-      const availableIds = new Set(data.map((run) => run.run_id));
+      const availableIds = new Set(fresh.map((run) => run.run_id));
       return new Set([...current].filter((jobId) => availableIds.has(jobId)));
     });
   }, []);
 
   const loadRuns = useCallback(async () => {
+    const filterKey = `terminal:${!activeOnly}`;
     try {
       const page = await fetchRuns({ includeTerminal: !activeOnly });
-      applyRuns(page.items);
+      mergeRuns(page.items, filterKey, page.next_page_token !== null);
       setNextPageToken(page.next_page_token);
+      setError('');
     } catch (e) {
       console.error('Failed to load runs', e);
+      setError(apiErrorMessage(e, 'Failed to load runs. Try again.'));
     } finally {
       setLoading(false);
     }
-  }, [activeOnly, applyRuns]);
+  }, [activeOnly, mergeRuns]);
 
   const markInitialLoading = useCallback(() => {
     setLoading(true);
   }, []);
 
-  usePollingEffect(loadRuns, { intervalMs: 5000, onInitialPoll: markInitialLoading });
+  usePollingEffect(loadRuns, { intervalMs: 5000, onInitialPoll: markInitialLoading, onError: (e) => setError(apiErrorMessage(e, 'Failed to load runs. Try again.')) });
 
   const refreshRuns = async () => {
-    const page = await fetchRuns({ includeTerminal: !activeOnly });
-    applyRuns(page.items);
-    setNextPageToken(page.next_page_token);
+    try {
+      const page = await fetchRuns({ includeTerminal: !activeOnly });
+      mergeRuns(page.items, `terminal:${!activeOnly}`, false);
+      setNextPageToken(page.next_page_token);
+      setError('');
+    } catch (e) {
+      setError(apiErrorMessage(e, 'Failed to refresh runs. Try again.'));
+      throw e;
+    }
   };
 
   const loadMore = async () => {
@@ -80,8 +116,14 @@ export default function Runs() {
     setLoadingMore(true);
     try {
       const page = await fetchRuns({ includeTerminal: !activeOnly, pageToken: nextPageToken });
-      applyRuns([...runs, ...page.items]);
+      setRuns((prev) => {
+        const known = new Set(prev.map((run) => run.run_id));
+        return [...prev, ...page.items.filter((run) => !known.has(run.run_id))];
+      });
       setNextPageToken(page.next_page_token);
+      setError('');
+    } catch (e) {
+      setError(apiErrorMessage(e, 'Failed to load more runs. Try again.'));
     } finally {
       setLoadingMore(false);
     }
@@ -192,6 +234,8 @@ export default function Runs() {
   };
 
   const confirmClearJobs = () => {
+    if (runs.length === 0) return;
+
     confirmActionDialog({
       tone: 'danger',
       id: 'jobs-clear',
@@ -234,6 +278,14 @@ export default function Runs() {
 
   return (
     <Card>
+      {error ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-b border-red-200 bg-red-50 px-5 py-3 text-xs text-red-800">
+          <span>{error}</span>
+          <Button type="button" variant="outline" size="sm" onClick={() => void refreshRuns()}>
+            Retry
+          </Button>
+        </div>
+      ) : null}
       <CardHeader className="flex flex-col items-stretch gap-3 space-y-0 border-b border-neutral-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs font-medium text-neutral-500" aria-live="polite">
           {loading
@@ -314,7 +366,7 @@ export default function Runs() {
                 variant="outline"
                 className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
                 size="sm"
-                disabled={isClearing || isCancellingAll || bulkAction !== null}
+                disabled={runs.length === 0 || isClearing || isCancellingAll || bulkAction !== null}
                 onClick={confirmClearJobs}
               >
                 {isClearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -403,7 +455,7 @@ export default function Runs() {
                     {run.submitted_at ? format(new Date(run.submitted_at), 'MMM d, HH:mm:ss') : 'Unknown'}
                   </TableCell>
                   <TableCell className="px-4 py-2.5 text-xs text-neutral-600">
-                    {isServiceJob(run) ? '∞' : `${run.active_executors ?? 0} / ${run.executor_count ?? 0}`}
+                    {isServiceJob(run) ? '∞' : (run.active_executors ?? run.executor_count ?? null) === null ? 'Not reported' : `${run.active_executors ?? 0} / ${run.executor_count ?? 0}`}
                   </TableCell>
                   <TableCell className="px-4 py-2.5">
                     <Tooltip content="Open run details and live progress.">

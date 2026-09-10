@@ -24,13 +24,16 @@ type WorkflowProgressPanelProps = {
   details?: JobDetails | null;
   showFailurePanel?: boolean;
   webUi?: WebUiInfo | null;
+  streamState?: 'connecting' | 'live' | 'stale' | 'disconnected' | 'closed';
+  streamError?: string | null;
+  onRetryStream?: () => void;
 };
 
 const statusTone = (status: string | undefined) => {
   const normalized = String(status || '').toLowerCase();
-  if (['completed', 'done', 'succeeded'].includes(normalized)) return 'text-emerald-700';
+  if (['completed', 'done', 'succeeded', 'success', 'finished'].includes(normalized)) return 'text-emerald-700';
   if (['partial', 'skipped'].includes(normalized)) return 'text-amber-700';
-  if (['failed', 'cancelled', 'error'].includes(normalized)) return 'text-red-700';
+  if (['failed', 'cancelled', 'canceled', 'error'].includes(normalized)) return 'text-red-700';
   if (['running', 'active'].includes(normalized)) return 'text-sky-700';
   if (['retry_wait', 'blocked', 'paused', 'pausing', 'queued'].includes(normalized)) return 'text-amber-700';
   if (['idle', 'ready'].includes(normalized)) return 'text-neutral-600';
@@ -39,9 +42,9 @@ const statusTone = (status: string | undefined) => {
 
 const StatusGlyph = ({ status, current }: { status?: string; current?: boolean }) => {
   const normalized = String(status || '').toLowerCase();
-  if (['completed', 'done', 'succeeded'].includes(normalized)) return <Check className="h-3.5 w-3.5 text-emerald-700" />;
+  if (['completed', 'done', 'succeeded', 'success', 'finished'].includes(normalized)) return <Check className="h-3.5 w-3.5 text-emerald-700" />;
   if (['partial', 'skipped'].includes(normalized)) return <Circle className="h-3.5 w-3.5 text-amber-600" />;
-  if (['failed', 'cancelled', 'error'].includes(normalized)) return <X className="h-3.5 w-3.5 text-red-700" />;
+  if (['failed', 'cancelled', 'canceled', 'error'].includes(normalized)) return <X className="h-3.5 w-3.5 text-red-700" />;
   if (current || ['running', 'active'].includes(normalized)) return <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-700" />;
   if (['retry_wait', 'blocked', 'paused', 'pausing', 'queued'].includes(normalized)) return <Clock3 className="h-3.5 w-3.5 text-amber-600" />;
   if (['idle', 'ready'].includes(normalized)) return <Circle className="h-3.5 w-3.5 text-neutral-500" />;
@@ -163,7 +166,7 @@ const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
         </div>
       </td>
       <td className="w-[110px] px-3 py-2 text-xs">
-        <span className={`capitalize ${statusTone(agent.status)}`}>{agent.status || 'unknown'}</span>
+        <span className={`capitalize ${statusTone(agent.status)}`}>{agent.status || 'Not reported'}</span>
       </td>
       <td className="max-w-[320px] px-3 py-2 text-xs text-neutral-700">
         {agent.failure ? (
@@ -296,14 +299,31 @@ const ActivityList = ({ activities, fallbackMessages }: { activities: WorkflowAc
   );
 };
 
-export function WorkflowProgressPanel({ progress, details, webUi, showFailurePanel = true }: WorkflowProgressPanelProps) {
+export function WorkflowProgressPanel({ progress, details, webUi, showFailurePanel = true, streamState = 'connecting', streamError = null, onRetryStream }: WorkflowProgressPanelProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'graph'>('list');
 
   if (!progress) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-white font-mono text-xs text-neutral-500">
-        Waiting for public v2 workflow progress...
+      <div className="absolute inset-0 flex items-center justify-center bg-white p-6">
+        <div className="max-w-sm space-y-2 text-center" role={streamState === 'disconnected' ? 'alert' : 'status'}>
+          <div className="font-mono text-xs text-neutral-500">
+            {streamState === 'disconnected'
+              ? (streamError || 'Workflow progress stream disconnected.')
+              : streamState === 'stale'
+                ? 'Workflow progress updates are stale. Waiting to reconnect…'
+                : 'Waiting for public v2 workflow progress…'}
+          </div>
+          {streamState === 'disconnected' && onRetryStream ? (
+            <button
+              type="button"
+              onClick={onRetryStream}
+              className="rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+            >
+              Retry connection
+            </button>
+          ) : null}
+        </div>
       </div>
     );
   }
@@ -378,7 +398,7 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
                 <div className="truncate text-xs font-semibold text-neutral-950">{workflowLabel}</div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-500">
                   <span>Current: <strong className="font-medium text-neutral-700">{currentLabel}</strong></span>
-                  <span className={`capitalize ${statusTone(progress.status)}`}>{progress.status || 'unknown'}</span>
+                  <span className={`capitalize ${statusTone(progress.status)}`}>{progress.status || 'Not reported'}</span>
                   {progress.progress_source ? <span>Source: {progress.progress_source}</span> : null}
                   {webUi ? (
                     <span>
@@ -387,7 +407,7 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
                         className="font-medium text-neutral-950 underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-950"
                         href={webUi.href || webUi.url}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noreferrer noopener"
                       >
                         {webUi.title}
                       </a>
@@ -451,9 +471,13 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
                 <div className="max-h-[28rem] space-y-1 overflow-auto">
                   {progress.steps.map((step, index) => {
                     const focused = Boolean(primaryStep && stepMatchesId(step, index, primaryStep.id));
+                    // Step ids are fuzzy-matched aliases and may repeat (e.g.
+                    // synthesized `step-N` fallbacks), so the React key mixes
+                    // the canonical id with position for stable focus.
+                    const stepKey = `${step.id || 'step'}#${index}`;
                     return (
                       <button
-                        key={step.id}
+                        key={stepKey}
                         type="button"
                         aria-pressed={focused}
                         aria-label={`${index + 1}. ${step.label} ${step.done_count}/${step.total_count}`}
@@ -478,7 +502,7 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
                   </div>
                   <div className={`inline-flex items-center gap-1.5 text-xs font-medium capitalize ${statusTone(primaryStep?.status || progress.status)}`}>
                     <StatusGlyph status={primaryStep?.status || progress.status} current={primaryStep?.current} />
-                    {primaryStep?.status || progress.status || 'unknown'}
+                    {primaryStep?.status || progress.status || 'Not reported'}
                   </div>
                 </div>
                 {primaryStep ? (
@@ -513,7 +537,7 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
                   Show active steps
                 </button>
               ) : null}
-              <div className={`text-[11px] font-medium capitalize ${statusTone(detailStatus)}`}>{detailStatus || 'unknown'}</div>
+              <div className={`text-[11px] font-medium capitalize ${statusTone(detailStatus)}`}>{detailStatus || 'Not reported'}</div>
             </div>
           </div>
 

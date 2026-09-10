@@ -47,4 +47,37 @@ describe('buildDisplayGraph', () => {
     ]);
     expect(display.edges).toHaveLength(3);
   });
+
+  it('merges public live-registry nodes with progress nodes by stable id', () => {
+    const runtimeGraph: AgentGraph = {
+      job_id: 'job-merge',
+      graph_id: 'g',
+      status: 'running',
+      nodes: [
+        { id: 'watcher', label: 'Watcher', agent_type: 'executor', status: 'running' },
+      ],
+      edges: [],
+      stats: { agent_count: 1, edge_count: 0, message_count: 0, event_count: 0 },
+    } as unknown as AgentGraph;
+    const progress = {
+      job_id: 'job-merge',
+      workflow_id: 'g',
+      status: 'running',
+      steps: [
+        { id: 'detect', status: 'done', agents: [{ id: 'watcher', status: 'done' }] },
+        { id: 'plan', status: 'queued', agents: [{ id: 'planner', status: 'pending' }] },
+      ],
+      edges: [],
+      recent_events: [],
+    } as unknown as WorkflowProgress;
+
+    const display = buildDisplayGraph(runtimeGraph, [], 'job-merge', 'g', 'running', progress);
+
+    // Live status wins on conflict, progress contributes the missing node, and
+    // the union keeps identity stable across polls.
+    expect(display.nodes.map((node) => node.id).sort()).toEqual(['planner', 'watcher']);
+    expect(display.nodes.find((node) => node.id === 'watcher')?.status).toBe('running');
+    const planner = display.nodes.find((node) => node.id === 'planner') as unknown as Record<string, unknown>;
+    expect(planner?.countsUnknown).toBe(true);
+  });
 });

@@ -63,7 +63,7 @@ export function nodeResourceMetrics(node: SystemSummary['nodes'][number]) {
   return [
     {
       label: 'CPU',
-      value: resources.cpuCores ? `${resources.cpuCores.toLocaleString()} cores` : '0 cores',
+      value: resources.cpuCores ? `${resources.cpuCores.toLocaleString()} cores` : 'Not reported',
       detail: resources.cpuLoadRatio === null ? 'No load reported' : `${formatPercent(resources.cpuLoadRatio)} load`,
     },
     {
@@ -262,6 +262,9 @@ function numberValueOrNull(value: unknown) {
 }
 
 export function formatMemoryPair(gpuMemoryTotalMb: number, memoryTotalBytes: number) {
+  if ((!Number.isFinite(gpuMemoryTotalMb) || gpuMemoryTotalMb <= 0) && (!Number.isFinite(memoryTotalBytes) || memoryTotalBytes <= 0)) {
+    return 'Not reported';
+  }
   const gpuGb = gpuMemoryTotalMb / 1024;
   const totalGb = memoryTotalBytes / (1024 * 1024 * 1024);
   return `${formatGbAmount(gpuGb)} / ${formatGbAmount(totalGb)} GB`;

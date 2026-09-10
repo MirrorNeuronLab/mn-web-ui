@@ -130,6 +130,17 @@ describe('JobDetails Component', () => {
     expect(screen.getByText(/Loading/i)).toBeInTheDocument();
   });
 
+  it('shows an error with retry instead of infinite loading when details fail', async () => {
+    vi.mocked(fetchJobDetails).mockRejectedValue({ response: { status: 404 } });
+
+    renderWithRouter(<JobDetails />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Run not found/);
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to runs' })).toBeInTheDocument();
+    expect(screen.queryByText('Loading run…')).not.toBeInTheDocument();
+  });
+
   it('renders job details and switches tabs', async () => {
     const mockDetails = {
       job: {

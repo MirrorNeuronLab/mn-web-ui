@@ -1,5 +1,14 @@
 import { z } from 'zod';
 
+export class ValidationError extends Error {
+  readonly validationLabel: string;
+  constructor(validationLabel: string, message?: string) {
+    super(message ? `${validationLabel}: ${message}` : `${validationLabel} returned invalid data.`);
+    this.name = 'ValidationError';
+    this.validationLabel = validationLabel;
+  }
+}
+
 export const parseOrFallback = <T>(
   schema: z.ZodType<T>,
   data: unknown,
@@ -9,9 +18,37 @@ export const parseOrFallback = <T>(
   const result = schema.safeParse(data);
   if (!result.success) {
     console.error(`${validationLabel} validation failed:`, result.error);
-    return schema.parse(fallback);
+    const fallbackResult = schema.safeParse(fallback);
+    if (!fallbackResult.success) {
+      throw new ValidationError(validationLabel, 'The server returned invalid data. Try again.');
+    }
+    return fallbackResult.data;
   }
   return result.data;
+};
+
+export const parseOrThrow = <T>(
+  schema: z.ZodType<T>,
+  data: unknown,
+  validationLabel: string,
+): T => {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    console.error(`${validationLabel} validation failed:`, result.error);
+    throw new ValidationError(validationLabel, 'The server returned invalid data. Try again.');
+  }
+  return result.data;
+};
+
+export const pageTokenFrom = (data: unknown): string | null => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const token = (data as Record<string, unknown>).next_page_token;
+  if (token === null || token === undefined) return null;
+  if (typeof token !== 'string') {
+    console.error('next_page_token validation failed: expected string, received', typeof token);
+    return null;
+  }
+  return token;
 };
 
 export const parseArrayOrEmpty = <T>(

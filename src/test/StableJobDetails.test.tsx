@@ -159,8 +159,17 @@ describe('StableJobDetails', () => {
 
     const statuses = await screen.findByLabelText('Job and run status');
     expect(statuses).toHaveTextContent('Job statusActive');
-    expect(statuses).toHaveTextContent('Latest runNot started');
+    expect(statuses).toHaveTextContent('Latest runNo runs yet');
     expect(screen.getByRole('button', { name: 'Start run' })).toBeEnabled();
+  });
+
+  it('still renders the job when run history fails, with a runs retry', async () => {
+    vi.mocked(fetchStableJobRuns).mockRejectedValue(new Error('runs unavailable'));
+    renderPage();
+
+    expect(await screen.findByText('Research workspace')).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/runs unavailable/);
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 
   it('archives and resets only after explicit confirmation', async () => {

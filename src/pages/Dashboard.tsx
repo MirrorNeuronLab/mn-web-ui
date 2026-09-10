@@ -6,6 +6,7 @@ import { Tooltip } from '../components/ui/tooltip';
 import { Card, CardContent } from '../components/ui/card';
 import { Skeleton } from '../components/ui/skeleton';
 import { usePollingEffect } from '../hooks/usePollingEffect';
+import { apiErrorMessage } from '../utils/apiErrors';
 import { cn } from '../lib/utils';
 import { isActiveRunStatus } from '../utils/jobStatus';
 import {
@@ -21,13 +22,17 @@ import {
 export default function Dashboard() {
   const [summary, setSummary] = useState<SystemSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const loadDashboard = useCallback(async () => {
     try {
       setSummary(await fetchSystemSummary());
-    } catch (error) {
-      console.error('Failed to load system summary', error);
-      setSummary({ nodes: [], jobs: [] });
+      setError('');
+    } catch (err) {
+      console.error('Failed to load system summary', err);
+      // Never masquerade a contract failure as measured zeros: keep the last
+      // good snapshot (if any) and show a visible diagnostic instead.
+      setError(apiErrorMessage(err, 'Failed to load runtime summary. Try again.'));
     }
     setLoading(false);
   }, []);
@@ -65,6 +70,18 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-4">
+      {error ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => void loadDashboard()}
+            className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-800 hover:bg-red-100"
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
         <MetricCard
           icon={BriefcaseBusiness}
@@ -83,7 +100,7 @@ export default function Dashboard() {
         <MetricCard
           icon={Cpu}
           label="CPU"
-          value={resources.cpuCores ? `${resources.cpuCores.toLocaleString()} cores` : '0 cores'}
+          value={resources.cpuCores ? `${resources.cpuCores.toLocaleString()} cores` : 'Not reported'}
           headline={resources.cpuLoadRatio === null ? 'No CPU load reported' : `${formatPercent(resources.cpuLoadRatio)} load`}
           detail={`${resources.nodeCount} runtime node${resources.nodeCount === 1 ? '' : 's'} reporting`}
         />

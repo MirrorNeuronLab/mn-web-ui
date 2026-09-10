@@ -96,7 +96,7 @@ describe('Models Component', () => {
     expect(screen.queryByText('Orphaned')).not.toBeInTheDocument();
     expect(screen.queryByText('ai/gemma4:E2B')).not.toBeInTheDocument();
     expect(screen.getByText('personal_income_tax_expert')).toBeInTheDocument();
-    expect(screen.getByText('Runtime')).toBeInTheDocument();
+    expect(screen.getByText('Not reported')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /install/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Benchmark Gemma 4 E2B' }));

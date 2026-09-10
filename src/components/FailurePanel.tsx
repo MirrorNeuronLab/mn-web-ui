@@ -1,6 +1,6 @@
 import { AlertTriangle, ExternalLink, FileText } from 'lucide-react';
 import type { ErrorEnvelope } from '../api';
-import { artifactDisplayName } from '../utils/artifacts';
+import { artifactDisplayName, isOpenableHref } from '../utils/artifacts';
 import { isRecord } from '../utils/records';
 
 type ArtifactRef = {
@@ -116,7 +116,10 @@ export function FailurePanel({ failure, title = 'Failure', compact = false, arti
             <div className="flex flex-wrap gap-2 border-t border-red-100 pt-2">
               {links.map((link, index) => {
                 const artifact = artifactForLink(link.artifact_id, artifacts);
-                const href = link.url || artifact?.url;
+                const rawHref = link.url || artifact?.url;
+                // Server-provided URLs are untrusted: only render http(s) or
+                // same-origin links; anything else becomes labeled plain text.
+                const href = rawHref && isOpenableHref(rawHref) ? rawHref : undefined;
                 const label = artifactDisplayName(artifact || { artifact_id: link.artifact_id }, link.rel || 'artifact');
                 const size = formatBytes(artifact?.size_bytes);
                 const content = (
@@ -124,11 +127,12 @@ export function FailurePanel({ failure, title = 'Failure', compact = false, arti
                     {href ? <ExternalLink className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
                     <span>{label}</span>
                     {size ? <span className="text-neutral-500">{size}</span> : null}
+                    {!href && rawHref ? <span className="text-neutral-500">(unavailable link)</span> : null}
                   </>
                 );
                 const className = "inline-flex h-7 items-center gap-1.5 rounded-md border border-red-200 bg-white px-2 text-xs font-medium text-neutral-800";
                 return href ? (
-                  <a key={`${label}-${index}`} href={href} target="_blank" rel="noreferrer" className={className}>
+                  <a key={`${label}-${index}`} href={href} target="_blank" rel="noreferrer noopener" className={className}>
                     {content}
                   </a>
                 ) : (

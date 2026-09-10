@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { Archive, Clock3, Eye, Layers3, Play, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -35,11 +35,23 @@ export default function StableJobs() {
   const [error, setError] = useState('');
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const filterKeyRef = useRef<string>('');
 
   const loadJobs = useCallback(async () => {
+    const filterKey = `archived:${includeArchived}`;
     try {
       const page = await fetchStableJobs({ includeArchived });
-      setJobs(page.items);
+      setJobs((prev) => {
+        // Preserve expanded pages across background polls only while the
+        // server reports further pages; otherwise missing rows are gone.
+        if (filterKeyRef.current !== filterKey || prev.length === 0 || page.next_page_token === null) {
+          filterKeyRef.current = filterKey;
+          return page.items;
+        }
+        const freshIds = new Set(page.items.map((job) => job.job_id));
+        const extra = prev.filter((job) => !freshIds.has(job.job_id));
+        return [...page.items, ...extra];
+      });
       setNextPageToken(page.next_page_token);
       setError('');
     } catch (err) {
@@ -54,7 +66,10 @@ export default function StableJobs() {
     setLoadingMore(true);
     try {
       const page = await fetchStableJobs({ includeArchived, pageToken: nextPageToken });
-      setJobs((current) => [...current, ...page.items]);
+      setJobs((current) => {
+        const known = new Set(current.map((job) => job.job_id));
+        return [...current, ...page.items.filter((job) => !known.has(job.job_id))];
+      });
       setNextPageToken(page.next_page_token);
     } catch (err) {
       setError(apiErrorMessage(err, 'Failed to load more persistent jobs.'));

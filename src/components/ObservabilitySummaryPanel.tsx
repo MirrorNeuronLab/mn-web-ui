@@ -1,5 +1,5 @@
 import { Network } from 'lucide-react';
-import { artifactDisplayName } from '../utils/artifacts';
+import { artifactDisplayName, isOpenableHref } from '../utils/artifacts';
 import { isRecord } from '../utils/records';
 import { formatElapsed } from '../utils/workflowProgress';
 
@@ -90,11 +90,11 @@ export default function ObservabilitySummaryPanel({ summary, traceId, artifacts 
       <div className="mt-3 flex flex-wrap gap-2">
         {links.map(([artifactId, label]) => {
           const artifact = artifactLink(artifacts, artifactId);
-          if (!artifact?.url) return null;
+          if (!artifact?.url || !isOpenableHref(artifact.url)) return null;
           const displayLabel = artifactDisplayName(artifact, label);
           const className = "rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-medium text-neutral-700 hover:border-neutral-300 hover:bg-white";
           return (
-            <a key={artifactId} href={artifact.url} target="_blank" rel="noreferrer" className={className}>
+            <a key={artifactId} href={artifact.url} target="_blank" rel="noreferrer noopener" className={className}>
               {displayLabel}
             </a>
           );

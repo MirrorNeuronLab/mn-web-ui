@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkflowProgress } from '../api';
-import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
+import { formatElapsed, stepStatusBucket, workflowStepCounts } from '../utils/workflowProgress';
 
 describe('formatElapsed', () => {
   it('formats missing and invalid durations as zero seconds', () => {
@@ -36,5 +36,38 @@ describe('workflowStepCounts', () => {
     } as unknown as WorkflowProgress;
 
     expect(workflowStepCounts(progress)).toEqual({ done: 3, running: 0, failed: 0, total: 10 });
+  });
+
+  it('counts success, finished, and canceled aliases consistently', () => {
+    const progress = {
+      steps: [
+        { id: 'a', status: 'success' },
+        { id: 'b', status: 'finished' },
+        { id: 'c', status: 'canceled' },
+        { id: 'd', status: 'cancelled' },
+        { id: 'e', status: 'active' },
+      ],
+    } as unknown as WorkflowProgress;
+
+    expect(workflowStepCounts(progress)).toEqual({ done: 2, running: 1, failed: 2, total: 5 });
+  });
+});
+
+describe('stepStatusBucket', () => {
+  it('maps every known alias to the same bucket used by counts, list, and graph', () => {
+    for (const status of ['completed', 'done', 'succeeded', 'success', 'finished', 'partial', 'skipped']) {
+      expect(stepStatusBucket(status)).toBe('done');
+    }
+    for (const status of ['running', 'active']) {
+      expect(stepStatusBucket(status)).toBe('running');
+    }
+    for (const status of ['failed', 'cancelled', 'canceled', 'error']) {
+      expect(stepStatusBucket(status)).toBe('failed');
+    }
+    for (const status of ['paused', 'pending', 'scheduled', 'queued']) {
+      expect(stepStatusBucket(status)).not.toBe('failed');
+    }
+    expect(stepStatusBucket('')).toBeNull();
+    expect(stepStatusBucket('something-new')).toBeNull();
   });
 });

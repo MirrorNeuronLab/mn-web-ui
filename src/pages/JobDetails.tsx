@@ -25,6 +25,7 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { cn } from '../lib/utils';
+import { apiErrorMessage } from '../utils/apiErrors';
 import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
 import { buildOutputResources } from '../utils/workflowResources';
 import { webUiInfoFromRecord } from '../utils/jobDetailsView';
@@ -32,13 +33,24 @@ import { isTerminalRunStatus, runStatusBadgeClass } from '../utils/jobStatus';
 import { isRecord } from '../utils/records';
 
 const StatusIcon = ({ status }: { status: string }) => {
-  switch (status) {
-    case 'running': return <PlayCircle className="h-3.5 w-3.5 text-neutral-700" />;
-    case 'completed': return <CheckCircle className="h-3.5 w-3.5 text-neutral-700" />;
-    case 'failed': return <XCircle className="h-3.5 w-3.5 text-neutral-700" />;
-    case 'pending': return <Clock className="h-3.5 w-3.5 text-neutral-700" />;
-    case 'paused': return <PauseCircle className="h-3.5 w-3.5 text-neutral-700" />;
-    case 'cancelled': return <Ban className="h-3.5 w-3.5 text-neutral-500" />;
+  const normalized = status.trim().toLowerCase();
+  switch (normalized) {
+    case 'running':
+    case 'active': return <PlayCircle className="h-3.5 w-3.5 text-neutral-700" />;
+    case 'completed':
+    case 'done':
+    case 'finished':
+    case 'succeeded':
+    case 'success': return <CheckCircle className="h-3.5 w-3.5 text-neutral-700" />;
+    case 'failed':
+    case 'error': return <XCircle className="h-3.5 w-3.5 text-neutral-700" />;
+    case 'pending':
+    case 'scheduled':
+    case 'queued': return <Clock className="h-3.5 w-3.5 text-neutral-700" />;
+    case 'paused':
+    case 'pausing': return <PauseCircle className="h-3.5 w-3.5 text-neutral-700" />;
+    case 'cancelled':
+    case 'canceled': return <Ban className="h-3.5 w-3.5 text-neutral-500" />;
     default: return <AlertCircle className="h-3.5 w-3.5 text-neutral-400" />;
   }
 };
@@ -187,12 +199,16 @@ export default function JobDetails() {
   const [jobWebUi, setJobWebUi] = useState<WebUiHandle | null>(null);
   const [activeTab, setActiveTab] = useState<'progress' | 'agents' | 'logs'>('progress');
   const [agentView, setAgentView] = useState<'list' | 'graph' | 'code'>('list');
+  const [loadError, setLoadError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   
   const [isCancelling, setIsCancelling] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [progressStreamState, setProgressStreamState] = useState<ProgressStreamState>('connecting');
+  const [streamError, setStreamError] = useState('');
+  const [streamAttempt, setStreamAttempt] = useState(0);
   const terminalRefreshRef = useRef<string | null>(null);
   const eventsLoadedForRef = useRef<string | null>(null);
   const graphLoadedForRef = useRef<string | null>(null);
@@ -203,6 +219,8 @@ export default function JobDetails() {
     try {
       const d = await fetchJobDetails(id, { include: 'full' });
       setDetails(d);
+      setLoadError('');
+      setLoadFailed(false);
       const root = d as Record<string, unknown>;
       const job: Record<string, unknown> = isRecord(d.job) ? d.job : {};
       const summary: Record<string, unknown> = isRecord(d.summary) ? d.summary : {};
@@ -223,6 +241,11 @@ export default function JobDetails() {
 
     } catch (err) {
       console.error('Failed to load job details', err);
+      const status = responseStatusFromError(err);
+      setLoadError(status === 404
+        ? 'Run not found. It may have been cleaned up or the link is incorrect.'
+        : apiErrorMessage(err, 'Failed to load run details. Try again.'));
+      setLoadFailed(true);
     }
   }, [id]);
 
@@ -232,6 +255,16 @@ export default function JobDetails() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  useEffect(() => {
+    if (!actionStatus) return undefined;
+    // Optimistic action hints must not pin the header forever: fresher
+    // server snapshots take over, and the hint expires on its own.
+    const timer = window.setTimeout(() => {
+      setActionStatus(null);
+    }, 15_000);
+    return () => window.clearTimeout(timer);
+  }, [actionStatus]);
 
   useEffect(() => {
     const previousJobId = renderedJobIdRef.current;
@@ -244,6 +277,7 @@ export default function JobDetails() {
       setActionStatus(null);
       setEvents([]);
       setGraph(null);
+      setStreamError('');
       setWorkflowProgress(current => current?.job_id === id ? current : null);
       setProgressStreamState('connecting');
     }, 0);
@@ -297,10 +331,12 @@ export default function JobDetails() {
     }, 0);
     streamWorkflowProgress(id, (snapshot) => {
       if (cancelled) return;
+      setStreamError('');
       if (isTerminalRunStatus(snapshot.status)) {
         terminalObserved = true;
         clearHealthTimers();
         setProgressStreamState('closed');
+        setActionStatus(null);
         controller.abort();
       } else {
         markLive();
@@ -318,7 +354,10 @@ export default function JobDetails() {
     }).catch((err) => {
       if (!cancelled && err?.name !== 'AbortError') {
         clearHealthTimers();
-        if (!terminalObserved) setProgressStreamState('disconnected');
+        if (!terminalObserved) {
+          setProgressStreamState('disconnected');
+          setStreamError(apiErrorMessage(err, 'Workflow progress stream disconnected. Retry to reconnect.'));
+        }
         console.error('Workflow progress stream closed', err);
       }
     });
@@ -328,9 +367,26 @@ export default function JobDetails() {
       clearHealthTimers();
       controller.abort();
     };
-  }, [id, load]);
+  }, [id, load, streamAttempt]);
 
-  if (!details || !details.job) return <div className="p-5 text-sm text-neutral-500">Loading run…</div>;
+  if (!details || !details.job) {
+    if (loadFailed) {
+      return (
+        <div role="alert" className="space-y-3 rounded-md border border-red-200 bg-red-50 p-5 text-sm text-red-800">
+          <div className="font-semibold">{loadError || 'Failed to load run details.'}</div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
+              Retry
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => navigate('/runs')}>
+              Back to runs
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    return <div className="p-5 text-sm text-neutral-500">Loading run…</div>;
+  }
   const jobRecord: Record<string, unknown> = isRecord(details.job) ? details.job : {};
   const durableJobId = knownStringValue(jobRecord.job_id, (details as Record<string, unknown>).job_id);
   const resolvedWebUi = webUiInfoFromRecord(jobWebUi);
@@ -339,6 +395,8 @@ export default function JobDetails() {
     : resolvedWebUi;
   const jobId = knownStringValue(details.job.run_id, details.job.job_id, id) || id || 'run';
   const progressTerminalStatus = inferredTerminalStatusFromProgress(workflowProgress);
+  // actionStatus is an optimistic hint: it wins for at most 15s (see the
+  // expiry timer above) while terminal progress always wins immediately.
   const displayStatus = displayStatusFromSources(actionStatus, progressTerminalStatus || workflowProgress?.status, details.job.status, graph?.status);
   const graphId = knownStringValue(details.job.graph_id, workflowProgress?.workflow_id, graph?.graph_id);
   const submittedAt = formattedTimestamp(details.job.submitted_at, workflowProgress?.submitted_at);
@@ -576,6 +634,13 @@ export default function JobDetails() {
               details={details}
               webUi={webUi}
               showFailurePanel={!failure}
+              streamState={progressStreamState}
+              streamError={streamError}
+              onRetryStream={() => {
+                setStreamError('');
+                setProgressStreamState('connecting');
+                setStreamAttempt((attempt) => attempt + 1);
+              }}
             />
           )}
 
@@ -661,12 +726,12 @@ export default function JobDetails() {
                         <TableBody>
                           {displayAgents.map((agent, i) => (
                             <TableRow key={agent.id || i} className="hover:bg-neutral-50">
-                              <TableCell className="px-4 py-2 font-mono text-xs font-medium text-neutral-950">{agent.label || agent.id || 'unknown'}</TableCell>
-                              <TableCell className="px-4 py-2 text-xs text-neutral-600">{agent.agent_type || 'unknown'} / {agent.type || 'unknown'}</TableCell>
+                              <TableCell className="px-4 py-2 font-mono text-xs font-medium text-neutral-950">{agent.label || agent.id || 'Unnamed agent'}</TableCell>
+                              <TableCell className="px-4 py-2 text-xs text-neutral-600">{agent.agent_type || 'Not reported'} / {agent.type || 'Not reported'}</TableCell>
                               <TableCell className="px-4 py-2 text-xs">
-                                <Badge variant="outline" className={cn('capitalize', runStatusBadgeClass(agent.status))}>{agent.status || 'unknown'}</Badge>
+                                <Badge variant="outline" className={cn('capitalize', runStatusBadgeClass(agent.status))}>{agent.status || 'Not reported'}</Badge>
                               </TableCell>
-                              <TableCell className="px-4 py-2 text-xs text-neutral-600">{agent.processed_messages ?? 0} processed, {agent.mailbox_depth ?? 0} in queue</TableCell>
+                              <TableCell className="px-4 py-2 text-xs text-neutral-600">{(agent as { countsUnknown?: boolean }).countsUnknown ? 'Activity not reported' : `${agent.processed_messages ?? 0} processed, ${agent.mailbox_depth ?? 0} in queue`}</TableCell>
                               <TableCell className="px-4 py-2 text-xs text-neutral-500">{agent.assigned_node || 'unassigned'}</TableCell>
                             </TableRow>
                           ))}

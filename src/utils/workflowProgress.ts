@@ -8,9 +8,24 @@ export const formatElapsed = (seconds?: number) => {
   return `${Math.floor(value / 3600)}h ${Math.floor((value % 3600) / 60)}m`;
 };
 
-const COMPLETED_STEP_STATUSES = new Set(['completed', 'done', 'succeeded', 'success', 'partial', 'skipped']);
+const COMPLETED_STEP_STATUSES = new Set(['completed', 'done', 'succeeded', 'success', 'finished', 'partial', 'skipped']);
 const RUNNING_STEP_STATUSES = new Set(['running', 'active']);
-const FAILED_STEP_STATUSES = new Set(['failed', 'cancelled', 'error']);
+const FAILED_STEP_STATUSES = new Set(['failed', 'cancelled', 'canceled', 'error']);
+const PENDING_STEP_STATUSES = new Set(['pending', 'scheduled', 'queued', 'validated', 'preparing', 'idle', 'ready']);
+const PAUSED_STEP_STATUSES = new Set(['paused', 'pausing', 'blocked', 'retry_wait']);
+
+export type StepStatusBucket = 'done' | 'running' | 'failed' | 'paused' | 'pending';
+
+export const stepStatusBucket = (status?: string | null): StepStatusBucket | null => {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (!normalized) return null;
+  if (COMPLETED_STEP_STATUSES.has(normalized)) return 'done';
+  if (RUNNING_STEP_STATUSES.has(normalized)) return 'running';
+  if (FAILED_STEP_STATUSES.has(normalized)) return 'failed';
+  if (PAUSED_STEP_STATUSES.has(normalized)) return 'paused';
+  if (PENDING_STEP_STATUSES.has(normalized)) return 'pending';
+  return null;
+};
 
 export const workflowStepCounts = (progress: WorkflowProgress | null | undefined) => {
   const steps = progress?.steps.length ? progress.steps : progress?.current_step ? [progress.current_step] : [];
