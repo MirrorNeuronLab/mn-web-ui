@@ -190,7 +190,7 @@ describe('JobDetails Component', () => {
     await waitFor(() => {
       expect(screen.getByText('test-job-1')).toBeInTheDocument();
     });
-    expect(fetchJobDetails).toHaveBeenCalledWith('test-job-1', { include: 'full' });
+    expect(fetchJobDetails).toHaveBeenCalledWith('test-job-1');
     expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute('href', '/jobs/test-job-1/ui');
     expect(screen.queryByRole('link', { name: 'Web UI' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Executors:/i)).not.toBeInTheDocument();

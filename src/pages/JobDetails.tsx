@@ -217,7 +217,7 @@ export default function JobDetails() {
   const load = useCallback(async () => {
     if (!id) return;
     try {
-      const d = await fetchJobDetails(id, { include: 'full' });
+      const d = await fetchJobDetails(id);
       setDetails(d);
       setLoadError('');
       setLoadFailed(false);

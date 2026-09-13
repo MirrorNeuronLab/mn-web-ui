@@ -312,13 +312,6 @@ export const ClusterNodeAddResponseSchema = z.object({
   message: z.string().optional().default(''),
 }).passthrough();
 
-export const ClusterNodeRemoveResponseSchema = z.object({
-  ok: z.boolean().optional().default(true),
-  node_name: z.string().optional().default(''),
-  status: z.string().optional().default('unknown'),
-  message: z.string().optional().default(''),
-}).passthrough();
-
 export const JobUiDefinitionSchema = z.object({
   schema_version: z.string().optional().default('mn.web_ui.external.v1'),
   renderer: z.string().optional().default('external-url'),
@@ -612,7 +605,6 @@ export type RuntimeModel = z.infer<typeof RuntimeModelSchema>;
 export type RuntimeModelListResponse = z.infer<typeof RuntimeModelListResponseSchema>;
 export type RuntimeModelBenchmark = z.infer<typeof RuntimeModelBenchmarkSchema>;
 export type ClusterNodeAddResponse = z.infer<typeof ClusterNodeAddResponseSchema>;
-export type ClusterNodeRemoveResponse = z.infer<typeof ClusterNodeRemoveResponseSchema>;
 export type JobUiDefinition = z.infer<typeof JobUiDefinitionSchema>;
 export type WebUiHandle = z.infer<typeof WebUiHandleSchema>;
 export type JobUiResponse = z.infer<typeof JobUiResponseSchema>;
@@ -658,10 +650,6 @@ export const benchmarkRuntimeModel = (model: string, payload: { prompt?: string;
 
 export const addClusterNode = (payload: { host: string; token: string }) => api.post('/nodes', AddClusterNodeRequestSchema.parse(payload)).then(r => (
   parseOrThrow(ClusterNodeAddResponseSchema, r.data, 'addClusterNode')
-));
-
-export const removeClusterNode = (nodeName: string) => api.delete(`/nodes/${encodeURIComponent(nodeName)}`).then(r => (
-  parseOrFallback(ClusterNodeRemoveResponseSchema, r.data, { node_name: nodeName, status: 'deleted' }, 'removeClusterNode')
 ));
 
 export type FetchRunsOptions = {
@@ -796,18 +784,9 @@ export const deleteRun = (id: string) => api.delete(runPath(id)).then((response)
   response.status === 204 ? undefined : parseOrThrow(StableRunActionResponseSchema, response.data, `deleteRun(${id})`)
 ));
 
-export type FetchJobDetailsOptions = {
-  include?: 'compact' | 'full';
-};
-
-export const fetchJobDetails = (id: string, options: FetchJobDetailsOptions = {}) => {
-  const request = options.include
-    ? api.get(runPath(id, '/monitor'), { params: { include: options.include } })
-    : api.get(runPath(id, '/monitor'));
-  return request.then(r => (
-    parseOrFallback(JobDetailsSchema, r.data, { job: { job_id: id, status: 'unknown' } }, `fetchJobDetails(${id})`)
-  ));
-};
+export const fetchJobDetails = (id: string) => api.get(runPath(id, '/monitor')).then(r => (
+  parseOrFallback(JobDetailsSchema, r.data, { job: { job_id: id, status: 'unknown' } }, 'fetchJobDetails')
+));
 
 export const fetchJobEvents = (id: string) => api.get(runPath(id, '/events')).then(r => (
   parseArrayOrEmpty(JobEventSchema, arrayFromEnvelope(r.data, ['items', 'data', 'events', 'recent_events']), `fetchJobEvents(${id})`)
@@ -837,12 +816,6 @@ export const streamWorkflowProgress = createWorkflowProgressStreamer({
 });
 export const fetchOperation = (id: string) => api.get(operationPath(id)).then(r => (
   parseOrThrow(OperationSchema, r.data, `fetchOperation(${id})`)
-));
-export const clearJobs = (idempotencyKey = newIdempotencyKey()) => api.post('/run-cleanups', {}, { headers: { 'Idempotency-Key': idempotencyKey } }).then(r => (
-  parseOrThrow(OperationSchema, r.data, 'clearJobs')
-));
-export const cancelAllJobs = (idempotencyKey = newIdempotencyKey()) => api.post('/run-cancellations', {}, { headers: { 'Idempotency-Key': idempotencyKey } }).then(r => (
-  parseOrThrow(OperationSchema, r.data, 'cancelAllJobs')
 ));
 export const uploadBundle = (file: File) => {
   const formData = new FormData();

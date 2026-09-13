@@ -2,9 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   addClusterNode,
   archiveStableJob,
-  cancelAllJobs,
   cancelRun,
-  clearJobs,
   deleteStableJob,
   fetchJobEvents,
   fetchRuns,
@@ -13,7 +11,6 @@ import {
   fetchStableJobs,
   launchBlueprintJob,
   pauseRun,
-  removeClusterNode,
   resumeRun,
   startStableJobRun,
   uploadBundle,
@@ -180,19 +177,6 @@ describe('canonical REST v1 client', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/runs/run%2Fwith%20space/events');
   });
 
-  it('starts administrative operations through noun resources with idempotency', async () => {
-    mockApi.post
-      .mockResolvedValueOnce({ data: { operation_id: 'op-clean', kind: 'clear_jobs', status: 'running' } })
-      .mockResolvedValueOnce({ data: { operation_id: 'op-cancel', kind: 'cancel_all_jobs', status: 'running' } });
-    await clearJobs();
-    await cancelAllJobs();
-    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/run-cleanups', {}, {
-      headers: { 'Idempotency-Key': 'idem-test-key' },
-    });
-    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/run-cancellations', {}, {
-      headers: { 'Idempotency-Key': 'idem-test-key' },
-    });
-  });
 
   it('creates blueprint runs directly and rejects public host paths', async () => {
     mockApi.post.mockResolvedValue({ data: { run_id: 'run-blueprint', job_id: 'job-blueprint', status: 'pending' } });
@@ -218,13 +202,10 @@ describe('canonical REST v1 client', () => {
 
   it('uses canonical infrastructure resources and paginated models', async () => {
     mockApi.post.mockResolvedValue({ data: { ok: true, node_name: 'mn@10.0.0.2', status: 'connected' } });
-    mockApi.delete.mockResolvedValue({ data: { ok: true, node_name: 'mn@10.0.0.2', status: 'deleted' } });
     mockApi.get.mockResolvedValue({ data: { items: [], next_page_token: null } });
     await addClusterNode({ host: '10.0.0.2', token: 'join-token' });
-    await removeClusterNode('mn@10.0.0.2');
     await expect(fetchRuntimeModels()).resolves.toEqual(expect.objectContaining({ items: [], next_page_token: null }));
     expect(mockApi.post).toHaveBeenCalledWith('/nodes', { host: '10.0.0.2', token: 'join-token' });
-    expect(mockApi.delete).toHaveBeenCalledWith('/nodes/mn%4010.0.0.2');
     expect(mockApi.get).toHaveBeenCalledWith('/models');
   });
 });

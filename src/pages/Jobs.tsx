@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
-import { AlertCircle, Ban, CheckCircle, Clock, Eye, Loader2, PauseCircle, PlayCircle, Trash2, XCircle } from 'lucide-react';
-import { cancelAllJobs, cancelRun, clearJobs, fetchRuns, isServiceJob, pauseRun } from '../api';
+import { AlertCircle, Ban, CheckCircle, Clock, Eye, Loader2, PauseCircle, PlayCircle, XCircle } from 'lucide-react';
+import { cancelRun, fetchRuns, isServiceJob, pauseRun } from '../api';
 import type { RunSummary } from '../api';
 import { confirmActionDialog } from '../components/ui/confirm-action';
 import { Tooltip } from '../components/ui/tooltip';
@@ -21,6 +21,7 @@ import {
 import { usePollingEffect } from '../hooks/usePollingEffect';
 import { cn } from '../lib/utils';
 import { apiErrorMessage } from '../utils/apiErrors';
+import { isActiveRunStatus } from '../utils/jobStatus';
 
 const StatusIcon = ({ status }: { status: string }) => {
   const normalized = status.trim().toLowerCase();
@@ -50,8 +51,6 @@ export default function Runs() {
   const [loading, setLoading] = useState(true);
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<'pause' | 'cancel' | null>(null);
-  const [isClearing, setIsClearing] = useState(false);
-  const [isCancellingAll, setIsCancellingAll] = useState(false);
   const [activeOnly, setActiveOnly] = useState(false);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -73,7 +72,7 @@ export default function Runs() {
       return [...fresh, ...extra];
     });
     setSelectedJobIds((current) => {
-      const availableIds = new Set(fresh.map((run) => run.run_id));
+      const availableIds = new Set(fresh.filter((run) => isActiveRunStatus(run.status)).map((run) => run.run_id));
       return new Set([...current].filter((jobId) => availableIds.has(jobId)));
     });
   }, []);
@@ -142,9 +141,10 @@ export default function Runs() {
   };
 
   const toggleAllJobs = () => {
+    const selectableIds = runs.filter((run) => isActiveRunStatus(run.status)).map((run) => run.run_id);
     setSelectedJobIds((current) => {
-      if (current.size === runs.length) return new Set();
-      return new Set(runs.map((run) => run.run_id));
+      if (current.size === selectableIds.length) return new Set();
+      return new Set(selectableIds);
     });
   };
 
@@ -194,87 +194,13 @@ export default function Runs() {
     });
   };
 
-  const confirmCancelAllJobs = () => {
-    if (runs.length === 0) return;
-
-    confirmActionDialog({
-      tone: 'danger',
-      id: 'jobs-cancel-all',
-      title: 'Cancel all active runs?',
-      description: 'A durable cancellation operation will be started for every pending, scheduled, running, and paused execution.',
-      confirmLabel: 'Cancel all',
-      cancelLabel: 'Keep runs',
-      loading: {
-        title: 'Starting cancellation',
-        description: 'Submitting the durable cancellation operation.',
-      },
-      success: (result: { operation_id: string }) => ({
-        title: 'Cancellation started',
-        description: `Operation ${result.operation_id} will continue until every active run is handled.`,
-      }),
-      error: (error) => ({
-        title: 'Cancel all failed',
-        description: apiErrorMessage(error, 'Failed to start cancellation for active runs.'),
-      }),
-      onConfirm: async () => {
-        try {
-          setIsCancellingAll(true);
-          const result = await cancelAllJobs();
-          setSelectedJobIds(new Set());
-          await refreshRuns();
-          return result;
-        } catch (e) {
-          console.error('Failed to cancel all active runs', e);
-          throw e;
-        } finally {
-          setIsCancellingAll(false);
-        }
-      },
-    });
-  };
-
-  const confirmClearJobs = () => {
-    if (runs.length === 0) return;
-
-    confirmActionDialog({
-      tone: 'danger',
-      id: 'jobs-clear',
-      title: 'Clean execution history?',
-      description: 'A durable cleanup operation will remove completed, failed, cancelled, and cancellation-pending executions. Offline cleanup continues when a node rejoins. Active runs stay visible.',
-      confirmLabel: 'Start cleanup',
-      cancelLabel: 'Keep history',
-      loading: {
-        title: 'Starting cleanup',
-        description: 'Submitting the durable execution cleanup operation.',
-      },
-      success: (result: { operation_id: string }) => ({
-        title: 'Cleanup started',
-        description: `Operation ${result.operation_id} will continue in the background.`,
-      }),
-      error: (error) => ({
-        title: 'Cleanup failed',
-        description: apiErrorMessage(error, 'Failed to start execution cleanup.'),
-      }),
-      onConfirm: async () => {
-        try {
-          setIsClearing(true);
-          const result = await clearJobs();
-          setSelectedJobIds(new Set());
-          await refreshRuns();
-          return result;
-        } catch (e) {
-          console.error('Failed to start execution cleanup', e);
-          throw e;
-        } finally {
-          setIsClearing(false);
-        }
-      },
-    });
-  };
-
-  const selectedCount = selectedJobIds.size;
+  const selectedRuns = runs.filter((run) => selectedJobIds.has(run.run_id));
+  const selectedCount = selectedRuns.length;
   const hasSelection = selectedCount > 0;
-  const allSelected = runs.length > 0 && selectedCount === runs.length;
+  const canPauseSelection = hasSelection && selectedRuns.every((run) => ['pending', 'running'].includes(run.status.trim().toLowerCase()));
+  const canCancelSelection = hasSelection && selectedRuns.every((run) => isActiveRunStatus(run.status));
+  const selectableCount = runs.filter((run) => isActiveRunStatus(run.status)).length;
+  const allSelected = selectableCount > 0 && selectedCount === selectableCount;
 
   return (
     <Card>
@@ -321,7 +247,7 @@ export default function Runs() {
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={!hasSelection || isCancellingAll || bulkAction !== null}
+                disabled={!canPauseSelection || bulkAction !== null}
                 onClick={() => confirmBulkAction('pause')}
               >
                 {bulkAction === 'pause' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PauseCircle className="h-3.5 w-3.5" />}
@@ -336,41 +262,11 @@ export default function Runs() {
                 variant="outline"
                 className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
                 size="sm"
-                disabled={!hasSelection || isCancellingAll || bulkAction !== null}
+                disabled={!canCancelSelection || bulkAction !== null}
                 onClick={() => confirmBulkAction('cancel')}
               >
                 {bulkAction === 'cancel' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
                 {bulkAction === 'cancel' ? 'Cancelling...' : `Cancel${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip content="Start a durable operation to cancel every active run.">
-            <span className="inline-flex">
-              <Button
-                type="button"
-                variant="outline"
-                className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
-                size="sm"
-                disabled={runs.length === 0 || isCancellingAll || bulkAction !== null}
-                onClick={confirmCancelAllJobs}
-              >
-                {isCancellingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
-                {isCancellingAll ? 'Cancelling all...' : 'Cancel all'}
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip content="Start durable cleanup for terminal and cancellation-pending executions.">
-            <span className="inline-flex">
-              <Button
-                type="button"
-                variant="outline"
-                className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
-                size="sm"
-                disabled={runs.length === 0 || isClearing || isCancellingAll || bulkAction !== null}
-                onClick={confirmClearJobs}
-              >
-                {isClearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                {isClearing ? 'Starting...' : 'Clean up'}
               </Button>
             </span>
           </Tooltip>
@@ -425,6 +321,7 @@ export default function Runs() {
               runs.map((run) => {
                 const runId = run.run_id;
                 const selected = selectedJobIds.has(runId);
+                const selectable = isActiveRunStatus(run.status);
                 return (
                 <TableRow
                   key={runId}
@@ -436,6 +333,7 @@ export default function Runs() {
                       aria-label={`Select run ${runId}`}
                       checked={selected}
                       onChange={() => toggleJobSelection(runId)}
+                      disabled={!selectable}
                       className="h-4 w-4 rounded border-neutral-300 text-neutral-950 focus:ring-neutral-950"
                     />
                   </TableCell>
