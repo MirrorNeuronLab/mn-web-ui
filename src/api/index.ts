@@ -1,7 +1,7 @@
 import api, { getApiBaseUrl, getAuthHeader } from './client';
 import { z } from 'zod';
 import { pageTokenFrom, parseArrayOrEmpty, parseOrFallback, parseOrThrow, ValidationError } from './parsing';
-import { blueprintPath, jobPath, modelPath, operationPath, runPath } from './routes';
+import { blueprintPath, jobPath, modelPath, operationPath, routeId, runPath } from './routes';
 import { createWorkflowProgressStreamer } from './streaming';
 import { normalizeWorkflowProgressPayload } from './workflowProgress';
 import { isRecord } from '../utils/records';
@@ -805,6 +805,9 @@ export const fetchBlueprints = (pageToken?: string | null) => api.get('/blueprin
 export const fetchWorkflowProgress = (id: string) => api.get(runPath(id, '/workflow-progress')).then(r => (
   parseOrFallback(WorkflowProgressSchema, r.data, { job_id: id, workflow_id: id, name: id }, `fetchWorkflowProgress(${id})`)
 ));
+export const fetchLaunchProgress = (id: string) => api.get(`/launch-progress/${routeId(id)}`).then(r => (
+  parseOrThrow(LaunchProgressResponseSchema, r.data, `fetchLaunchProgress(${id})`)
+));
 
 const workflowProgressStreamUrl = (id: string) => `${getApiBaseUrl()}${runPath(id, '/events/stream')}`;
 
@@ -824,8 +827,15 @@ export const uploadBundle = (file: File) => {
     parseOrThrow(UploadedBundleSchema, r.data, 'uploadBundle')
   ));
 };
-export const createJob = (payload: unknown, idempotencyKey = newIdempotencyKey()) => api.post('/jobs', payload, {
-  headers: { 'Idempotency-Key': idempotencyKey },
+export const createJob = (
+  payload: unknown,
+  idempotencyKey = newIdempotencyKey(),
+  progressId?: string,
+) => api.post('/jobs', payload, {
+  headers: {
+    'Idempotency-Key': idempotencyKey,
+    ...(progressId ? { 'X-Launch-Progress-ID': progressId } : {}),
+  },
 }).then(r => CreateJobResponseSchema.parse(r.data));
 
 const parseLaunchResponse = (data: unknown) => {
@@ -837,7 +847,10 @@ const parseLaunchResponse = (data: unknown) => {
   return result.data;
 };
 
-export const launchBlueprintJob = (payload: unknown) => {
+export const launchBlueprintJob = (
+  payload: unknown,
+  options: { progressId?: string; idempotencyKey?: string } = {},
+) => {
   const record = isRecord(payload) ? payload : {};
   if (record.source === 'catalog') {
     const blueprintId = typeof record.blueprint_id === 'string' ? record.blueprint_id.trim() : '';
@@ -847,7 +860,11 @@ export const launchBlueprintJob = (payload: unknown) => {
   if (record.source === 'bundle') {
     const bundleId = typeof record.bundle_id === 'string' ? record.bundle_id.trim() : '';
     if (!bundleId) return Promise.reject(new Error('Bundle launch requires a bundle id.'));
-    return createJob({ bundle_id: bundleId }).then((job) => {
+    return createJob(
+      { bundle_id: bundleId },
+      options.idempotencyKey || newIdempotencyKey(),
+      options.progressId,
+    ).then((job) => {
       const jobId = isRecord(job) && typeof job.job_id === 'string' ? job.job_id : '';
       if (!jobId) throw new Error('Job creation did not return a job id.');
       return startStableJobRun(jobId).then((run) => parseLaunchResponse(run));
@@ -858,6 +875,9 @@ export const launchBlueprintJob = (payload: unknown) => {
   const blueprintId = typeof record.blueprint_id === 'string' ? record.blueprint_id.trim() : '';
   const body = LaunchBodySchema.parse({ config_overrides: isRecord(record.config_overrides) ? record.config_overrides : {} });
   return api.post(blueprintPath(blueprintId, '/runs'), body, {
-    headers: { 'Idempotency-Key': newIdempotencyKey() },
+    headers: {
+      'Idempotency-Key': options.idempotencyKey || newIdempotencyKey(),
+      ...(options.progressId ? { 'X-Launch-Progress-ID': options.progressId } : {}),
+    },
   }).then(r => parseLaunchResponse(r.data));
 };

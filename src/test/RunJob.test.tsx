@@ -3,14 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { toast } from 'sonner';
 import RunJob from '../pages/RunJob';
-import { fetchBlueprints, launchBlueprintJob, uploadBundle } from '../api';
+import { fetchBlueprints, fetchLaunchProgress, launchBlueprintJob, newIdempotencyKey, uploadBundle } from '../api';
 import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
 import { ConfirmActionDialogHost } from '../components/ui/confirm-action-dialog';
 
 vi.mock('../api', () => ({
   fetchBlueprints: vi.fn(),
+  fetchLaunchProgress: vi.fn(),
   launchBlueprintJob: vi.fn(),
+  newIdempotencyKey: vi.fn(),
   uploadBundle: vi.fn(),
 }));
 
@@ -38,6 +40,14 @@ describe('RunJob Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     toast.dismiss();
+    vi.mocked(newIdempotencyKey).mockReturnValue('launch-progress-test');
+    vi.mocked(fetchLaunchProgress).mockResolvedValue({
+      progress_id: 'launch-progress-test',
+      status: 'running',
+      completed: false,
+      events: [],
+      phases: [],
+    });
     vi.mocked(fetchBlueprints).mockResolvedValue({
       items: [
         { id: 'worker_one', name: 'Worker One', description: 'Runs one worker.' },
@@ -72,9 +82,42 @@ describe('RunJob Component', () => {
       expect(launchBlueprintJob).toHaveBeenCalledWith({
         source: 'catalog',
         blueprint_id: 'worker_one',
+      }, {
+        progressId: 'launch-progress-test',
+        idempotencyKey: 'launch-progress-test',
       });
       expect(mockNavigate).toHaveBeenCalledWith('/runs/run-blueprint-123');
     });
+  });
+
+  it('shows real server preparation phases while the launch request is pending', async () => {
+    vi.mocked(launchBlueprintJob).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(fetchLaunchProgress).mockResolvedValue({
+      progress_id: 'launch-progress-test',
+      status: 'running',
+      current_phase: 'context_engine',
+      completed: false,
+      latest: {
+        phase: 'context_engine',
+        status: 'running',
+        message: 'Starting context memory service.',
+      },
+      events: [],
+      phases: [
+        { id: 'requirements', label: 'Check runtime resources', status: 'completed', message: 'Runtime requirements passed.' },
+        { id: 'context_engine', label: 'Prepare context memory', status: 'running', message: 'Starting context memory service.' },
+      ],
+    });
+    renderRunJob();
+    await waitForBlueprintSelection();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Launch' })).at(-1)!);
+
+    expect(await screen.findByText('Check runtime resources')).toBeInTheDocument();
+    expect(screen.getByText('Prepare context memory')).toBeInTheDocument();
+    expect(screen.getByText('Starting context memory service.')).toBeInTheDocument();
+    expect(fetchLaunchProgress).toHaveBeenCalledWith('launch-progress-test');
   });
 
   it('sends nested configuration overrides with a blueprint run', async () => {
@@ -95,6 +138,9 @@ describe('RunJob Component', () => {
         llm: { configs: { primary: { context_size: 8192 } } },
         features: { research: true },
       },
+    }, {
+      progressId: 'launch-progress-test',
+      idempotencyKey: 'launch-progress-test',
     }));
   });
 
@@ -128,7 +174,10 @@ describe('RunJob Component', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
     fireEvent.click((await screen.findAllByRole('button', { name: 'Launch' })).at(-1)!);
     await waitFor(() => {
-      expect(launchBlueprintJob).toHaveBeenCalledWith({ source: 'bundle', bundle_id: 'bundle_01JABC' });
+      expect(launchBlueprintJob).toHaveBeenCalledWith(
+        { source: 'bundle', bundle_id: 'bundle_01JABC' },
+        { progressId: 'launch-progress-test', idempotencyKey: 'launch-progress-test' },
+      );
       expect(mockNavigate).toHaveBeenCalledWith('/runs/run-zip-123');
     });
   });

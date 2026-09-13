@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchBlueprints, launchBlueprintJob, uploadBundle } from '../api';
+import { fetchBlueprints, fetchLaunchProgress, launchBlueprintJob, newIdempotencyKey, uploadBundle } from '../api';
 import type { Blueprint, LaunchProgressEvent, LaunchProgressPhase, LaunchProgressResponse } from '../api';
 import { CheckCircle, FileArchive, Loader2, Play, UploadCloud, Workflow, XCircle } from 'lucide-react';
 import { confirmActionDialog } from '../components/ui/confirm-action';
@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { cn } from '../lib/utils';
 import { apiErrorMessage } from '../utils/apiErrors';
 import { parseConfigOverrideAssignments } from '../utils/configOverrides';
+import { usePollingEffect } from '../hooks/usePollingEffect';
 
 type LaunchMode = 'blueprint' | 'bundle';
 
@@ -193,7 +194,7 @@ function LaunchProgressModal({
             Client-side steps. Server pipeline progress is shown on the run page after submission.
           </p>
         ) : null}
-        <ol className="space-y-3">
+        <ol className="space-y-3" aria-live="polite">
           {items.map((phase) => {
             const status = normalizedStatus(phase.status);
             const failed = FAILED_LAUNCH_STATUSES.has(status);
@@ -251,7 +252,10 @@ export default function RunJob() {
   const [uploading, setUploading] = useState(false);
   const [running, setRunning] = useState(false);
   const [progressEvents, setProgressEvents] = useState<LaunchProgressEvent[]>([]);
+  const [launchProgress, setLaunchProgress] = useState<LaunchProgressResponse | null>(null);
+  const [launchProgressId, setLaunchProgressId] = useState<string | null>(null);
   const [progressModalOpen, setProgressModalOpen] = useState(false);
+  const launchProgressIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
 
@@ -274,6 +278,7 @@ export default function RunJob() {
     }, 0);
     return () => {
       cancelled = true;
+      launchProgressIdRef.current = null;
       window.clearTimeout(timer);
     };
   }, []);
@@ -293,6 +298,21 @@ export default function RunJob() {
     parsedConfigOverrides.ok &&
     ((mode === 'blueprint' && Boolean(selectedBlueprintId)) ||
       (mode === 'bundle' && Boolean(bundleData?.bundle_id)));
+
+  const loadLaunchProgress = useCallback(async () => {
+    if (!launchProgressId) return;
+    const snapshot = await fetchLaunchProgress(launchProgressId);
+    if (launchProgressIdRef.current !== launchProgressId) return;
+    setLaunchProgress(snapshot);
+    setProgressEvents(snapshot.events || []);
+  }, [launchProgressId]);
+
+  usePollingEffect(loadLaunchProgress, {
+    intervalMs: 750,
+    enabled: running && Boolean(launchProgressId),
+    maxConsecutiveFailures: 5,
+    maxDelayMs: 5_000,
+  });
 
   const resetFileInput = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -378,8 +398,18 @@ export default function RunJob() {
         description: apiErrorMessage(err, 'Failed to validate and launch job'),
       }),
       onConfirm: async () => {
+        const progressId = newIdempotencyKey();
+        launchProgressIdRef.current = progressId;
         setRunning(true);
         setError(null);
+        setLaunchProgressId(progressId);
+        setLaunchProgress({
+          progress_id: progressId,
+          status: 'pending',
+          completed: false,
+          events: [],
+          phases: [],
+        });
         setProgressModalOpen(true);
         setProgressEvents([{
           ts: new Date().toISOString(),
@@ -388,7 +418,10 @@ export default function RunJob() {
           message: 'Starting launch.',
         }]);
         try {
-          const response = await launchBlueprintJob(launchPayload());
+          const response = await launchBlueprintJob(launchPayload(), {
+            progressId,
+            idempotencyKey: progressId,
+          });
           const runId = launchResponseRunId(response);
           if (!runId) throw new Error('Run creation did not return a run id.');
           setProgressEvents((events) => [...events, {
@@ -397,12 +430,23 @@ export default function RunJob() {
             status: 'completed',
             message: 'Run accepted by the runtime.',
           }]);
+          launchProgressIdRef.current = null;
+          setLaunchProgressId(null);
           setRunning(false);
           navigate(`/runs/${encodeURIComponent(runId)}`);
           return runId;
         } catch (err: unknown) {
           const message = apiErrorMessage(err, 'Failed to validate and launch job');
           setError(message);
+          try {
+            const snapshot = await fetchLaunchProgress(progressId);
+            setLaunchProgress(snapshot);
+            setProgressEvents(snapshot.events || []);
+          } catch {
+            // The launch response remains authoritative when progress retrieval is unavailable.
+          }
+          launchProgressIdRef.current = null;
+          setLaunchProgressId(null);
           setProgressEvents((events) => [...events, {
             ts: new Date().toISOString(),
             phase: 'submit',
@@ -422,6 +466,9 @@ export default function RunJob() {
     setMode(nextMode);
     setError(null);
     setProgressEvents([]);
+    setLaunchProgress(null);
+    launchProgressIdRef.current = null;
+    setLaunchProgressId(null);
     setProgressModalOpen(false);
   };
 
@@ -592,7 +639,7 @@ export default function RunJob() {
       </Card>
       <LaunchProgressModal
         events={progressEvents}
-        progress={null}
+        progress={launchProgress}
         open={progressModalOpen && (running || progressEvents.length > 0)}
         running={running}
         onClose={() => setProgressModalOpen(false)}

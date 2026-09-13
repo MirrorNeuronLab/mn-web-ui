@@ -53,7 +53,7 @@ avoids duplicate events or stale-state overwrites.
 ## Interaction Contract
 
 - Every user action produces immediate visible feedback.
-- Long-running operations show their current state and a clear terminal result.
+- Long-running operations show their current state and a clear terminal result. Run submission sends a per-launch progress identifier and renders the API-reported preparation phases until the run is ready.
 - Destructive or broad mutations require explicit confirmation.
 - Stable-job controls use the projected executable `job.type` as their sole
   lifecycle classifier. A `type: service` job shows Start only with no attached

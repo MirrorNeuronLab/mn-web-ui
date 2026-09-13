@@ -5,6 +5,7 @@ import {
   cancelRun,
   deleteStableJob,
   fetchJobEvents,
+  fetchLaunchProgress,
   fetchRuns,
   fetchRuntimeModels,
   fetchStableJobRuns,
@@ -178,19 +179,57 @@ describe('canonical REST v1 client', () => {
   });
 
 
+  it('reads sanitized launch preparation progress', async () => {
+    mockApi.get.mockResolvedValue({
+      data: {
+        progress_id: 'progress-test',
+        status: 'running',
+        completed: false,
+        phases: [{ id: 'prepare_bundle', label: 'Package workflow', status: 'running' }],
+      },
+    });
+
+    await expect(fetchLaunchProgress('progress/test')).resolves.toEqual(expect.objectContaining({
+      progress_id: 'progress-test',
+      phases: [expect.objectContaining({ id: 'prepare_bundle', status: 'running' })],
+    }));
+    expect(mockApi.get).toHaveBeenCalledWith('/launch-progress/progress%2Ftest');
+  });
+
   it('creates blueprint runs directly and rejects public host paths', async () => {
     mockApi.post.mockResolvedValue({ data: { run_id: 'run-blueprint', job_id: 'job-blueprint', status: 'pending' } });
     await expect(launchBlueprintJob({
       source: 'catalog',
       blueprint_id: 'researcher',
       config_overrides: { mode: 'safe' },
-    })).resolves.toEqual(expect.objectContaining({ run_id: 'run-blueprint' }));
+    }, { progressId: 'progress-test' })).resolves.toEqual(expect.objectContaining({ run_id: 'run-blueprint' }));
     expect(mockApi.post).toHaveBeenCalledWith('/blueprints/researcher/runs', {
       config_overrides: { mode: 'safe' },
-    }, { headers: { 'Idempotency-Key': 'idem-test-key' } });
+    }, { headers: {
+      'Idempotency-Key': 'idem-test-key',
+      'X-Launch-Progress-ID': 'progress-test',
+    } });
     await expect(launchBlueprintJob({ source: 'path', path: '/tmp/private' })).rejects.toThrow(
       'Host filesystem paths are not accepted',
     );
+  });
+
+  it('reports bundle preparation through the stable job creation request', async () => {
+    mockApi.post
+      .mockResolvedValueOnce({ data: { job_id: 'job-bundle' } })
+      .mockResolvedValueOnce({ data: { run_id: 'run-bundle', job_id: 'job-bundle', status: 'pending' } });
+
+    await launchBlueprintJob(
+      { source: 'bundle', bundle_id: 'bundle-1' },
+      { progressId: 'progress-bundle', idempotencyKey: 'launch-bundle' },
+    );
+
+    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/jobs', { bundle_id: 'bundle-1' }, {
+      headers: {
+        'Idempotency-Key': 'launch-bundle',
+        'X-Launch-Progress-ID': 'progress-bundle',
+      },
+    });
   });
 
   it('uploads multipart bundles and retains only the opaque bundle identity', async () => {

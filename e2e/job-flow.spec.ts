@@ -162,7 +162,7 @@ test('submits an opaque bundle and controls its canonical Run', async ({ page })
   await expect(page.getByRole('cell', { name: /cancelled/i })).toBeVisible();
 });
 
-test('creates a catalog Run directly without launch-progress aliases', async ({ page }) => {
+test('creates a catalog Run directly with live launch progress', async ({ page }) => {
   let requests = 0;
   let runStatus = 'running';
   await page.route('**/api/v1/blueprints*', (route) => route.fulfill({
@@ -172,6 +172,7 @@ test('creates a catalog Run directly without launch-progress aliases', async ({ 
     requests += 1;
     expect(await route.request().postDataJSON()).toEqual({ config_overrides: {} });
     expect(route.request().headers()['idempotency-key']).toBeTruthy();
+    expect(route.request().headers()['x-launch-progress-id']).toBeTruthy();
     await route.fulfill({ status: 202, headers: { Location: '/api/v1/runs/catalog-run-1' }, contentType: 'application/json', body: JSON.stringify({ run_id: 'catalog-run-1', status: 'pending' }) });
   });
   await installRunRoutes(page, 'catalog-run-1', () => runStatus, (next) => { runStatus = next; });
