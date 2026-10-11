@@ -31,6 +31,8 @@ import { buildOutputResources } from '../utils/workflowResources';
 import { webUiInfoFromRecord } from '../utils/jobDetailsView';
 import { isTerminalRunStatus, runStatusBadgeClass } from '../utils/jobStatus';
 import { isRecord } from '../utils/records';
+import { applyWorkflowShape, type WorkflowShape } from '../api/workflowShape';
+import { usePollingEffect } from '../hooks/usePollingEffect';
 
 const StatusIcon = ({ status }: { status: string }) => {
   const normalized = status.trim().toLowerCase();
@@ -191,6 +193,10 @@ const progressStreamBadgeClass = (state: ProgressStreamState) => {
 
 export default function JobDetails() {
   const { id } = useParams();
+  return <JobDetailsView key={id} id={id} />;
+}
+
+function JobDetailsView({ id }: { id?: string }) {
   const navigate = useNavigate();
   const [details, setDetails] = useState<JobDetailsType | null>(null);
   const [events, setEvents] = useState<JobEvent[]>([]);
@@ -201,6 +207,10 @@ export default function JobDetails() {
   const [agentView, setAgentView] = useState<'list' | 'graph' | 'code'>('list');
   const [loadError, setLoadError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
+  const [eventsError, setEventsError] = useState('');
+  const [graphError, setGraphError] = useState('');
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [graphLoading, setGraphLoading] = useState(true);
   
   const [isCancelling, setIsCancelling] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
@@ -210,21 +220,16 @@ export default function JobDetails() {
   const [streamError, setStreamError] = useState('');
   const [streamAttempt, setStreamAttempt] = useState(0);
   const terminalRefreshRef = useRef<string | null>(null);
-  const eventsLoadedForRef = useRef<string | null>(null);
-  const graphLoadedForRef = useRef<string | null>(null);
-  const renderedJobIdRef = useRef(id);
-
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     if (!id) return;
     try {
       const d = await fetchJobDetails(id);
+      if (signal?.aborted) return;
       setDetails(d);
       setLoadError('');
       setLoadFailed(false);
       const root = d as Record<string, unknown>;
-      const job: Record<string, unknown> = isRecord(d.job) ? d.job : {};
-      const summary: Record<string, unknown> = isRecord(d.summary) ? d.summary : {};
-      const jobId = stringValue(job.job_id, job.id, root.job_id, summary.job_id);
+      const jobId = stringValue(root.job_id);
       if (!jobId) {
         setJobWebUi(null);
       } else {
@@ -232,15 +237,15 @@ export default function JobDetails() {
           // A Job does not need to publish a dedicated blueprint dashboard.
           // Keep the progress UI quiet when that optional resource is absent.
           if (responseStatusFromError(err) !== 404) {
-            console.error('Failed to load job web UI', err);
+            console.error('Failed to load job web UI.');
           }
           return null;
         });
-        setJobWebUi(jobUi?.web_ui || null);
+        if (!signal?.aborted) setJobWebUi(jobUi?.web_ui || null);
       }
 
     } catch (err) {
-      console.error('Failed to load job details', err);
+      if (signal?.aborted) return;
       const status = responseStatusFromError(err);
       setLoadError(status === 404
         ? 'Run not found. It may have been cleaned up or the link is incorrect.'
@@ -250,10 +255,14 @@ export default function JobDetails() {
   }, [id]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void load();
+      void load(controller.signal);
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
   }, [load]);
 
   useEffect(() => {
@@ -266,45 +275,34 @@ export default function JobDetails() {
     return () => window.clearTimeout(timer);
   }, [actionStatus]);
 
-  useEffect(() => {
-    const previousJobId = renderedJobIdRef.current;
-    renderedJobIdRef.current = id;
-    terminalRefreshRef.current = null;
-    eventsLoadedForRef.current = null;
-    graphLoadedForRef.current = null;
-    if (previousJobId === id) return undefined;
-    const timer = window.setTimeout(() => {
-      setActionStatus(null);
-      setEvents([]);
-      setGraph(null);
-      setStreamError('');
-      setWorkflowProgress(current => current?.job_id === id ? current : null);
-      setProgressStreamState('connecting');
-    }, 0);
-    return () => window.clearTimeout(timer);
+  const loadEvents = useCallback(async (signal?: AbortSignal) => {
+    if (!id) return;
+    try {
+      const next = await fetchJobEvents(id);
+      if (signal?.aborted) return;
+      setEvents(next);
+      setEventsError('');
+    } catch (err) {
+      if (!signal?.aborted) setEventsError(apiErrorMessage(err, 'Failed to load events. Try again.'));
+    } finally {
+      if (!signal?.aborted) setEventsLoading(false);
+    }
   }, [id]);
-
-  useEffect(() => {
-    if (!id || activeTab !== 'logs' || eventsLoadedForRef.current === id) return;
-    eventsLoadedForRef.current = id;
-    void fetchJobEvents(id).then((nextEvents) => {
-      if (eventsLoadedForRef.current === id) setEvents(nextEvents);
-    }).catch((err) => {
-      console.error('Failed to load job events', err);
-      if (eventsLoadedForRef.current === id) setEvents([]);
-    });
-  }, [activeTab, id]);
-
-  useEffect(() => {
-    if (!id || activeTab !== 'agents' || graphLoadedForRef.current === id) return;
-    graphLoadedForRef.current = id;
-    void fetchJobAgentGraph(id).then((nextGraph) => {
-      if (graphLoadedForRef.current === id) setGraph(nextGraph);
-    }).catch((err) => {
-      console.error('Failed to load job agent graph', err);
-      if (graphLoadedForRef.current === id) setGraph(null);
-    });
-  }, [activeTab, id]);
+  const loadGraph = useCallback(async (signal?: AbortSignal) => {
+    if (!id) return;
+    try {
+      const next = await fetchJobAgentGraph(id);
+      if (signal?.aborted) return;
+      setGraph(next);
+      setGraphError('');
+    } catch (err) {
+      if (!signal?.aborted) setGraphError(apiErrorMessage(err, 'Failed to load the agent graph. Try again.'));
+    } finally {
+      if (!signal?.aborted) setGraphLoading(false);
+    }
+  }, [id]);
+  usePollingEffect(loadEvents, { intervalMs: 5000, enabled: activeTab === 'logs' });
+  usePollingEffect(loadGraph, { intervalMs: 5000, enabled: activeTab === 'agents' });
 
   useEffect(() => {
     if (!id) return;
@@ -344,7 +342,7 @@ export default function JobDetails() {
       setWorkflowProgress(snapshot);
       if (isTerminalRunStatus(snapshot.status) && terminalRefreshRef.current !== snapshot.status) {
         terminalRefreshRef.current = snapshot.status || 'terminal';
-        void load();
+        void load(controller.signal);
       }
     }, controller.signal, markLive).then(() => {
       if (!cancelled) {
@@ -358,7 +356,7 @@ export default function JobDetails() {
           setProgressStreamState('disconnected');
           setStreamError(apiErrorMessage(err, 'Workflow progress stream disconnected. Retry to reconnect.'));
         }
-        console.error('Workflow progress stream closed', err);
+        console.error('Workflow progress stream closed.');
       }
     });
     return () => {
@@ -387,20 +385,20 @@ export default function JobDetails() {
     }
     return <div className="p-5 text-sm text-neutral-500">Loading run…</div>;
   }
-  const jobRecord: Record<string, unknown> = isRecord(details.job) ? details.job : {};
-  const durableJobId = knownStringValue(jobRecord.job_id, (details as Record<string, unknown>).job_id);
+  const durableJobId = knownStringValue((details as Record<string, unknown>).job_id);
   const resolvedWebUi = webUiInfoFromRecord(jobWebUi);
   const webUi = resolvedWebUi && durableJobId
     ? { ...resolvedWebUi, href: `/jobs/${encodeURIComponent(durableJobId)}/ui` }
     : resolvedWebUi;
-  const jobId = knownStringValue(details.job.run_id, details.job.job_id, id) || id || 'run';
-  const progressTerminalStatus = inferredTerminalStatusFromProgress(workflowProgress);
+  const jobId = id || 'run';
+  const shapedProgress = workflowProgress ? applyWorkflowShape(workflowProgress, details.workflow_shape as WorkflowShape | undefined) : null;
+  const progressTerminalStatus = inferredTerminalStatusFromProgress(shapedProgress);
   // actionStatus is an optimistic hint: it wins for at most 15s (see the
   // expiry timer above) while terminal progress always wins immediately.
   const displayStatus = displayStatusFromSources(actionStatus, progressTerminalStatus || workflowProgress?.status, details.job.status, graph?.status);
   const graphId = knownStringValue(details.job.graph_id, workflowProgress?.workflow_id, graph?.graph_id);
   const submittedAt = formattedTimestamp(details.job.submitted_at, workflowProgress?.submitted_at);
-  const displayWorkflowProgress = workflowProgress && displayStatus ? { ...workflowProgress, status: displayStatus } : workflowProgress;
+  const displayWorkflowProgress = shapedProgress && displayStatus ? { ...shapedProgress, status: displayStatus } : shapedProgress;
   const displayGraph = buildDisplayGraph(graph, details.agents || [], jobId, graphId, displayStatus, displayWorkflowProgress);
   const displayAgents = displayGraph.nodes;
   const graphCode = JSON.stringify(displayGraph, null, 2);
@@ -460,7 +458,6 @@ export default function JobDetails() {
           setIsCancelling(false);
           navigate('/runs');
         } catch (err: unknown) {
-          console.error('Failed to cancel job', err);
           setIsCancelling(false);
           throw err;
         }
@@ -493,9 +490,6 @@ export default function JobDetails() {
           const response = await pauseRun(jobId);
           setActionStatus(canonicalActionStatus(response, 'paused'));
           await load();
-        } catch (err) {
-          console.error('Failed to pause job', err);
-          throw err;
         } finally {
           setIsPausing(false);
         }
@@ -528,9 +522,6 @@ export default function JobDetails() {
           const response = await resumeRun(jobId);
           setActionStatus(canonicalActionStatus(response, 'running'));
           await load();
-        } catch (err) {
-          console.error('Failed to resume job', err);
-          throw err;
         } finally {
           setIsResuming(false);
         }
@@ -544,6 +535,7 @@ export default function JobDetails() {
 
   return (
     <div className="flex h-full flex-col space-y-4 font-sans">
+      {typeof details.workflow_shape_warning === 'string' ? <div role="status" className="text-xs text-amber-800">{details.workflow_shape_warning}</div> : null}
       <div className="grid shrink-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_560px]">
         <Card className="flex flex-col items-start justify-between gap-4 p-4 sm:flex-row">
         <div className="min-w-0">
@@ -646,6 +638,7 @@ export default function JobDetails() {
 
           {activeTab === 'agents' && (
             <div className="absolute inset-0 flex flex-col bg-white">
+              {graphError ? <div role="alert" className="flex items-center justify-between gap-2 border-b border-red-200 bg-red-50 p-3 text-xs text-red-800"><span>{graphError}</span><Button variant="outline" size="sm" onClick={() => void loadGraph()}>Retry graph</Button></div> : null}
               <div className="flex items-center justify-end border-b border-neutral-200 bg-white px-3 py-2">
                 <div className="flex overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
                   <Tooltip content="Show agents in a scan-friendly table.">
@@ -710,7 +703,7 @@ export default function JobDetails() {
                   <div className="overflow-auto absolute inset-0">
                     {displayAgents.length === 0 ? (
                       <div className="flex h-full items-center justify-center text-xs text-neutral-500">
-                        No agents reported yet.
+                        {graphLoading ? 'Loading agents…' : graphError ? 'Agent data is unavailable.' : 'No agents reported yet.'}
                       </div>
                     ) : (
                       <Table>
@@ -746,15 +739,16 @@ export default function JobDetails() {
 
           {activeTab === 'logs' && (
             <div className="absolute inset-0 overflow-auto bg-neutral-950 p-3 font-mono text-xs leading-5 text-neutral-300">
+              {eventsError ? <div role="alert" className="mb-3 flex items-center justify-between gap-2 text-red-300"><span>{eventsError}</span><Button variant="outline" size="sm" onClick={() => void loadEvents()}>Retry events</Button></div> : null}
               {(events || []).slice().reverse().map((ev, i) => (
                 <div key={i} className="mb-1">
-                  <span className="text-neutral-500">{ev.timestamp ? format(new Date(ev.timestamp), 'HH:mm:ss.SSS') : 'unknown'}</span>{' '}
+                  <span className="text-neutral-500">{ev.timestamp && Number.isFinite(new Date(ev.timestamp).getTime()) ? format(new Date(ev.timestamp), 'HH:mm:ss.SSS') : 'Not reported'}</span>{' '}
                   <span className="text-neutral-300">[{ev.type}]</span>{' '}
                   {ev.agent_id && <span className="text-neutral-300 font-bold">{ev.agent_id}</span>}{' '}
                   <span className="text-neutral-300">{ev.payload ? JSON.stringify(ev.payload) : ''}</span>
                 </div>
               ))}
-              {events.length === 0 && <div className="text-neutral-500 italic">No events recorded.</div>}
+              {events.length === 0 && <div className="text-neutral-500 italic">{eventsLoading ? 'Loading events…' : eventsError ? 'Event data is unavailable.' : 'No events recorded.'}</div>}
             </div>
           )}
         </div>

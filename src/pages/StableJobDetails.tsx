@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { Archive, Ban, Clock3, DatabaseZap, Eye, Loader2, Pause, Play, RotateCcw, Trash2 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -15,6 +15,8 @@ import {
   startStableJobRun,
 } from '../api';
 import type { StableJob, StableRun } from '../api';
+import { collectPages } from '../api/parsing';
+import { usePollingEffect } from '../hooks/usePollingEffect';
 import { confirmActionDialog } from '../components/ui/confirm-action';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -47,6 +49,10 @@ const timestamp = (...values: Array<string | null | undefined>) => {
 
 export default function StableJobDetails() {
   const { jobId } = useParams();
+  return <StableJobDetailsView key={jobId} jobId={jobId} />;
+}
+
+function StableJobDetailsView({ jobId }: { jobId?: string }) {
   const navigate = useNavigate();
   const [job, setJob] = useState<StableJob | null>(null);
   const [runs, setRuns] = useState<StableRun[]>([]);
@@ -55,35 +61,35 @@ export default function StableJobDetails() {
   const [runsError, setRunsError] = useState('');
   const [busyAction, setBusyAction] = useState('');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     if (!jobId) return;
     try {
       const nextJob = await fetchStableJob(jobId);
+      if (signal?.aborted) return;
       setJob(nextJob);
       setError('');
     } catch (err) {
+      if (signal?.aborted) return;
       setError(apiErrorMessage(err, 'Failed to load this job.'));
     }
     try {
-      const nextRuns = await fetchStableJobRuns(jobId);
+      const nextRuns = await collectPages((token) => token ? fetchStableJobRuns(jobId, token) : fetchStableJobRuns(jobId), 'Run history');
+      if (signal?.aborted) return;
       setRuns(nextRuns.items);
       setRunsError('');
     } catch (err) {
+      if (signal?.aborted) return;
       setRunsError(apiErrorMessage(err, 'Failed to load run history. The job details above are still current.'));
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [jobId]);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void load();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [load]);
+  usePollingEffect(load, { intervalMs: 5000, enabled: !busyAction });
 
   const activeRuns = useMemo(() => runs.filter((run) => isActiveRunStatus(run.status)), [runs]);
   const hasActiveRuns = activeRuns.length > 0;
+  const lifecycleBlocked = Boolean(busyAction || hasActiveRuns || error || runsError);
   const latestRun = useMemo(() => (
     runs.find((run) => run.run_id === job?.latest_run_id) || runs.at(-1) || null
   ), [job?.latest_run_id, runs]);
@@ -300,14 +306,14 @@ export default function StableJobDetails() {
               </Button>
             ) : null}
             {job.status !== 'archived' ? (
-              <Button variant="outline" size="sm" onClick={confirmArchive} disabled={Boolean(busyAction) || hasActiveRuns}>
+              <Button variant="outline" size="sm" onClick={confirmArchive} disabled={lifecycleBlocked}>
                 <Archive className="h-3.5 w-3.5" /> Archive
               </Button>
             ) : null}
-            <Button variant="outline" size="sm" onClick={confirmReset} disabled={Boolean(busyAction) || hasActiveRuns}>
+            <Button variant="outline" size="sm" onClick={confirmReset} disabled={lifecycleBlocked}>
               <DatabaseZap className="h-3.5 w-3.5" /> Reset data
             </Button>
-            <Button variant="outline" size="sm" className="border-red-200 text-red-700 hover:bg-red-50" onClick={confirmDeleteJob} disabled={Boolean(busyAction) || hasActiveRuns}>
+            <Button variant="outline" size="sm" className="border-red-200 text-red-700 hover:bg-red-50" onClick={confirmDeleteJob} disabled={lifecycleBlocked}>
               <Trash2 className="h-3.5 w-3.5" /> Delete
             </Button>
           </div>

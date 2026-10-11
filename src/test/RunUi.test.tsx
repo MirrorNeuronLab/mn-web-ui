@@ -119,4 +119,15 @@ describe('JobUi', () => {
     expect(await screen.findByText('This job is paused. Resume it to reopen its web UI.')).toBeInTheDocument();
     expect(screen.queryByTitle('Blueprint Dashboard')).not.toBeInTheDocument();
   });
+
+  it('waits for readiness rather than loading an unavailable dashboard', async () => {
+    vi.mocked(fetchJobUi).mockResolvedValue({
+      job_id: 'job-1',
+      ui: { schema_version: 'mn.web_ui.external.v1', renderer: 'external-url', job_id: 'job-1', title: 'Blueprint Web UI', metadata: {} },
+      web_ui: { adapter: 'external-url', kind: 'service', url: 'http://127.0.0.1:61000/', title: 'Blueprint Dashboard', status: 'starting', metadata: { readiness: { ready: false } } },
+    });
+    renderJobUi();
+    expect(await screen.findByText('The web UI is getting ready. This page will open when it is available.')).toBeInTheDocument();
+    expect(screen.queryByTitle('Blueprint Dashboard')).not.toBeInTheDocument();
+  });
 });

@@ -46,5 +46,5 @@ export const artifactDisplayName = (artifact?: ArtifactLike | null, fallback = '
 };
 
 export const isOpenableHref = (value: string | undefined): value is string => (
-  typeof value === 'string' && /^(https?:\/\/|\/)/i.test(value.trim())
+  typeof value === 'string' && /^(https?:\/\/|\/(?![/\\]))/i.test(value.trim()) && !/[\\\r\n]/.test(value)
 );

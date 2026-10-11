@@ -3,6 +3,7 @@ import { apiBaseUrl, authToken } from '../config/browser';
 
 const api = axios.create({
   baseURL: apiBaseUrl(),
+  timeout: 30_000,
 });
 
 api.interceptors.request.use((request) => {

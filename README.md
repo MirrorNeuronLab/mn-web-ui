@@ -12,8 +12,11 @@ The main lifecycle surfaces are intentionally separate:
   monitor snapshots, agent graphs, events, and artifacts use `/api/v1`.
 
 The run monitor defaults to a selectable public-step list and can switch to the
-equivalent workflow graph. Both modes consume the same workflow-progress
-contract as `mn job monitor`; runtime-only control nodes are not UI steps.
+equivalent workflow graph. Live progress supplies execution state; the job's
+latest-run workflow resources supply labels, agent roles, and topology. They
+are combined only when their execution identities match. Historical runs whose
+shape is unavailable show an explicit notice and runtime step identifiers.
+Runtime-only control nodes are not UI steps.
 
 ## Quick Start
 
@@ -32,7 +35,23 @@ Run local checks:
 npm run lint
 npm test -- --run
 npm run build
+npm run test:e2e
 ```
+
+The normal browser suite uses deterministic HTTP fixtures. To additionally test
+against the current API's actual routes and Web UI reverse proxy, keep sibling
+`mn-api` and `mn-python-sdk` checkouts and provide a Python interpreter with the
+API dependencies installed:
+
+```bash
+MN_WEB_E2E_PYTHON=/path/to/python npm run test:api
+```
+
+`MN_WEB_E2E_API_SOURCE` may override the sibling API checkout path. This gate
+uses ports 54009 and 4174, temporary storage, and a fake runtime. It verifies
+authentication, pagination, ZIP validation/upload, launch requests, progress,
+downloads, model benchmarks, job/run controls, data resets, and embedded service
+UI without executing real work or accessing user runtime storage.
 
 Default local URL:
 
@@ -49,16 +68,26 @@ http://localhost:55173
 ## Notes
 
 - Start `mn-api` before using live runtime screens.
-- The configured API base may still point at `/api/v1` for runtime-wide
-  inventory endpoints; all job and execution monitoring derives and uses the
-  sibling `/api/v1` base.
+- The browser API base is a same-origin path, normally `/api/v1`. Absolute and
+  protocol-relative bases are rejected to keep bearer tokens on the local origin.
 - Set `MN_WEB_API_TOKEN` when connecting to a protected API instance.
+- Job IDs, execution IDs, and output-storage IDs are separate identities. Run
+  routes and controls always use the canonical execution ID; job UI routes use
+  the durable job ID returned by the canonical Run resource.
+- Models request `installed_only=true`. Catalogs, models, events, and job run
+  history follow the API's opaque page cursors. Jobs and Runs retain expanded
+  pages while polling their current contents and cursor.
+- Protected artifact/output links download through the authenticated API client.
+  Reads time out after 30 seconds, benchmarks after 70 seconds, and explicit
+  preparation/upload commands after 30 minutes. Data reset waits for its accepted
+  operation to complete, with a five-minute polling deadline.
 - Blueprint-owned interfaces are `external-url` service handles. Service pages
   remain under the local `/jobs/:jobId/ui` route: the local Web UI server
   proxies only the job's declared dashboard, video, and WebSocket companion
   ports, so the browser never needs to navigate directly to a remote runtime
   node. Paused, stopped, cancelled, and failed services show a lifecycle
-  message instead of framing a dead upstream.
+  message instead of framing a dead upstream. Handles reporting
+  `metadata.readiness.ready=false` wait until the API reports readiness.
 
 ## Configuration
 

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { AlertCircle, Ban, CheckCircle, Clock, Eye, Loader2, PauseCircle, PlayCircle, XCircle } from 'lucide-react';
@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { usePollingEffect } from '../hooks/usePollingEffect';
+import { usePaginatedPolling } from '../hooks/usePaginatedPolling';
 import { cn } from '../lib/utils';
 import { apiErrorMessage } from '../utils/apiErrors';
 import { isActiveRunStatus } from '../utils/jobStatus';
@@ -46,87 +46,21 @@ const StatusIcon = ({ status }: { status: string }) => {
   }
 };
 
+const runIdentity = (run: RunSummary) => run.run_id;
+
 export default function Runs() {
-  const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<'pause' | 'cancel' | null>(null);
   const [activeOnly, setActiveOnly] = useState(false);
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState('');
-  const filterKeyRef = useRef<string>('');
-
-  const mergeRuns = useCallback((fresh: RunSummary[], filterKey: string, preserveExtra: boolean) => {
-    // Background polls preserve user-expanded "Load more" pages: rows the
-    // fresh first page no longer contains are kept after it (deduped).
-    // Replacement happens on filter change, explicit refresh, or when the
-    // server reports no further pages (then missing rows are genuinely gone).
-    setRuns((prev) => {
-      if (filterKeyRef.current !== filterKey || prev.length === 0 || !preserveExtra) {
-        filterKeyRef.current = filterKey;
-        return fresh;
-      }
-      const freshIds = new Set(fresh.map((run) => run.run_id));
-      const extra = prev.filter((run) => !freshIds.has(run.run_id));
-      return [...fresh, ...extra];
-    });
-    setSelectedJobIds((current) => {
-      const availableIds = new Set(fresh.filter((run) => isActiveRunStatus(run.status)).map((run) => run.run_id));
-      return new Set([...current].filter((jobId) => availableIds.has(jobId)));
-    });
-  }, []);
-
-  const loadRuns = useCallback(async () => {
-    const filterKey = `terminal:${!activeOnly}`;
-    try {
-      const page = await fetchRuns({ includeTerminal: !activeOnly });
-      mergeRuns(page.items, filterKey, page.next_page_token !== null);
-      setNextPageToken(page.next_page_token);
-      setError('');
-    } catch (e) {
-      console.error('Failed to load runs', e);
-      setError(apiErrorMessage(e, 'Failed to load runs. Try again.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [activeOnly, mergeRuns]);
-
-  const markInitialLoading = useCallback(() => {
-    setLoading(true);
-  }, []);
-
-  usePollingEffect(loadRuns, { intervalMs: 5000, onInitialPoll: markInitialLoading, onError: (e) => setError(apiErrorMessage(e, 'Failed to load runs. Try again.')) });
-
-  const refreshRuns = async () => {
-    try {
-      const page = await fetchRuns({ includeTerminal: !activeOnly });
-      mergeRuns(page.items, `terminal:${!activeOnly}`, false);
-      setNextPageToken(page.next_page_token);
-      setError('');
-    } catch (e) {
-      setError(apiErrorMessage(e, 'Failed to refresh runs. Try again.'));
-      throw e;
-    }
-  };
-
-  const loadMore = async () => {
-    if (!nextPageToken || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const page = await fetchRuns({ includeTerminal: !activeOnly, pageToken: nextPageToken });
-      setRuns((prev) => {
-        const known = new Set(prev.map((run) => run.run_id));
-        return [...prev, ...page.items.filter((run) => !known.has(run.run_id))];
-      });
-      setNextPageToken(page.next_page_token);
-      setError('');
-    } catch (e) {
-      setError(apiErrorMessage(e, 'Failed to load more runs. Try again.'));
-    } finally {
-      setLoadingMore(false);
-    }
-  };
+  const loadPage = useCallback((token?: string) => fetchRuns({
+    includeTerminal: !activeOnly,
+    ...(token ? { pageToken: token } : {}),
+  }), [activeOnly]);
+  const { items: runs, loading, nextPageToken, loadingMore, error, refresh: refreshRuns, loadMore } = usePaginatedPolling(
+    loadPage, runIdentity, 'Failed to load runs. Try again.',
+  );
+  const availableIds = new Set(runs.filter(run => isActiveRunStatus(run.status)).map(run => run.run_id));
+  const selectedIds = [...selectedJobIds].filter(id => availableIds.has(id));
 
   const toggleJobSelection = (jobId: string) => {
     setSelectedJobIds((current) => {
@@ -142,14 +76,14 @@ export default function Runs() {
 
   const toggleAllJobs = () => {
     const selectableIds = runs.filter((run) => isActiveRunStatus(run.status)).map((run) => run.run_id);
-    setSelectedJobIds((current) => {
-      if (current.size === selectableIds.length) return new Set();
+    setSelectedJobIds(() => {
+      if (selectedIds.length === selectableIds.length) return new Set();
       return new Set(selectableIds);
     });
   };
 
   const confirmBulkAction = (action: 'pause' | 'cancel') => {
-    const jobIds = [...selectedJobIds];
+    const jobIds = selectedIds;
     if (jobIds.length === 0) return;
 
     const actionLabel = action === 'pause' ? 'Pause' : 'Cancel';
@@ -184,9 +118,6 @@ export default function Runs() {
           await Promise.all(jobIds.map((jobId) => runner(jobId)));
           setSelectedJobIds(new Set());
           await refreshRuns();
-        } catch (e) {
-          console.error(`Failed to ${action} selected runs`, e);
-          throw e;
         } finally {
           setBulkAction(null);
         }
@@ -194,7 +125,7 @@ export default function Runs() {
     });
   };
 
-  const selectedRuns = runs.filter((run) => selectedJobIds.has(run.run_id));
+  const selectedRuns = runs.filter((run) => selectedIds.includes(run.run_id));
   const selectedCount = selectedRuns.length;
   const hasSelection = selectedCount > 0;
   const canPauseSelection = hasSelection && selectedRuns.every((run) => ['pending', 'running'].includes(run.status.trim().toLowerCase()));
@@ -207,7 +138,7 @@ export default function Runs() {
       {error ? (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-b border-red-200 bg-red-50 px-5 py-3 text-xs text-red-800">
           <span>{error}</span>
-          <Button type="button" variant="outline" size="sm" onClick={() => void refreshRuns()}>
+          <Button type="button" variant="outline" size="sm" onClick={() => void refreshRuns().catch(() => {})}>
             Retry
           </Button>
         </div>
@@ -320,7 +251,7 @@ export default function Runs() {
             ) : (
               runs.map((run) => {
                 const runId = run.run_id;
-                const selected = selectedJobIds.has(runId);
+                const selected = selectedIds.includes(runId);
                 const selectable = isActiveRunStatus(run.status);
                 return (
                 <TableRow
@@ -350,7 +281,7 @@ export default function Runs() {
                   </TableCell>
                   <TableCell className="px-4 py-2.5 text-xs text-neutral-600">{run.graph_id}</TableCell>
                   <TableCell className="px-4 py-2.5 text-xs text-neutral-500">
-                    {run.submitted_at ? format(new Date(run.submitted_at), 'MMM d, HH:mm:ss') : 'Unknown'}
+                    {run.submitted_at && Number.isFinite(new Date(run.submitted_at).getTime()) ? format(new Date(run.submitted_at), 'MMM d, HH:mm:ss') : 'Not reported'}
                   </TableCell>
                   <TableCell className="px-4 py-2.5 text-xs text-neutral-600">
                     {isServiceJob(run) ? '∞' : (run.active_executors ?? run.executor_count ?? null) === null ? 'Not reported' : `${run.active_executors ?? 0} / ${run.executor_count ?? 0}`}

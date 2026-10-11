@@ -24,12 +24,14 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (signal?: AbortSignal) => {
     try {
-      setSummary(await fetchSystemSummary());
+      const nextSummary = await fetchSystemSummary();
+      if (signal?.aborted) return;
+      setSummary(nextSummary);
       setError('');
     } catch (err) {
-      console.error('Failed to load system summary', err);
+      if (signal?.aborted) return;
       // Never masquerade a contract failure as measured zeros: keep the last
       // good snapshot (if any) and show a visible diagnostic instead.
       setError(apiErrorMessage(err, 'Failed to load runtime summary. Try again.'));

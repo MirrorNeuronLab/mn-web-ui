@@ -143,6 +143,7 @@ describe('JobDetails Component', () => {
 
   it('renders job details and switches tabs', async () => {
     const mockDetails = {
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'graph-1',
@@ -225,6 +226,7 @@ describe('JobDetails Component', () => {
 
   it('renders observability summary with trace and artifact links', async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         run_id: 'trace-run',
@@ -287,6 +289,7 @@ describe('JobDetails Component', () => {
       },
     ];
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'graph-1',
@@ -357,6 +360,7 @@ describe('JobDetails Component', () => {
     };
 
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'graph-1',
@@ -412,6 +416,7 @@ describe('JobDetails Component', () => {
 
   it('uses workflow progress status and hides unknown header metadata', async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'vwav-be7cc6d4',
         graph_id: 'unknown',
@@ -442,7 +447,7 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('vwav-be7cc6d4')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'test-job-1' })).toBeInTheDocument();
     });
 
     expect(screen.getAllByText('running').length).toBeGreaterThan(0);
@@ -453,6 +458,7 @@ describe('JobDetails Component', () => {
 
   it('shows paused controls when compact details are paused but workflow progress is stale', async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'pitev-5d7781d6',
         graph_id: null,
@@ -484,7 +490,7 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('pitev-5d7781d6')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'test-job-1' })).toBeInTheDocument();
     });
 
     expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
@@ -494,6 +500,7 @@ describe('JobDetails Component', () => {
 
   it('prefers live workflow status over stale compact job status', async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'service-job-1',
         graph_id: 'video_watch_assistant_v1',
@@ -524,7 +531,7 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('service-job-1')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'test-job-1' })).toBeInTheDocument();
     });
 
     expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
@@ -534,6 +541,7 @@ describe('JobDetails Component', () => {
   it('infers completed batch status from complete progress counters', async () => {
     let progressSignal: AbortSignal | undefined;
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'batch-job-1',
         graph_id: 'batch_workflow_v1',
@@ -571,7 +579,7 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('batch-job-1')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'test-job-1' })).toBeInTheDocument();
     });
 
     expect(screen.getAllByText('completed').length).toBeGreaterThan(0);
@@ -585,6 +593,7 @@ describe('JobDetails Component', () => {
 
   it('renders job details when agent graph is unavailable', async () => {
     const mockDetails = {
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'graph-1',
@@ -622,6 +631,7 @@ describe('JobDetails Component', () => {
 
   it('populates the agents list from graph nodes when job details have no agents', async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'graph-1',
@@ -670,6 +680,7 @@ describe('JobDetails Component', () => {
 
   it('uses workflow progress aliases when the graph only has runtime infrastructure nodes', async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'video-job-1',
         graph_id: 'video_watch_assistant_v1',
@@ -742,7 +753,7 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('video-job-1')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'test-job-1' })).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
 
@@ -754,6 +765,7 @@ describe('JobDetails Component', () => {
 
   it('waits for the public v2 workflow instead of inventing runtime-agent steps', async () => {
     const mockDetails = {
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'graph-1',
@@ -794,6 +806,7 @@ describe('JobDetails Component', () => {
 
   it('renders service workflow agents as idle instead of done while the job is running', async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'video_watch_assistant_v1',
@@ -895,6 +908,7 @@ describe('JobDetails Component', () => {
 
   it('renders graph workflow layers and multiple active steps in the Progress tab', async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'tax_graph',
@@ -1007,6 +1021,7 @@ describe('JobDetails Component', () => {
       emitSnapshot = onSnapshot;
     });
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'tax_graph',
@@ -1121,6 +1136,7 @@ describe('JobDetails Component', () => {
 
   it('renders selected step reasons, timing, attempts, and empty-agent steps', async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'retry_graph',
@@ -1234,6 +1250,7 @@ describe('JobDetails Component', () => {
 
   it('shows blueprint web ui from the job ui endpoint when job details are compact', async () => {
     const mockDetails = {
+      job_id: 'test-job-1',
       runtime_run_id: 'blueprint-run-1',
       job: {
         job_id: 'test-job-1',
@@ -1273,6 +1290,7 @@ describe('JobDetails Component', () => {
   it('treats a missing optional job web ui as a normal progress-only run', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.mocked(fetchJobDetails).mockResolvedValue({
+      job_id: 'test-job-1',
       runtime_run_id: 'progress-only-runtime',
       job: {
         job_id: 'test-job-1',
@@ -1298,8 +1316,9 @@ describe('JobDetails Component', () => {
     }
   });
 
-  it('pauses a running execution through the v2 run control', async () => {
+  it('pauses a running execution through canonical run control', async () => {
     const mockDetails = {
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'graph-1',
@@ -1335,8 +1354,9 @@ describe('JobDetails Component', () => {
     expect(screen.getAllByText('paused').length).toBeGreaterThan(0);
   });
 
-  it('resumes a paused execution through the v2 run control', async () => {
+  it('resumes a paused execution through canonical run control', async () => {
     const mockDetails = {
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'graph-1',
@@ -1372,8 +1392,9 @@ describe('JobDetails Component', () => {
     });
   });
 
-  it('cancels an execution through the v2 run control', async () => {
+  it('cancels an execution through canonical run control', async () => {
     const mockDetails = {
+      job_id: 'test-job-1',
       job: {
         job_id: 'test-job-1',
         graph_id: 'graph-1',

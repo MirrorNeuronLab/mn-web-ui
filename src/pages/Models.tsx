@@ -35,17 +35,18 @@ export default function Models() {
   const [benchmarking, setBenchmarking] = useState(false);
   const [benchmarkError, setBenchmarkError] = useState('');
 
-  const loadModels = useCallback(async () => {
+  const loadModels = useCallback(async (signal?: AbortSignal) => {
     try {
       const result = await fetchRuntimeModels();
+      if (signal?.aborted) return;
       setModelState(result);
       setError('');
     } catch (loadError) {
-      console.error('Failed to load runtime models', loadError);
+      if (signal?.aborted) return;
       setModelState(null);
       setError(apiErrorMessage(loadError, 'Could not load installed models.'));
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, []);
 
@@ -62,7 +63,6 @@ export default function Models() {
       const result = await benchmarkRuntimeModel(modelKey(model));
       setBenchmark(result);
     } catch (runError) {
-      console.error('Failed to benchmark runtime model', runError);
       setBenchmarkError(apiErrorMessage(runError, 'Benchmark failed.'));
     } finally {
       setBenchmarking(false);

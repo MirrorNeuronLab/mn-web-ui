@@ -43,7 +43,7 @@ describe('request robustness', () => {
   });
 
   it('reuses a caller-supplied idempotency key across retries', async () => {
-    mockApi.post.mockResolvedValue({ data: { operation_id: 'op-1', status: 'running' } });
+    mockApi.post.mockResolvedValue({ data: { operation_id: 'op-1', status: 'completed' } });
     await resetStableJobData('job-1', 'fixed-key');
     await resetStableJobData('job-1', 'fixed-key');
     expect(mockApi.post).toHaveBeenNthCalledWith(1, '/jobs/job-1/data-resets', {}, {

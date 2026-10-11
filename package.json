@@ -22,7 +22,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:api": "playwright test --config playwright.api.config.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

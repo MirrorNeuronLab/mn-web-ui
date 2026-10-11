@@ -1,10 +1,12 @@
 import api, { getApiBaseUrl, getAuthHeader } from './client';
 import { z } from 'zod';
-import { pageTokenFrom, parseArrayOrEmpty, parseOrFallback, parseOrThrow, ValidationError } from './parsing';
+import { collectPages, parsePage, parseOrThrow, ValidationError } from './parsing';
 import { blueprintPath, jobPath, modelPath, operationPath, routeId, runPath } from './routes';
 import { createWorkflowProgressStreamer } from './streaming';
 import { normalizeWorkflowProgressPayload } from './workflowProgress';
 import { isRecord } from '../utils/records';
+import { waitForOperation } from './operations';
+import { WorkflowStepsSchema, WorkflowDagSchema, type WorkflowShape } from './workflowShape';
 
 export class MissingEtagError extends Error {
   constructor(action: string) {
@@ -48,19 +50,9 @@ const AddClusterNodeRequestSchema = z.object({ host: z.string().trim().min(1), t
 const BenchmarkRequestSchema = z.object({ prompt: z.string().optional(), max_tokens: z.number().optional() }).passthrough();
 const LaunchBodySchema = z.object({ config_overrides: z.record(z.string(), z.unknown()) });
 
-const arrayFromEnvelope = (data: unknown, keys: string[]) => {
-  if (Array.isArray(data)) return data;
-  if (!isRecord(data)) {
-    console.error('arrayFromEnvelope: expected an array or envelope object, received', typeof data);
-    return [];
-  }
-  for (const key of keys) {
-    const value = data[key];
-    if (Array.isArray(value)) return value;
-  }
-  console.error(`arrayFromEnvelope: none of [${keys.join(', ')}] held an array; returning empty with diagnostic.`);
-  return [];
-};
+// Preparation can include dependency/model downloads. Reads remain bounded at
+// 30 seconds; explicit launches and uploads have a separate, longer deadline.
+const PREPARATION_TIMEOUT_MS = 30 * 60_000;
 
 export const ErrorEnvelopeSchema = z.object({
   schema_version: z.string().optional().default('mn.error.v1'),
@@ -108,7 +100,7 @@ export const JobEventSchema = z.object({
   agent_id: z.string().optional(),
   payload: z.any().optional(),
   error: ErrorEnvelopeSchema.optional(),
-  failure: ErrorEnvelopeSchema.optional(),
+  failure: ErrorEnvelopeSchema.nullable().optional(),
 }).passthrough();
 
 export const JobSchema = z.object({
@@ -128,7 +120,7 @@ export const JobSchema = z.object({
   recovery_status: z.string().nullable().optional(),
   recovery_requires_review: z.boolean().optional(),
   recovery: z.record(z.string(), z.unknown()).optional(),
-  failure: ErrorEnvelopeSchema.optional(),
+  failure: ErrorEnvelopeSchema.nullable().optional(),
 }).passthrough();
 
 export const StableJobSchema = z.object({
@@ -181,11 +173,12 @@ export const RunSummarySchema = StableRunSchema.extend({
   recovery_status: z.string().nullable().optional(),
   recovery_requires_review: z.boolean().optional(),
   recovery: z.record(z.string(), z.unknown()).optional(),
-  failure: ErrorEnvelopeSchema.optional(),
+  failure: ErrorEnvelopeSchema.nullable().optional(),
 }).passthrough();
 
 export const JobDetailsSchema = z.object({
-  job: JobSchema.optional(),
+  job: JobSchema,
+  job_id: z.string().nullable().optional(),
   summary: z.record(z.string(), z.unknown()).optional(),
   agents: z.array(AgentSchema).optional().default([]),
   sandboxes: z.array(z.unknown()).optional().default([]),
@@ -250,11 +243,11 @@ export const SystemSummarySchema = z.object({
       queued: z.number().optional().default(0),
       active: z.number().optional().default(0),
     })).optional().default({}),
-  }).passthrough()).optional().default([]),
+  }).passthrough()),
   jobs: z.array(z.object({
     job_id: z.string().optional().default('unknown'),
     status: z.string().optional().default('unknown'),
-  }).passthrough()).optional().default([]),
+  }).passthrough()),
 }).passthrough();
 
 export const RuntimeModelCompatibilitySchema = z.object({
@@ -283,7 +276,7 @@ export const RuntimeModelSchema = z.object({
 }).passthrough();
 
 export const RuntimeModelListResponseSchema = z.object({
-  items: z.array(RuntimeModelSchema).optional().default([]),
+  items: z.array(RuntimeModelSchema),
   next_page_token: z.string().nullable().optional().default(null),
   node: z.string().optional().default('local'),
   runner_available: z.boolean().optional().default(false),
@@ -291,15 +284,15 @@ export const RuntimeModelListResponseSchema = z.object({
 }).passthrough();
 
 export const RuntimeModelBenchmarkSchema = z.object({
-  model: z.string().optional().default('unknown'),
+  model: z.string().min(1),
   name: z.string().optional().default('Runtime model'),
   docker_model: z.string().optional().default('unknown'),
   api_model: z.string().optional(),
   node: z.string().optional().default('local'),
-  elapsed_ms: z.number().optional().default(0),
+  elapsed_ms: z.number().nonnegative(),
   first_token_ms: z.number().nullable().optional(),
   generated_tokens: z.number().optional().default(0),
-  tokens_per_second: z.number().optional().default(0),
+  tokens_per_second: z.number().nonnegative(),
   sample: z.string().optional().default(''),
   estimated: z.boolean().optional().default(true),
 }).passthrough();
@@ -353,7 +346,7 @@ export const BlueprintSchema = z.object({
 }).passthrough();
 
 export const BlueprintListResponseSchema = z.object({
-  items: z.array(BlueprintSchema).optional().default([]),
+  items: z.array(BlueprintSchema),
   next_page_token: z.string().nullable().optional().default(null),
 }).passthrough();
 
@@ -635,16 +628,19 @@ export const isServiceJob = (job: Partial<Job | RunSummary> | null | undefined, 
 };
 
 export const fetchSystemSummary = () => api.get('/system/summary').then(r => (
-  parseOrFallback(SystemSummarySchema, r.data, {}, 'SystemSummary')
+  parseOrThrow(SystemSummarySchema, r.data, 'SystemSummary')
 ));
 
-export const fetchRuntimeModels = () => api.get('/models').then(r => (
-  parseOrFallback(RuntimeModelListResponseSchema, r.data, {}, 'fetchRuntimeModels')
-));
+export const fetchRuntimeModels = async (): Promise<RuntimeModelListResponse> => {
+  const page = await collectPages((token) => api.get('/models', {
+    params: { installed_only: true, page_token: token },
+  }).then(r => parsePage(RuntimeModelSchema, r.data, 'fetchRuntimeModels')), 'Models');
+  return RuntimeModelListResponseSchema.parse(page);
+};
 
 export const benchmarkRuntimeModel = (model: string, payload: { prompt?: string; max_tokens?: number } = {}) => (
-  api.post(modelPath(model, '/benchmarks'), BenchmarkRequestSchema.parse(payload)).then(r => (
-    parseOrFallback(RuntimeModelBenchmarkSchema, r.data, { model }, `benchmarkRuntimeModel(${model})`)
+  api.post(modelPath(model, '/benchmarks'), BenchmarkRequestSchema.parse(payload), { timeout: 70_000 }).then(r => (
+    parseOrThrow(RuntimeModelBenchmarkSchema, r.data, `benchmarkRuntimeModel(${model})`)
   ))
 );
 
@@ -667,11 +663,7 @@ export const fetchRuns = async (options: FetchRunsOptions = {}) => {
       ? api.get('/runs', { params: { include_terminal: options.includeTerminal, page_size: options.pageSize, page_token: options.pageToken } })
       : api.get('/runs', { params: { page_size: options.pageSize, page_token: options.pageToken } });
   const r = await request;
-  const data = arrayFromEnvelope(r.data, ['items', 'data', 'runs']);
-  return {
-    items: parseArrayOrEmpty(RunSummarySchema, data, 'fetchRuns', true),
-    next_page_token: pageTokenFrom(r.data),
-  };
+  return parsePage(RunSummarySchema, r.data, 'fetchRuns');
 };
 
 /** @deprecated Use fetchRuns; retained for API consumers during the UI rename. */
@@ -691,15 +683,7 @@ export const fetchStableJobs = async (options: FetchStableJobsOptions = {}) => {
       page_token: options.pageToken,
     },
   });
-  return {
-    items: parseArrayOrEmpty(
-      StableJobSchema,
-      arrayFromEnvelope(response.data, ['items']),
-      'fetchStableJobs',
-      true,
-    ),
-    next_page_token: pageTokenFrom(response.data),
-  };
+  return parsePage(StableJobSchema, response.data, 'fetchStableJobs');
 };
 
 const stableJobEtags = new Map<string, string>();
@@ -707,15 +691,13 @@ const stableJobEtags = new Map<string, string>();
 export const fetchStableJob = (id: string) => api.get(jobPath(id)).then((response) => {
   const etag = readEtag(response.headers);
   if (etag) stableJobEtags.set(id, etag);
+  else stableJobEtags.delete(id);
   return parseOrThrow(StableJobSchema, response.data, `fetchStableJob(${id})`);
 });
 
 export const fetchStableJobRuns = (id: string, pageToken?: string | null) => api.get(jobPath(id, '/runs'), {
   params: { page_token: pageToken },
-}).then((response) => ({
-  items: parseArrayOrEmpty(StableRunSchema, arrayFromEnvelope(response.data, ['items']), `fetchStableJobRuns(${id})`, true),
-  next_page_token: pageTokenFrom(response.data),
-}));
+}).then((response) => parsePage(StableRunSchema, response.data, `fetchStableJobRuns(${id})`));
 
 export const startStableJobRun = (
   id: string,
@@ -723,13 +705,14 @@ export const startStableJobRun = (
   replaceExistingRun = false,
   idempotencyKey = newIdempotencyKey(),
 ) => {
-  const runId = replaceExistingRun ? `service-${newIdempotencyKey()}` : undefined;
+  const runId = replaceExistingRun ? `service-${idempotencyKey}` : undefined;
   return api.post(jobPath(id, '/runs'), {
     inputs,
     replace_existing_run: replaceExistingRun,
     ...(runId ? { run_id: runId } : {}),
   }, {
     headers: { 'Idempotency-Key': idempotencyKey },
+    timeout: PREPARATION_TIMEOUT_MS,
   }).then((response) => parseOrThrow(StableRunActionResponseSchema, response.data, `startStableJobRun(${id})`))
 };
 
@@ -755,8 +738,9 @@ export const archiveStableJob = (id: string) => withStableJobEtag(id, 'archiving
 
 export const resetStableJobData = (id: string, idempotencyKey = newIdempotencyKey()) => api.post(jobPath(id, '/data-resets'), {}, {
   headers: { 'Idempotency-Key': idempotencyKey },
-}).then((response) => (
-  parseOrThrow(OperationSchema, response.data, `resetStableJobData(${id})`)
+}).then((response) => waitForOperation(
+  parseOrThrow(OperationSchema, response.data, `resetStableJobData(${id})`),
+  fetchOperation,
 ));
 
 export const deleteStableJob = (id: string) => withStableJobEtag(id, 'deleting', (etag) => (
@@ -784,30 +768,80 @@ export const deleteRun = (id: string) => api.delete(runPath(id)).then((response)
   response.status === 204 ? undefined : parseOrThrow(StableRunActionResponseSchema, response.data, `deleteRun(${id})`)
 ));
 
-export const fetchJobDetails = (id: string) => api.get(runPath(id, '/monitor')).then(r => (
-  parseOrFallback(JobDetailsSchema, r.data, { job: { job_id: id, status: 'unknown' } }, 'fetchJobDetails')
-));
+export const fetchJobDetails = async (id: string): Promise<JobDetails> => {
+  const [response, run] = await Promise.all([
+    api.get(runPath(id, '/monitor')),
+    fetchStableRun(id),
+  ]);
+  const monitor = parseOrThrow(JobDetailsSchema, response.data, 'fetchJobDetails');
+  let workflowShape: WorkflowShape | undefined;
+  let workflowShapeWarning: string | undefined;
+  if (run.job_id) {
+    try {
+      const [job, stepsResponse, dagResponse] = await Promise.all([
+        fetchStableJob(run.job_id),
+        api.get(jobPath(run.job_id, '/workflow/latest-run/steps')),
+        api.get(jobPath(run.job_id, '/workflow/latest-run/dag')),
+      ]);
+      const steps = parseOrThrow(WorkflowStepsSchema, stepsResponse.data, 'Workflow steps');
+      const dag = parseOrThrow(WorkflowDagSchema, dagResponse.data, 'Workflow graph');
+      if (steps.run_id === id && dag.run_id === id && steps.job_id === run.job_id && dag.job_id === run.job_id && steps.graph_revision === dag.graph_revision) {
+        workflowShape = { ...steps, edges: dag.edges, layers: dag.layers, type: job.type, name: job.job_name };
+      } else {
+        workflowShapeWarning = 'Historical workflow labels are unavailable. Steps show runtime identifiers.';
+      }
+    } catch {
+      workflowShapeWarning = 'Workflow labels and topology could not be loaded. Reload to try again.';
+    }
+  }
+  // The compact monitor's nested job_id is the execution, and its run_id may
+  // identify output storage. Only the canonical Run owns the durable Job ID.
+  return {
+    ...monitor,
+    job_id: run.job_id,
+    execution_id: run.run_id,
+    runtime_run_id: monitor.runtime_run_id || monitor.job.run_id,
+    workflow_shape: workflowShape,
+    workflow_shape_warning: workflowShapeWarning,
+  };
+};
 
-export const fetchJobEvents = (id: string) => api.get(runPath(id, '/events')).then(r => (
-  parseArrayOrEmpty(JobEventSchema, arrayFromEnvelope(r.data, ['items', 'data', 'events', 'recent_events']), `fetchJobEvents(${id})`)
-));
+export const fetchJobEvents = async (id: string) => {
+  const page = await collectPages((token) => api.get(runPath(id, '/events'), {
+    params: { page_token: token },
+  }).then(r => parsePage(JobEventSchema, r.data, 'fetchJobEvents')), 'Run events');
+  return page.items;
+};
 export const fetchJobAgentGraph = (id: string) => api.get(runPath(id, '/agent-graph')).then(r => (
-  parseOrFallback(AgentGraphSchema, r.data, { job_id: id, nodes: [], edges: [] }, `fetchJobAgentGraph(${id})`)
+  parseOrThrow(AgentGraphSchema, r.data, `fetchJobAgentGraph(${id})`)
 ));
 export const fetchJobUi = (id: string) => api.get(jobPath(id, '/ui')).then(r => (
-  parseOrFallback(JobUiResponseSchema, r.data, { job_id: id, ui: { job_id: id, title: 'Blueprint Web UI' } }, `fetchJobUi(${id})`)
+  parseOrThrow(JobUiResponseSchema, r.data, `fetchJobUi(${id})`)
 ));
-export const fetchBlueprints = (pageToken?: string | null) => api.get('/blueprints', {
-  params: { page_token: pageToken },
-}).then(r => (
-  parseOrFallback(BlueprintListResponseSchema, r.data, {}, 'fetchBlueprints')
-));
+export const fetchBlueprints = () => collectPages((token) => api.get('/blueprints', {
+  params: { page_token: token },
+}).then(r => parsePage(BlueprintSchema, r.data, 'fetchBlueprints')), 'Blueprints');
 export const fetchWorkflowProgress = (id: string) => api.get(runPath(id, '/workflow-progress')).then(r => (
-  parseOrFallback(WorkflowProgressSchema, r.data, { job_id: id, workflow_id: id, name: id }, `fetchWorkflowProgress(${id})`)
+  parseOrThrow(WorkflowProgressSchema, r.data, `fetchWorkflowProgress(${id})`)
 ));
 export const fetchLaunchProgress = (id: string) => api.get(`/launch-progress/${routeId(id)}`).then(r => (
   parseOrThrow(LaunchProgressResponseSchema, r.data, `fetchLaunchProgress(${id})`)
 ));
+
+export const downloadRunFile = async (href: string) => {
+  if (!/^\/api\/v1\/runs\/[^/]+\/(artifacts|outputs)\//.test(href) || /[\\?#]/.test(href)) {
+    throw new Error('Invalid run file URL.');
+  }
+  const response = await api.get(href.slice('/api/v1'.length), { responseType: 'blob', timeout: PREPARATION_TIMEOUT_MS });
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = decodeURIComponent(href.split('/').at(-1) || 'artifact');
+  document.body.append(link);
+  link.click();
+  link.remove();
+  globalThis.setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
 
 const workflowProgressStreamUrl = (id: string) => `${getApiBaseUrl()}${runPath(id, '/events/stream')}`;
 
@@ -823,7 +857,7 @@ export const fetchOperation = (id: string) => api.get(operationPath(id)).then(r 
 export const uploadBundle = (file: File) => {
   const formData = new FormData();
   formData.append('bundle', file);
-  return api.post('/bundles', formData).then(r => (
+  return api.post('/bundles', formData, { timeout: PREPARATION_TIMEOUT_MS }).then(r => (
     parseOrThrow(UploadedBundleSchema, r.data, 'uploadBundle')
   ));
 };
@@ -832,16 +866,17 @@ export const createJob = (
   idempotencyKey = newIdempotencyKey(),
   progressId?: string,
 ) => api.post('/jobs', payload, {
+  timeout: PREPARATION_TIMEOUT_MS,
   headers: {
     'Idempotency-Key': idempotencyKey,
     ...(progressId ? { 'X-Launch-Progress-ID': progressId } : {}),
   },
-}).then(r => CreateJobResponseSchema.parse(r.data));
+}).then(r => parseOrThrow(CreateJobResponseSchema, r.data, 'createJob'));
 
 const parseLaunchResponse = (data: unknown) => {
   const result = BlueprintLaunchResponseSchema.safeParse(data);
   if (!result.success) {
-    console.error('launchBlueprintJob validation failed:', result.error);
+    console.error('launchBlueprintJob returned invalid data.');
     throw new ValidationError('launchBlueprintJob', 'The server returned an invalid launch response. Try again.');
   }
   return result.data;
@@ -860,14 +895,17 @@ export const launchBlueprintJob = (
   if (record.source === 'bundle') {
     const bundleId = typeof record.bundle_id === 'string' ? record.bundle_id.trim() : '';
     if (!bundleId) return Promise.reject(new Error('Bundle launch requires a bundle id.'));
+    const launchKey = options.idempotencyKey || newIdempotencyKey();
     return createJob(
-      { bundle_id: bundleId },
-      options.idempotencyKey || newIdempotencyKey(),
+      { bundle_id: bundleId, ...(isRecord(record.config_overrides) ? { resolved_configuration: record.config_overrides } : {}) },
+      launchKey,
       options.progressId,
     ).then((job) => {
       const jobId = isRecord(job) && typeof job.job_id === 'string' ? job.job_id : '';
       if (!jobId) throw new Error('Job creation did not return a job id.');
-      return startStableJobRun(jobId).then((run) => parseLaunchResponse(run));
+      // Both stages retain their identity across a lost-response retry. Keys
+      // are scoped by endpoint, so the same reviewed launch key is safe here.
+      return startStableJobRun(jobId, {}, false, launchKey).then((run) => parseLaunchResponse(run));
     });
   }
   if (record.source !== 'catalog') return Promise.reject(new Error('Host filesystem paths are not accepted by the REST API.'));
@@ -875,6 +913,7 @@ export const launchBlueprintJob = (
   const blueprintId = typeof record.blueprint_id === 'string' ? record.blueprint_id.trim() : '';
   const body = LaunchBodySchema.parse({ config_overrides: isRecord(record.config_overrides) ? record.config_overrides : {} });
   return api.post(blueprintPath(blueprintId, '/runs'), body, {
+    timeout: PREPARATION_TIMEOUT_MS,
     headers: {
       'Idempotency-Key': options.idempotencyKey || newIdempotencyKey(),
       ...(options.progressId ? { 'X-Launch-Progress-ID': options.progressId } : {}),

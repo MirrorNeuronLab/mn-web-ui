@@ -29,8 +29,8 @@ direct-linkable and survive refresh with the same route parameters.
 
 The browser calls the configured API base through the central API client.
 Persistent jobs, execution controls, monitor snapshots, public workflow
-progress, and execution artifacts use `/api/v1`. Runtime-wide inventory
-surfaces may continue to use the configured base. When
+progress, execution artifacts, and runtime-wide inventory use the configured
+same-origin `/api/v1` base. When
 `MN_WEB_API_TOKEN` is set, requests send it as a bearer token. The token is
 sensitive and is never printed or included in diagnostics.
 Job-specific UI definitions use an `external-url` service handle. The service
@@ -39,11 +39,20 @@ host is resolved by the local Web UI server from the authenticated job handle,
 which proxies only the explicitly allowlisted dashboard/companion ports. The
 browser must not navigate directly to a remote runtime node. A paused,
 stopped, cancelled, or failed handle displays a lifecycle message instead of
-framing its unavailable upstream.
+framing its unavailable upstream. A handle with an explicit negative readiness
+signal waits rather than framing a dashboard that cannot load yet.
+
+Durable jobs, canonical executions, and runtime output storage have distinct
+identities. The canonical Run supplies the durable job ID. Run navigation and
+mutations use the execution ID from the route, never the monitor's nested
+output-storage ID. Collections consume opaque cursor pagination; expanded
+inventory windows refresh all loaded pages. The model inventory explicitly
+requests installed models. Artifact downloads send the central client's bearer
+header rather than relying on unauthenticated anchor navigation.
 
 API and streaming payloads are unknown input until parsed. Zod schemas and
-focused adapters convert them into stable UI models. Invalid collections may
-degrade to safe empty/partial states with a visible diagnostic; invalid data
+focused adapters convert them into stable UI models. Invalid collections produce
+a visible diagnostic and may retain the last good snapshot; invalid data
 must not crash the whole app or be silently represented as successful data.
 
 Polling and streams are lifecycle-owned: they stop when their view unmounts or
@@ -54,6 +63,11 @@ avoids duplicate events or stale-state overwrites.
 
 - Every user action produces immediate visible feedback.
 - Long-running operations show their current state and a clear terminal result. Run submission sends a per-launch progress identifier and renders the API-reported preparation phases until the run is ready.
+- Accepted data resets remain busy until their operation completes or fails.
+  Polling has a five-minute deadline and never repeats the reset command.
+- ZIP launch passes reviewed configuration as `resolved_configuration` during
+  job creation. Creation and initial execution retain the launch's idempotency
+  key; service replacement derives a fresh execution ID from its request key.
 - Destructive or broad mutations require explicit confirmation.
 - Stable-job controls use the projected executable `job.type` as their sole
   lifecycle classifier. A `type: service` job shows Start only with no attached
@@ -67,10 +81,13 @@ avoids duplicate events or stale-state overwrites.
   exposing internal secrets or raw errors.
 - Workflow views make status, current activity, evidence/artifacts, failure
   context, and available controls discoverable.
-- Workflow list and graph modes render the same public steps returned by
-  `/api/v1/runs/{id}/workflow-progress`, preserving the step names, counts, current
-  state, and topology shown by `mn job monitor` without exposing lowered
-  runtime control nodes.
+- Workflow list and graph modes combine public execution progress with
+  `/api/v1/jobs/{jobId}/workflow/latest-run/steps` and `dag`. Shape resources
+  must match the requested execution, durable job, and graph revision. Missing
+  historical shape is disclosed; labels from another execution are never reused.
+  Terminal SSE events update the last progress snapshot without discarding its
+  steps. Runtime-unavailable and access failures produce an actionable stream
+  error; reconnect attempts are bounded.
 - Advanced IDs, raw manifests, and diagnostics use progressive disclosure.
 - Keyboard navigation, semantic labels, focus restoration, contrast, and
   screen-reader announcements are required for interactive controls.

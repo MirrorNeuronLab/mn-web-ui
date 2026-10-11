@@ -170,6 +170,9 @@ describe('StableJobDetails', () => {
     expect(await screen.findByText('Research workspace')).toBeInTheDocument();
     expect(await screen.findByRole('alert')).toHaveTextContent(/runs unavailable/);
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Reset data' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
   });
 
   it('archives and resets only after explicit confirmation', async () => {

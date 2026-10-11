@@ -23,48 +23,63 @@ const handleWorkflowProgressStreamData = <T>(
   seenEventIds: Set<string>,
   eventId: string | undefined,
   onSnapshot: (snapshot: T) => void,
-) => {
+  eventName: string,
+  previous: T | undefined,
+): T | undefined => {
   // Deduplicate: the same SSE id must never overwrite newer state twice.
   if (eventId) {
     if (seenEventIds.has(eventId)) return;
-    seenEventIds.add(eventId);
-    if (seenEventIds.size > 500) {
-      const oldest = seenEventIds.values().next().value;
-      if (oldest !== undefined) seenEventIds.delete(oldest);
-    }
   }
   let payload: unknown;
   try {
     payload = JSON.parse(data);
-  } catch (error) {
-    console.error(`${options.validationLabel(id)} JSON parse failed:`, error);
-    return;
+  } catch {
+    throw new Error(`${options.validationLabel(id)} returned invalid stream data.`);
   }
 
-  const candidate = payload && typeof payload === 'object' && !Array.isArray(payload) && 'data' in payload
+  let candidate = payload && typeof payload === 'object' && !Array.isArray(payload) && 'data' in payload
     ? (payload as { data: unknown }).data
     : payload;
+  // Terminal events carry a canonical Run resource, not workflow progress.
+  // Retain the last public steps, counts and topology instead of replacing
+  // them with the Run parser's empty defaults.
+  if (['run.completed', 'run.unavailable'].includes(eventName) && previous && typeof candidate === 'object' && candidate !== null) {
+    const terminal = candidate as Record<string, unknown>;
+    candidate = { ...previous, status: terminal.status, ...(terminal.failure ? { failure: terminal.failure } : {}) };
+  }
   const parsed = options.schema.safeParse(candidate);
   if (parsed.success) {
+    if (eventId) {
+      seenEventIds.add(eventId);
+      if (seenEventIds.size > 500) {
+        const oldest = seenEventIds.values().next().value;
+        if (oldest !== undefined) seenEventIds.delete(oldest);
+      }
+    }
     onSnapshot(parsed.data);
+    return parsed.data;
   } else {
-    console.error(`${options.validationLabel(id)} validation failed:`, parsed.error);
+    throw new Error(`${options.validationLabel(id)} returned invalid stream data.`);
   }
 };
 
 const delayCancellable = (delayMs: number, signal?: AbortSignal): Promise<void> => (
   new Promise<void>((resolve) => {
-    const timeout = globalThis.setTimeout(resolve, delayMs) as unknown as number;
+    const finish = () => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    };
+    const timeout = globalThis.setTimeout(finish, delayMs) as unknown as number;
+    const onAbort = () => {
+      globalThis.clearTimeout(timeout);
+      finish();
+    };
     if (!signal) return;
     if (signal.aborted) {
       globalThis.clearTimeout(timeout);
-      resolve();
+      finish();
       return;
     }
-    const onAbort = () => {
-      globalThis.clearTimeout(timeout);
-      resolve();
-    };
     signal.addEventListener('abort', onAbort, { once: true });
   })
 );
@@ -83,6 +98,7 @@ export const createWorkflowProgressStreamer = <T>(options: StreamOptions<T>) => 
     options.onError?.(error);
   };
   const headers = options.authHeader();
+  let previous: T | undefined;
   if (typeof EventSource !== 'undefined' && Object.keys(headers).length === 0) {
     await new Promise<void>((resolve, reject) => {
       const source = new EventSource(options.streamUrl(id));
@@ -102,7 +118,15 @@ export const createWorkflowProgressStreamer = <T>(options: StreamOptions<T>) => 
       const abort = () => finish();
       const track = (event: MessageEvent) => {
         const messageEvent = event as MessageEvent & { lastEventId?: string };
-        handleWorkflowProgressStreamData(options, id, messageEvent.data, seenEventIds, messageEvent.lastEventId || undefined, onSnapshot);
+        try {
+          const snapshot = handleWorkflowProgressStreamData(options, id, messageEvent.data, seenEventIds, messageEvent.lastEventId || undefined, onSnapshot, event.type, previous);
+          if (snapshot) {
+            previous = snapshot;
+            failures = 0;
+          }
+        } catch (error) {
+          finish(error instanceof Error ? error : new Error('Invalid workflow progress.'));
+        }
       };
       source.addEventListener('snapshot', track as EventListener);
       source.addEventListener('run.snapshot', track as EventListener);
@@ -110,12 +134,22 @@ export const createWorkflowProgressStreamer = <T>(options: StreamOptions<T>) => 
         track(event as MessageEvent);
         finish();
       });
+      source.addEventListener('run.unavailable', (event) => {
+        track(event as MessageEvent);
+        finish(new Error('Runtime control is unavailable. Reconnect the runtime and try again.'));
+      });
       source.addEventListener('heartbeat', () => {
         onHeartbeat?.();
       });
       source.onerror = () => {
         if (signal?.aborted) {
           finish();
+          return;
+        }
+        // Access errors close native EventSource permanently; there will be
+        // no second error event to exhaust the reconnect counter.
+        if (source.readyState === EventSource.CLOSED) {
+          finish(new Error('Workflow progress is unavailable. Check the runtime connection and access settings.'));
           return;
         }
         failures += 1;
@@ -142,9 +176,11 @@ export const createWorkflowProgressStreamer = <T>(options: StreamOptions<T>) => 
         signal,
       });
       if (!response.ok || !response.body) {
+        if ([400, 401, 403, 404].includes(response.status)) {
+          throw Object.assign(new Error(`Workflow progress is unavailable (HTTP ${response.status}). Check the runtime connection and access settings.`), { terminal: true });
+        }
         throw new Error(`workflow progress stream failed: ${response.status}`);
       }
-      attempts = 0;
       reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -153,10 +189,10 @@ export const createWorkflowProgressStreamer = <T>(options: StreamOptions<T>) => 
         const { value, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const chunks = buffer.split(/\n\n/);
+        const chunks = buffer.split(/\r?\n\r?\n/);
         buffer = chunks.pop() || '';
         for (const chunk of chunks) {
-          const lines = chunk.split('\n');
+          const lines = chunk.split(/\r?\n/);
           const eventId = lines.find((line) => line.startsWith('id:'))?.slice(3).trim();
           if (eventId) lastEventId = eventId;
           if (lines.every((line) => line.startsWith(':'))) {
@@ -172,8 +208,14 @@ export const createWorkflowProgressStreamer = <T>(options: StreamOptions<T>) => 
             onHeartbeat?.();
             continue;
           }
-          if (!['snapshot', 'run.snapshot', 'run.completed'].includes(eventName) || !data) continue;
-          handleWorkflowProgressStreamData(options, id, data, seenEventIds, eventId, onSnapshot);
+          if (!['snapshot', 'run.snapshot', 'run.completed', 'run.unavailable'].includes(eventName) || !data) continue;
+          const snapshot = handleWorkflowProgressStreamData(options, id, data, seenEventIds, eventId, onSnapshot, eventName, previous);
+          if (snapshot) {
+            previous = snapshot;
+            attempts = 0;
+            reconnectDelayMs = 250;
+          }
+          if (eventName === 'run.unavailable') throw Object.assign(new Error('Runtime control is unavailable. Reconnect the runtime and try again.'), { terminal: true });
           if (eventName === 'run.completed') {
             completed = true;
             break;
@@ -182,12 +224,13 @@ export const createWorkflowProgressStreamer = <T>(options: StreamOptions<T>) => 
         if (completed) break;
       }
       if (completed) return;
-      reconnectDelayMs = 250;
+      throw new Error('Workflow progress stream ended before completion.');
     } catch (error) {
       if (signal?.aborted) return;
       if (error instanceof Error && error.name === 'AbortError') return;
       attempts += 1;
       reportError(error);
+      if (error && typeof error === 'object' && 'terminal' in error) throw error;
       if (attempts > maxReconnectAttempts) {
         throw error;
       }

@@ -27,6 +27,9 @@ describe('resolveApiBaseUrl', () => {
     expect(() => resolveApiBaseUrl('   ')).toThrow();
     expect(() => resolveApiBaseUrl('https://evil.test/api')).toThrow();
     expect(() => resolveApiBaseUrl('api/v1')).toThrow();
+    expect(() => resolveApiBaseUrl('//evil.test/api')).toThrow();
+    expect(() => resolveApiBaseUrl('/\\evil.test/api')).toThrow();
+    expect(() => resolveApiBaseUrl('/api/v1?target=evil')).toThrow();
   });
 });
 

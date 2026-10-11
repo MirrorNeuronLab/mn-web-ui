@@ -65,7 +65,7 @@ describe('canonical REST v1 client', () => {
     });
   });
 
-  it('drops malformed rows without restoring legacy envelopes', async () => {
+  it('rejects malformed pages with a visible contract error', async () => {
     mockApi.get.mockResolvedValue({
       data: {
         items: [
@@ -75,10 +75,7 @@ describe('canonical REST v1 client', () => {
         next_page_token: null,
       },
     });
-    await expect(fetchRuns()).resolves.toEqual({
-      items: [expect.objectContaining({ run_id: 'valid-run' })],
-      next_page_token: null,
-    });
+    await expect(fetchRuns()).rejects.toThrow('returned invalid data');
   });
 
   it('pages persistent jobs and their run history', async () => {
@@ -122,6 +119,7 @@ describe('canonical REST v1 client', () => {
       replace_existing_run: false,
     }, {
       headers: { 'Idempotency-Key': 'idem-test-key' },
+      timeout: 1_800_000,
     });
 
     await startStableJobRun('job-1', {}, true);
@@ -131,6 +129,7 @@ describe('canonical REST v1 client', () => {
       run_id: 'service-idem-test-key',
     }, {
       headers: { 'Idempotency-Key': 'idem-test-key' },
+      timeout: 1_800_000,
     });
   });
 
@@ -175,7 +174,7 @@ describe('canonical REST v1 client', () => {
     await expect(fetchJobEvents('run/with space')).resolves.toEqual([
       expect.objectContaining({ type: 'agent.completed' }),
     ]);
-    expect(mockApi.get).toHaveBeenCalledWith('/runs/run%2Fwith%20space/events');
+    expect(mockApi.get).toHaveBeenCalledWith('/runs/run%2Fwith%20space/events', { params: { page_token: undefined } });
   });
 
 
@@ -205,7 +204,7 @@ describe('canonical REST v1 client', () => {
     }, { progressId: 'progress-test' })).resolves.toEqual(expect.objectContaining({ run_id: 'run-blueprint' }));
     expect(mockApi.post).toHaveBeenCalledWith('/blueprints/researcher/runs', {
       config_overrides: { mode: 'safe' },
-    }, { headers: {
+    }, { timeout: 1_800_000, headers: {
       'Idempotency-Key': 'idem-test-key',
       'X-Launch-Progress-ID': 'progress-test',
     } });
@@ -225,6 +224,7 @@ describe('canonical REST v1 client', () => {
     );
 
     expect(mockApi.post).toHaveBeenNthCalledWith(1, '/jobs', { bundle_id: 'bundle-1' }, {
+      timeout: 1_800_000,
       headers: {
         'Idempotency-Key': 'launch-bundle',
         'X-Launch-Progress-ID': 'progress-bundle',
@@ -236,7 +236,7 @@ describe('canonical REST v1 client', () => {
     mockApi.post.mockResolvedValue({ data: { bundle_id: 'bundle_01JABC' } });
     const file = new File(['bundle'], 'worker.zip', { type: 'application/zip' });
     await expect(uploadBundle(file)).resolves.toEqual({ bundle_id: 'bundle_01JABC' });
-    expect(mockApi.post).toHaveBeenCalledWith('/bundles', expect.any(FormData));
+    expect(mockApi.post).toHaveBeenCalledWith('/bundles', expect.any(FormData), { timeout: 1_800_000 });
   });
 
   it('uses canonical infrastructure resources and paginated models', async () => {
@@ -245,6 +245,6 @@ describe('canonical REST v1 client', () => {
     await addClusterNode({ host: '10.0.0.2', token: 'join-token' });
     await expect(fetchRuntimeModels()).resolves.toEqual(expect.objectContaining({ items: [], next_page_token: null }));
     expect(mockApi.post).toHaveBeenCalledWith('/nodes', { host: '10.0.0.2', token: 'join-token' });
-    expect(mockApi.get).toHaveBeenCalledWith('/models');
+    expect(mockApi.get).toHaveBeenCalledWith('/models', { params: { installed_only: true, page_token: undefined } });
   });
 });

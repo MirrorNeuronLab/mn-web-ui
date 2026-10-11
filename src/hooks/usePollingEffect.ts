@@ -21,7 +21,7 @@ const clearScheduled = (timer: number | undefined) => {
 };
 
 export function usePollingEffect(
-  callback: () => void | Promise<void>,
+  callback: (signal: AbortSignal) => void | Promise<void>,
   {
     intervalMs,
     initialDelayMs = 0,
@@ -47,6 +47,7 @@ export function usePollingEffect(
     if (!enabled) return undefined;
 
     let cancelled = false;
+    const controller = new AbortController();
     let refreshTimer: number | undefined;
     let consecutiveFailures = 0;
 
@@ -60,7 +61,7 @@ export function usePollingEffect(
     const run = async () => {
       if (cancelled) return;
       try {
-        await callback();
+        await callback(controller.signal);
         consecutiveFailures = 0;
       } catch (error) {
         consecutiveFailures += 1;
@@ -82,6 +83,7 @@ export function usePollingEffect(
 
     return () => {
       cancelled = true;
+      controller.abort();
       clearScheduled(initialTimer);
       clearScheduled(refreshTimer);
     };

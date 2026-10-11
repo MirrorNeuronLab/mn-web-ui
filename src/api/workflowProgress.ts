@@ -339,6 +339,7 @@ export const normalizeWorkflowProgressPayload = (value: unknown): unknown => {
   const unwrapped = unwrapWorkflowProgressPayload(value);
   const record = asRecord(unwrapped);
   if (!Object.keys(record).length) return value;
+  if (!Array.isArray(record.steps) && !Array.isArray(record.phases) && !isRecord(record.current_step) && !isRecord(record.currentStep)) return null;
 
   const topLevelAgents = toRecordArray(record.agents).map(normalizeAgent);
   const explicitCurrentIds = uniqueStrings([

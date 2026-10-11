@@ -60,10 +60,7 @@ describe('Runs Component', () => {
     try {
       const pageA = { items: [{ run_id: 'run-a', status: 'running', attempt: 1 }], next_page_token: 't1' };
       const pageB = { items: [{ run_id: 'run-b', status: 'running', attempt: 1 }], next_page_token: null };
-      vi.mocked(fetchRuns)
-        .mockResolvedValueOnce(pageA)
-        .mockResolvedValueOnce(pageB)
-        .mockResolvedValue({ items: pageA.items, next_page_token: 't1' });
+      vi.mocked(fetchRuns).mockImplementation(async (options) => options?.pageToken ? pageB : pageA);
 
       renderWithRouter(<Runs />);
       await act(async () => {
@@ -76,12 +73,15 @@ describe('Runs Component', () => {
         await vi.advanceTimersByTimeAsync(0);
       });
       expect(screen.getByText('run-b')).toBeInTheDocument();
+      fireEvent.click(screen.getByLabelText('Select run run-b'));
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(5000);
       });
       expect(screen.getByText('run-a')).toBeInTheDocument();
       expect(screen.getByText('run-b')).toBeInTheDocument();
+      expect(screen.getByLabelText('Select run run-b')).toBeChecked();
+      expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

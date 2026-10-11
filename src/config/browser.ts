@@ -12,7 +12,7 @@ const normalizeBaseUrl = (raw: string): string => {
   const trimmed = raw.trim().replace(/\/+$/, '');
   // Browser client only supports same-origin path bases (e.g. `/api/v1`).
   // Absolute URLs are rejected to avoid leaking the bearer token cross-origin.
-  if (!trimmed || !trimmed.startsWith('/')) {
+  if (!trimmed || !trimmed.startsWith('/') || trimmed.startsWith('//') || /[\\?#\s]/.test(trimmed)) {
     throw new Error(
       `Invalid web API base URL "${raw}". Expected a same-origin path starting with "/" (e.g. "/api/v1").`,
     );

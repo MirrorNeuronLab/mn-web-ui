@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { fetchJobUi } from '../api';
 import { apiErrorMessage } from '../utils/apiErrors';
+import { isRecord } from '../utils/records';
+import { usePollingEffect } from '../hooks/usePollingEffect';
 
 function localProxyUrl(jobId: string, serviceUrl: string, query: string): string {
   let remote: URL;
@@ -38,6 +40,10 @@ function unavailableMessage(status: string | undefined): string {
       return 'This service has stopped, so its web UI is no longer available.';
     case 'failed':
       return 'This service failed, so its web UI is no longer available.';
+    case 'completed':
+    case 'deleted':
+    case 'archived':
+      return 'This job has finished, so its web UI is no longer available.';
     default:
       return '';
   }
@@ -56,16 +62,15 @@ function JobUiView({ jobId, query }: { jobId?: string; query: string }) {
   const [error, setError] = useState('');
   const targetUrlRef = useRef('');
 
-  useEffect(() => {
-    if (!jobId) return undefined;
-    let cancelled = false;
+  const load = useCallback(async (signal?: AbortSignal) => {
+    if (!jobId) return;
     const updateTargetUrl = (nextUrl: string) => {
       targetUrlRef.current = nextUrl;
       setTargetUrl(nextUrl);
     };
-    const load = () => fetchJobUi(jobId)
+    await fetchJobUi(jobId)
       .then((response) => {
-        if (cancelled) return;
+        if (signal?.aborted) return;
         setTitle(response.web_ui?.title?.trim() || 'Blueprint Web UI');
         const unavailable = unavailableMessage(response.web_ui?.status);
         if (unavailable) {
@@ -79,6 +84,12 @@ function JobUiView({ jobId, query }: { jobId?: string; query: string }) {
           setError('No web UI is registered for this job yet.');
           return;
         }
+        const readiness = response.web_ui?.metadata.readiness;
+        if (isRecord(readiness) && readiness.ready === false) {
+          updateTargetUrl('');
+          setError('The web UI is getting ready. This page will open when it is available.');
+          return;
+        }
         const nextUrl = localProxyUrl(jobId, url, query);
         if (!nextUrl) {
           updateTargetUrl('');
@@ -89,17 +100,12 @@ function JobUiView({ jobId, query }: { jobId?: string; query: string }) {
         updateTargetUrl(nextUrl);
       })
       .catch((err: unknown) => {
-        if (!cancelled && !targetUrlRef.current) {
+        if (!signal?.aborted && !targetUrlRef.current) {
           setError(apiErrorMessage(err, 'Failed to load job web UI.'));
         }
       });
-    void load();
-    const poll = window.setInterval(() => void load(), 2_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(poll);
-    };
   }, [jobId, query]);
+  usePollingEffect(load, { intervalMs: 2000 });
 
   if (targetUrl) {
     return (

@@ -2,6 +2,7 @@ import { AlertTriangle, ExternalLink, FileText } from 'lucide-react';
 import type { ErrorEnvelope } from '../api';
 import { artifactDisplayName, isOpenableHref } from '../utils/artifacts';
 import { isRecord } from '../utils/records';
+import ArtifactLink from './ArtifactLink';
 
 type ArtifactRef = {
   artifact_id?: string;
@@ -132,9 +133,9 @@ export function FailurePanel({ failure, title = 'Failure', compact = false, arti
                 );
                 const className = "inline-flex h-7 items-center gap-1.5 rounded-md border border-red-200 bg-white px-2 text-xs font-medium text-neutral-800";
                 return href ? (
-                  <a key={`${label}-${index}`} href={href} target="_blank" rel="noreferrer noopener" className={className}>
+                  <ArtifactLink key={`${label}-${index}`} href={href} target="_blank" rel="noreferrer noopener" className={className}>
                     {content}
-                  </a>
+                  </ArtifactLink>
                 ) : (
                   <span key={`${label}-${index}`} className={className}>
                     {content}
