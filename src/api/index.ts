@@ -455,6 +455,11 @@ export const LaunchProgressResponseSchema = z.object({
 }).passthrough();
 
 export const WorkflowActivitySchema = z.object({
+  schema: z.string().optional(),
+  event_id: z.string().optional(),
+  level: z.enum(['debug', 'info', 'warning', 'error']).optional(),
+  owner_blueprint: z.string().optional(),
+  activity_kind: z.enum(['action', 'result', 'finding', 'milestone', 'diagnostic']).optional(),
   timestamp: z.string().optional(),
   type: z.string().optional(),
   category: z.string().optional(),

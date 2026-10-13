@@ -137,3 +137,10 @@ only, and provide secrets such as `MN_WEB_API_TOKEN` through deployment
 environment variables.
 
 Blueprint catalog information comes from the canonical package manifest and its role documents. Validation errors identify the document and JSON Pointer to correct. See the [blueprint format](../mn-docs/blueprint-standard.md).
+
+## Standard runtime activity
+
+Runtime events use the shared [`mn.runtime.event.v1` contract](../mn-python-sdk/docs/runtime-activity.md),
+including level, blueprint owner, UTC timestamp and actor attribution.
+The SDK selects meaningful activity for the CLI, API, desktop and web monitors;
+raw events remain available for diagnostics.

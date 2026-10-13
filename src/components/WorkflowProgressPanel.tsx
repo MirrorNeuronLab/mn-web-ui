@@ -278,11 +278,12 @@ const ActivityList = ({ activities, fallbackMessages }: { activities: WorkflowAc
                   {event.agent_id ? `${event.agent_id}: ` : ''}{activityMessage(event)}
                 </span>
               </div>
-              {(event.target || event.result_summary || detailText) ? (
+              {(event.type || event.target || event.result_summary || detailText) ? (
                 <details className="mt-1 pl-[148px] text-[11px] text-neutral-500">
                   <summary className="cursor-pointer select-none truncate">
-                    {event.target || event.result_summary || 'Details'}
+                    {'Details'}
                   </summary>
+                  <div>{[event.level, event.owner_blueprint, event.type].filter(Boolean).join(' · ')}</div>
                   {event.result_summary ? <div className="mt-1 whitespace-pre-wrap">{event.result_summary}</div> : null}
                   {detailText ? <pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2">{detailText}</pre> : null}
                 </details>

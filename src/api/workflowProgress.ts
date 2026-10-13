@@ -94,7 +94,7 @@ const normalizeActivity = (value: unknown) => {
     step_id: firstString(record.step_id, record.stepId, record.step, payload.step_id, payload.stepId, payload.step),
     agent_id: firstString(record.agent_id, record.agentId, record.worker, payload.agent_id, payload.agentId, payload.worker),
     status: firstString(record.status, record.state, payload.status, payload.state),
-    message: firstString(record.message, record.detail, payload.message, payload.detail, payload.reason),
+    message: firstString(record.message, record.detail, payload.message, payload.summary, payload.result_summary, payload.detail, payload.reason),
     tool_name: firstString(record.tool_name, record.toolName, payload.tool_name, payload.toolName),
     target: firstString(record.target, payload.target),
     result_summary: firstString(record.result_summary, record.resultSummary, payload.result_summary, payload.resultSummary),

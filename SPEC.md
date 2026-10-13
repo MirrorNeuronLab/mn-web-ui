@@ -132,3 +132,10 @@ and do not require network access.
 ## Canonical blueprint descriptors
 
 Catalog rows are derived by the SDK from canonical packages and carry semantic release versions. Browser code consumes the API projection; it never parses or executes package source files. Package validation displays the owning document and JSON Pointer from structured errors, including ZIP upload errors. Folder and ZIP launches share the same server pipeline.
+
+## Standard runtime activity
+
+Runtime events use the shared [`mn.runtime.event.v1` contract](../mn-python-sdk/docs/runtime-activity.md),
+including level, blueprint owner, UTC timestamp and actor attribution.
+The SDK selects meaningful activity for the CLI, API, desktop and web monitors;
+raw events remain available for diagnostics.
