@@ -79,6 +79,9 @@ const installRunRoutes = async (
       body: `id: 1\nevent: run.snapshot\ndata: ${JSON.stringify(envelope)}\n\n`,
     });
   });
+  await page.route(`**/api/v1/runs/${runId}/signals/stream*`, (route) => route.fulfill({
+    contentType: 'text/event-stream', body: ': heartbeat\n\n',
+  }));
   await page.route(new RegExp(`/api/v1/runs/${runId}/events(?:\\?.*)?$`), async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -118,6 +121,31 @@ const installRunRoutes = async (
     });
   });
 };
+
+test('observes recovery after the terminal progress stream closes', async ({ page }) => {
+  const runId = 'protected-signals-run';
+  await installRunRoutes(page, runId, () => 'completed', () => {});
+  let requests = 0;
+  await page.route(`**/api/v1/runs/${runId}/signals/stream?channel=errors`, async route => {
+    requests += 1;
+    const sequence = requests === 1 ? 1 : 2;
+    const state = sequence === 1 ? 'observed' : 'recovered';
+    if (requests === 2) expect(route.request().headers()['last-event-id']).toBe('1');
+    const event = { schema: 'mn.runtime.event.v1', event_id: `original-${sequence}`,
+      type: `runtime.error_${state}`, channel: 'errors', sequence, observed_ms: Date.now(),
+      payload: { incident_id: 'same-incident', state, count: 1,
+        error: { code: 'runner_failed', desc: 'Runner retry incident' } } };
+    await route.fulfill({ contentType: 'text/event-stream',
+      body: `id: ${sequence}\nevent: runtime.signal\ndata: ${JSON.stringify(event)}\n\n` });
+  });
+  await page.goto(`/runs/${runId}`);
+  await expect(page.getByText('Failure detected', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Communication Logs' }).click();
+  await expect(page.getByText('Recovered', { exact: true })).toBeVisible();
+  await expect(page.getByText('Failure detected', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('completed', { exact: true }).first()).toBeVisible();
+  expect(requests).toBeGreaterThanOrEqual(2);
+});
 
 test('submits an opaque bundle and controls its canonical Run', async ({ page }) => {
   let runStatus = 'running';

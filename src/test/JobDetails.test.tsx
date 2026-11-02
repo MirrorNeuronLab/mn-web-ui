@@ -9,6 +9,10 @@ import { Toaster } from '../components/ui/sonner';
 import { TooltipProvider } from '../components/ui/tooltip';
 import { ConfirmActionDialogHost } from '../components/ui/confirm-action-dialog';
 
+vi.mock('../hooks/useRuntimeSignals', () => ({
+  useRuntimeSignals: () => ({ events: [], unavailable: null }),
+}));
+
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>();
   return {

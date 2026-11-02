@@ -144,3 +144,17 @@ Runtime events use the shared [`mn.runtime.event.v1` contract](../mn-python-sdk/
 including level, blueprint owner, UTC timestamp and actor attribution.
 The SDK selects meaningful activity for the CLI, API, desktop and web monitors;
 raw events remain available for diagnostics.
+
+
+## Runtime delivery flows
+
+The run monitor subscribes to independent errors and responses SSE channels in
+addition to workflow snapshots. Core, SDK/native and API must be deployed with the
+v2 delivery contract. Protected subscriptions preserve per-channel replay cursors,
+deduplicate by event position, and merge incident recovery using the same incident
+identity. A first failure remains visible while the ledger decides retry or
+termination. Recovery updates that incident without closing observation or changing
+the run's status. Command acceptance/execution/completion notifications remain
+separate from workflow completion.
+
+See [SPEC.md](SPEC.md) for queue guarantees, correlation, replay, and compatibility details.

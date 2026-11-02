@@ -33,6 +33,8 @@ import { isTerminalRunStatus, runStatusBadgeClass } from '../utils/jobStatus';
 import { isRecord } from '../utils/records';
 import { applyWorkflowShape, type WorkflowShape } from '../api/workflowShape';
 import { usePollingEffect } from '../hooks/usePollingEffect';
+import { useRuntimeSignals } from '../hooks/useRuntimeSignals';
+import { RuntimeSignalsPanel } from '../components/RuntimeSignalsPanel';
 
 const StatusIcon = ({ status }: { status: string }) => {
   const normalized = status.trim().toLowerCase();
@@ -219,6 +221,7 @@ function JobDetailsView({ id }: { id?: string }) {
   const [progressStreamState, setProgressStreamState] = useState<ProgressStreamState>('connecting');
   const [streamError, setStreamError] = useState('');
   const [streamAttempt, setStreamAttempt] = useState(0);
+  const signals = useRuntimeSignals(id, streamAttempt);
   const terminalRefreshRef = useRef<string | null>(null);
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!id) return;
@@ -605,6 +608,9 @@ function JobDetailsView({ id }: { id?: string }) {
         </div>
       </div>
 
+      <div className="max-h-48 overflow-y-auto">
+        <RuntimeSignalsPanel events={signals.events} unavailable={signals.unavailable} />
+      </div>
       <Card className="flex min-h-[560px] flex-1 flex-col overflow-hidden">
         <Tabs
           value={activeTab}
