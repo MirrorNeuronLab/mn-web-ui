@@ -27,12 +27,12 @@ describe('Models Component', () => {
       warnings: [],
       items: [
         {
-          id: 'gemma4:e2b',
-          name: 'Gemma 4 E2B',
+          id: 'nemotron-3.5-bolt-e4b:q4_k_m',
+          name: 'Nemotron 3.5 Bolt E4B Q4_K_M',
           provider: 'docker_model_runner',
-          model: 'ai/gemma4:E2B',
-          docker_model: 'ai/gemma4:E2B',
-          api_model: 'ai/gemma4:E2B',
+          model: 'nemotron-3.5-bolt-e4b:q4_k_m',
+          docker_model: 'nemotron-3.5-bolt-e4b:q4_k_m',
+          api_model: 'nemotron-3.5-bolt-e4b:q4_k_m',
           backend: 'llama.cpp',
           installed: true,
           node: 'mn1@local',
@@ -74,10 +74,10 @@ describe('Models Component', () => {
       next_page_token: null,
     });
     vi.mocked(benchmarkRuntimeModel).mockResolvedValue({
-      model: 'gemma4:e2b',
-      name: 'Gemma 4 E2B',
-      docker_model: 'ai/gemma4:E2B',
-      api_model: 'ai/gemma4:E2B',
+      model: 'nemotron-3.5-bolt-e4b:q4_k_m',
+      name: 'Nemotron 3.5 Bolt E4B Q4_K_M',
+      docker_model: 'nemotron-3.5-bolt-e4b:q4_k_m',
+      api_model: 'nemotron-3.5-bolt-e4b:q4_k_m',
       node: 'mn1@local',
       elapsed_ms: 1200,
       first_token_ms: 340,
@@ -89,19 +89,19 @@ describe('Models Component', () => {
 
     renderModels();
 
-    expect(await screen.findByText('Gemma 4 E2B')).toBeInTheDocument();
-    expect(screen.getAllByText('Gemma 4 E2B')).toHaveLength(1);
+    expect(await screen.findByText('Nemotron 3.5 Bolt E4B Q4_K_M')).toBeInTheDocument();
+    expect(screen.getAllByText('Nemotron 3.5 Bolt E4B Q4_K_M')).toHaveLength(1);
     expect(screen.queryByText('Installed Models')).not.toBeInTheDocument();
     expect(screen.queryByText('Blueprint-Owned')).not.toBeInTheDocument();
     expect(screen.queryByText('Orphaned')).not.toBeInTheDocument();
-    expect(screen.queryByText('ai/gemma4:E2B')).not.toBeInTheDocument();
+    expect(screen.queryByText('nemotron-3.5-bolt-e4b:q4_k_m')).not.toBeInTheDocument();
     expect(screen.getByText('personal_income_tax_expert')).toBeInTheDocument();
     expect(screen.getByText('Not reported')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /install/i })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Benchmark Gemma 4 E2B' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Benchmark Nemotron 3.5 Bolt E4B Q4_K_M' }));
 
-    await waitFor(() => expect(benchmarkRuntimeModel).toHaveBeenCalledWith('gemma4:e2b'));
+    await waitFor(() => expect(benchmarkRuntimeModel).toHaveBeenCalledWith('nemotron-3.5-bolt-e4b:q4_k_m'));
     const dialog = await screen.findByRole('dialog', { name: /benchmark model/i });
     expect(within(dialog).getByText('12.5 tok/s')).toBeInTheDocument();
     expect(within(dialog).getByText('340ms')).toBeInTheDocument();

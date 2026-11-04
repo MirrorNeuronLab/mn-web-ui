@@ -52,7 +52,7 @@ describe('apiErrorMessage', () => {
             issues: [
               {
                 code: 'runtime_model_install_failed',
-                message: "llm: unknown runtime model 'gemma4:e2b'",
+                message: "llm: unknown runtime model 'nemotron-3.5-bolt-e4b:q4_k_m'",
                 location: { path: 'llm' },
               },
             ],
@@ -61,7 +61,7 @@ describe('apiErrorMessage', () => {
       },
       message: 'OtterDesk could not reach the MirrorNeuron runtime',
     }, 'Fallback')).toBe(
-      'Required runtime model gemma4:e2b could not be prepared. Check model installation/runtime model settings and try again.',
+      'Required runtime model nemotron-3.5-bolt-e4b:q4_k_m could not be prepared. Check model installation/runtime model settings and try again.',
     );
   });
 
@@ -71,7 +71,7 @@ describe('apiErrorMessage', () => {
         data: {
           error: 'blueprint_model_install_failed',
           model_install: {
-            models: [{ id: 'gemma4:e2b', model: 'ai/gemma4:E2B' }],
+            models: [{ id: 'nemotron-3.5-bolt-e4b:q4_k_m', model: 'nemotron-3.5-bolt-e4b:q4_k_m' }],
           },
           validation: {
             issues: [
@@ -85,7 +85,7 @@ describe('apiErrorMessage', () => {
         },
       },
     }, 'Fallback')).toBe(
-      'Required runtime model gemma4:e2b could not be prepared. Check model installation/runtime model settings and try again.',
+      'Required runtime model nemotron-3.5-bolt-e4b:q4_k_m could not be prepared. Check model installation/runtime model settings and try again.',
     );
   });
 
