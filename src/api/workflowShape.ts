@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { WorkflowProgress } from './index';
+import type { WorkflowProgress } from './schemas';
 
 const identity = {
   job_id: z.string(),
