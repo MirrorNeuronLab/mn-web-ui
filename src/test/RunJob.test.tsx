@@ -1,14 +1,26 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BrowserRouter } from 'react-router-dom';
-import { toast } from 'sonner';
-import RunJob from '../pages/RunJob';
-import { fetchBlueprints, fetchLaunchProgress, launchBlueprintJob, newIdempotencyKey, uploadBundle } from '../api';
-import { Toaster } from '../components/ui/sonner';
-import { TooltipProvider } from '../components/ui/tooltip';
-import { ConfirmActionDialogHost } from '../components/ui/confirm-action-dialog';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BrowserRouter } from "react-router-dom";
+import { toast } from "sonner";
+import RunJob from "../pages/RunJob";
+import {
+  fetchBlueprints,
+  fetchLaunchProgress,
+  launchBlueprintJob,
+  newIdempotencyKey,
+  uploadBundle,
+} from "../api";
+import { Toaster } from "../components/ui/sonner";
+import { TooltipProvider } from "../components/ui/tooltip";
+import { ConfirmActionDialogHost } from "../components/ui/confirm-action-dialog";
 
-vi.mock('../api', () => ({
+vi.mock("../api", () => ({
   fetchBlueprints: vi.fn(),
   fetchLaunchProgress: vi.fn(),
   launchBlueprintJob: vi.fn(),
@@ -17,182 +29,249 @@ vi.mock('../api', () => ({
 }));
 
 const mockNavigate = vi.fn();
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom");
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-const renderRunJob = () => render(
-  <TooltipProvider>
-    <BrowserRouter><RunJob /></BrowserRouter>
-    <ConfirmActionDialogHost />
-    <Toaster />
-  </TooltipProvider>,
-);
+const renderRunJob = () =>
+  render(
+    <TooltipProvider>
+      <BrowserRouter>
+        <RunJob />
+      </BrowserRouter>
+      <ConfirmActionDialogHost />
+      <Toaster />
+    </TooltipProvider>,
+  );
 
 const waitForBlueprintSelection = async () => {
-  const select = await screen.findByRole('combobox', { name: 'Blueprint' });
-  await waitFor(() => expect(select).toHaveValue('worker_one'));
+  const select = await screen.findByRole("combobox", { name: "Blueprint" });
+  await waitFor(() => expect(select).toHaveValue("worker_one"));
   return select;
 };
 
-describe('RunJob Component', () => {
+describe("RunJob Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     toast.dismiss();
-    vi.mocked(newIdempotencyKey).mockReturnValue('launch-progress-test');
+    vi.mocked(newIdempotencyKey).mockReturnValue("launch-progress-test");
     vi.mocked(fetchLaunchProgress).mockResolvedValue({
-      progress_id: 'launch-progress-test',
-      status: 'running',
+      progress_id: "launch-progress-test",
+      status: "running",
       completed: false,
       events: [],
       phases: [],
     });
     vi.mocked(fetchBlueprints).mockResolvedValue({
       items: [
-        { id: 'worker_one', name: 'Worker One', description: 'Runs one worker.' },
-        { id: 'tax_expert', name: 'Tax Expert', description: 'Prepare tax workpapers.' },
+        {
+          id: "worker_one",
+          name: "Worker One",
+          description: "Runs one worker.",
+        },
+        {
+          id: "tax_expert",
+          name: "Tax Expert",
+          description: "Prepare tax workpapers.",
+        },
       ],
       next_page_token: null,
     });
   });
 
-  it('offers only canonical blueprint and opaque bundle sources', async () => {
+  it("offers only canonical blueprint and opaque bundle sources", async () => {
     renderRunJob();
-    expect(screen.getByRole('tab', { name: 'Blueprint' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'ZIP blueprint' })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'File system path' })).not.toBeInTheDocument();
-    expect(await waitForBlueprintSelection()).toHaveValue('worker_one');
+    expect(screen.getByRole("tab", { name: "Blueprint" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "ZIP blueprint" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "File system path" }),
+    ).not.toBeInTheDocument();
+    expect(await waitForBlueprintSelection()).toHaveValue("worker_one");
   });
 
-  it('creates a run directly from a catalog blueprint without version or progress aliases', async () => {
+  it("creates a run directly from a catalog blueprint without version or progress aliases", async () => {
     vi.mocked(launchBlueprintJob).mockResolvedValue({
-      job_id: 'job-blueprint-123',
-      run_id: 'run-blueprint-123',
-      status: 'pending',
+      job_id: "job-blueprint-123",
+      run_id: "run-blueprint-123",
+      status: "pending",
     });
     renderRunJob();
     await waitForBlueprintSelection();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
-    const confirm = await screen.findByRole('dialog');
-    fireEvent.click(within(confirm).getByRole('button', { name: 'Launch' }));
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    const confirm = await screen.findByRole("dialog");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Launch" }));
 
     await waitFor(() => {
-      expect(launchBlueprintJob).toHaveBeenCalledWith({
-        source: 'catalog',
-        blueprint_id: 'worker_one',
-      }, {
-        progressId: 'launch-progress-test',
-        idempotencyKey: 'launch-progress-test',
-      });
-      expect(mockNavigate).toHaveBeenCalledWith('/runs/run-blueprint-123');
+      expect(launchBlueprintJob).toHaveBeenCalledWith(
+        {
+          source: "catalog",
+          blueprint_id: "worker_one",
+        },
+        {
+          progressId: "launch-progress-test",
+          idempotencyKey: "launch-progress-test",
+        },
+      );
+      expect(mockNavigate).toHaveBeenCalledWith("/runs/run-blueprint-123");
     });
   });
 
-  it('shows real server preparation phases while the launch request is pending', async () => {
-    vi.mocked(launchBlueprintJob).mockImplementation(() => new Promise(() => {}));
+  it("shows real server preparation phases while the launch request is pending", async () => {
+    vi.mocked(launchBlueprintJob).mockImplementation(
+      () => new Promise(() => {}),
+    );
     vi.mocked(fetchLaunchProgress).mockResolvedValue({
-      progress_id: 'launch-progress-test',
-      status: 'running',
-      current_phase: 'context_engine',
+      progress_id: "launch-progress-test",
+      status: "running",
+      current_phase: "context_engine",
       completed: false,
       latest: {
-        phase: 'context_engine',
-        status: 'running',
-        message: 'Starting context memory service.',
+        phase: "context_engine",
+        status: "running",
+        message: "Starting context memory service.",
       },
       events: [],
       phases: [
-        { id: 'requirements', label: 'Check runtime resources', status: 'completed', message: 'Runtime requirements passed.' },
-        { id: 'context_engine', label: 'Prepare context memory', status: 'running', message: 'Starting context memory service.' },
+        {
+          id: "requirements",
+          label: "Check runtime resources",
+          status: "completed",
+          message: "Runtime requirements passed.",
+        },
+        {
+          id: "context_engine",
+          label: "Prepare context memory",
+          status: "running",
+          message: "Starting context memory service.",
+        },
       ],
     });
     renderRunJob();
     await waitForBlueprintSelection();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Launch' })).at(-1)!);
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    fireEvent.click(
+      (await screen.findAllByRole("button", { name: "Launch" })).at(-1)!,
+    );
 
-    expect(await screen.findByText('Check runtime resources')).toBeInTheDocument();
-    expect(screen.getByText('Prepare context memory')).toBeInTheDocument();
-    expect(screen.getByText('Starting context memory service.')).toBeInTheDocument();
-    expect(fetchLaunchProgress).toHaveBeenCalledWith('launch-progress-test');
+    expect(
+      await screen.findByText("Check runtime resources"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Prepare context memory")).toBeInTheDocument();
+    expect(
+      screen.getByText("Starting context memory service."),
+    ).toBeInTheDocument();
+    expect(fetchLaunchProgress).toHaveBeenCalledWith("launch-progress-test");
   });
 
-  it('sends nested configuration overrides with a blueprint run', async () => {
-    vi.mocked(launchBlueprintJob).mockResolvedValue({ run_id: 'run-config-123', status: 'pending' });
-    renderRunJob();
-    await waitForBlueprintSelection();
-    fireEvent.click(screen.getByText('Run configuration'));
-    fireEvent.change(screen.getByLabelText('Configuration overrides'), {
-      target: { value: 'llm.configs.primary.context_size=8192\nfeatures.research=true' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Launch' })).at(-1)!);
-
-    await waitFor(() => expect(launchBlueprintJob).toHaveBeenCalledWith({
-      source: 'catalog',
-      blueprint_id: 'worker_one',
-      config_overrides: {
-        llm: { configs: { primary: { context_size: 8192 } } },
-        features: { research: true },
-      },
-    }, {
-      progressId: 'launch-progress-test',
-      idempotencyKey: 'launch-progress-test',
-    }));
-  });
-
-  it('blocks malformed run configuration overrides', async () => {
-    renderRunJob();
-    await waitForBlueprintSelection();
-    fireEvent.click(screen.getByText('Run configuration'));
-    fireEvent.change(screen.getByLabelText('Configuration overrides'), {
-      target: { value: 'llm..model=default' },
-    });
-    expect(screen.getByRole('alert')).toHaveTextContent('expected non-empty dotted path segments');
-    expect(screen.getByRole('button', { name: 'Launch' })).toBeDisabled();
-  });
-
-  it('uploads a ZIP and launches it by opaque bundle_id', async () => {
-    vi.mocked(uploadBundle).mockResolvedValue({ bundle_id: 'bundle_01JABC' });
+  it("sends nested configuration overrides with a blueprint run", async () => {
     vi.mocked(launchBlueprintJob).mockResolvedValue({
-      job_id: 'job-zip-123',
-      run_id: 'run-zip-123',
-      status: 'pending',
+      run_id: "run-config-123",
+      status: "pending",
     });
     renderRunJob();
-    fireEvent.click(screen.getByRole('tab', { name: 'ZIP blueprint' }));
-    const file = new File(['bundle'], 'bundle.zip', { type: 'application/zip' });
-    fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
-      target: { files: [file] },
+    await waitForBlueprintSelection();
+    fireEvent.click(screen.getByText("Run configuration"));
+    fireEvent.change(screen.getByLabelText("Configuration overrides"), {
+      target: {
+        value: "llm.configs.primary.context_size=8192\nfeatures.research=true",
+      },
     });
-    fireEvent.click(await screen.findByRole('button', { name: 'Upload ZIP' }));
-    expect(await screen.findByText('bundle_01JABC')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    fireEvent.click(
+      (await screen.findAllByRole("button", { name: "Launch" })).at(-1)!,
+    );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Launch' })).at(-1)!);
+    await waitFor(() =>
+      expect(launchBlueprintJob).toHaveBeenCalledWith(
+        {
+          source: "catalog",
+          blueprint_id: "worker_one",
+          config_overrides: {
+            llm: { configs: { primary: { context_size: 8192 } } },
+            features: { research: true },
+          },
+        },
+        {
+          progressId: "launch-progress-test",
+          idempotencyKey: "launch-progress-test",
+        },
+      ),
+    );
+  });
+
+  it("blocks malformed run configuration overrides", async () => {
+    renderRunJob();
+    await waitForBlueprintSelection();
+    fireEvent.click(screen.getByText("Run configuration"));
+    fireEvent.change(screen.getByLabelText("Configuration overrides"), {
+      target: { value: "llm..model=default" },
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "expected non-empty dotted path segments",
+    );
+    expect(screen.getByRole("button", { name: "Launch" })).toBeDisabled();
+  });
+
+  it("uploads a ZIP and launches it by opaque bundle_id", async () => {
+    vi.mocked(uploadBundle).mockResolvedValue({ bundle_id: "bundle_01JABC" });
+    vi.mocked(launchBlueprintJob).mockResolvedValue({
+      job_id: "job-zip-123",
+      run_id: "run-zip-123",
+      status: "pending",
+    });
+    renderRunJob();
+    fireEvent.click(screen.getByRole("tab", { name: "ZIP blueprint" }));
+    const file = new File(["bundle"], "bundle.zip", {
+      type: "application/zip",
+    });
+    fireEvent.change(
+      document.querySelector('input[type="file"]') as HTMLInputElement,
+      {
+        target: { files: [file] },
+      },
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Upload ZIP" }));
+    expect(await screen.findByText("bundle_01JABC")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    fireEvent.click(
+      (await screen.findAllByRole("button", { name: "Launch" })).at(-1)!,
+    );
     await waitFor(() => {
       expect(launchBlueprintJob).toHaveBeenCalledWith(
-        { source: 'bundle', bundle_id: 'bundle_01JABC' },
-        { progressId: 'launch-progress-test', idempotencyKey: 'launch-progress-test' },
+        { source: "bundle", bundle_id: "bundle_01JABC" },
+        {
+          progressId: "launch-progress-test",
+          idempotencyKey: "launch-progress-test",
+        },
       );
-      expect(mockNavigate).toHaveBeenCalledWith('/runs/run-zip-123');
+      expect(mockNavigate).toHaveBeenCalledWith("/runs/run-zip-123");
     });
   });
 
-  it('surfaces a rejected canonical run creation', async () => {
+  it("surfaces a rejected canonical run creation", async () => {
     vi.mocked(launchBlueprintJob).mockRejectedValue({
-      response: { data: { detail: 'Blueprint validation failed.', code: 'request.validation_failed' } },
+      response: {
+        data: {
+          detail: "Blueprint validation failed.",
+          code: "request.validation_failed",
+        },
+      },
     });
     renderRunJob();
     await waitForBlueprintSelection();
-    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
-    const confirm = await screen.findByRole('dialog');
-    fireEvent.click(within(confirm).getByRole('button', { name: 'Launch' }));
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    const confirm = await screen.findByRole("dialog");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Launch" }));
     await waitFor(() => expect(launchBlueprintJob).toHaveBeenCalled());
-    expect(await screen.findAllByText('Blueprint validation failed.')).not.toHaveLength(0);
+    expect(
+      await screen.findAllByText("Blueprint validation failed."),
+    ).not.toHaveLength(0);
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

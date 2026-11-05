@@ -1,545 +1,676 @@
 /** API payload schemas and inferred types, independent of the HTTP client. */
-import { z } from 'zod';
-import { normalizeWorkflowProgressPayload } from './workflowProgress';
+import { z } from "zod";
+import { normalizeWorkflowProgressPayload } from "./workflowProgress";
 
-export const CreateJobResponseSchema = z.object({ job_id: z.string().min(1) }).passthrough();
-export const AddClusterNodeRequestSchema = z.object({ host: z.string().trim().min(1), token: z.string().trim().min(1) });
-export const BenchmarkRequestSchema = z.object({ prompt: z.string().optional(), max_tokens: z.number().optional() }).passthrough();
-export const LaunchBodySchema = z.object({ config_overrides: z.record(z.string(), z.unknown()) });
+export const CreateJobResponseSchema = z
+  .object({ job_id: z.string().min(1) })
+  .passthrough();
+export const AddClusterNodeRequestSchema = z.object({
+  host: z.string().trim().min(1),
+  token: z.string().trim().min(1),
+});
+export const BenchmarkRequestSchema = z
+  .object({ prompt: z.string().optional(), max_tokens: z.number().optional() })
+  .passthrough();
+export const LaunchBodySchema = z.object({
+  config_overrides: z.record(z.string(), z.unknown()),
+});
 
-export const ErrorEnvelopeSchema = z.object({
-  schema_version: z.string().optional().default('mn.error.v1'),
-  code: z.string().optional().default('runtime.failure'),
-  desc: z.string().optional().default('Runtime failure'),
-  details: z.record(z.string(), z.unknown()).optional().default({}),
-  severity: z.string().optional().default('ERROR'),
-  occurred_at: z.string().optional(),
-  event_id: z.string().optional(),
-  trace_id: z.string().nullable().optional(),
-  span_id: z.string().nullable().optional(),
-  remediation: z.string().optional(),
-  links: z.array(z.object({
-    rel: z.string().optional(),
-    artifact_id: z.string().optional(),
-    url: z.string().optional(),
-  }).passthrough()).optional().default([]),
-}).passthrough();
+export const ErrorEnvelopeSchema = z
+  .object({
+    schema_version: z.string().optional().default("mn.error.v1"),
+    code: z.string().optional().default("runtime.failure"),
+    desc: z.string().optional().default("Runtime failure"),
+    details: z.record(z.string(), z.unknown()).optional().default({}),
+    severity: z.string().optional().default("ERROR"),
+    occurred_at: z.string().optional(),
+    event_id: z.string().optional(),
+    trace_id: z.string().nullable().optional(),
+    span_id: z.string().nullable().optional(),
+    remediation: z.string().optional(),
+    links: z
+      .array(
+        z
+          .object({
+            rel: z.string().optional(),
+            artifact_id: z.string().optional(),
+            url: z.string().optional(),
+          })
+          .passthrough(),
+      )
+      .optional()
+      .default([]),
+  })
+  .passthrough();
 
-export const ObservabilitySummarySchema = z.record(z.string(), z.unknown()).optional();
+export const ObservabilitySummarySchema = z
+  .record(z.string(), z.unknown())
+  .optional();
 
-export const AgentSchema = z.object({
-  agent_id: z.string().optional().default('unknown'),
-  alias: z.string().optional(),
-  display_name: z.string().optional(),
-  label: z.string().optional(),
-  role: z.string().optional(),
-  agent_type: z.string().optional().default('unknown'),
-  type: z.string().optional().default('unknown'),
-  assigned_node: z.string().optional().default('unassigned'),
-  status: z.string().optional().default('unknown'),
-  running: z.boolean().optional(),
-  processed_messages: z.number().optional().default(0),
-  mailbox_depth: z.number().optional().default(0),
-  paused: z.boolean().optional(),
-  failure: ErrorEnvelopeSchema.optional().nullable(),
-  metadata: z.object({
-    outbound_edges: z.array(z.string()).optional(),
-  }).optional(),
-}).passthrough();
+export const AgentSchema = z
+  .object({
+    agent_id: z.string().optional().default("unknown"),
+    alias: z.string().optional(),
+    display_name: z.string().optional(),
+    label: z.string().optional(),
+    role: z.string().optional(),
+    agent_type: z.string().optional().default("unknown"),
+    type: z.string().optional().default("unknown"),
+    assigned_node: z.string().optional().default("unassigned"),
+    status: z.string().optional().default("unknown"),
+    running: z.boolean().optional(),
+    processed_messages: z.number().optional().default(0),
+    mailbox_depth: z.number().optional().default(0),
+    paused: z.boolean().optional(),
+    failure: ErrorEnvelopeSchema.optional().nullable(),
+    metadata: z
+      .object({
+        outbound_edges: z.array(z.string()).optional(),
+      })
+      .optional(),
+  })
+  .passthrough();
 
-export const JobEventSchema = z.object({
-  timestamp: z.string().optional().default('unknown'),
-  type: z.string().optional().default('unknown'),
-  agent_id: z.string().optional(),
-  payload: z.any().optional(),
-  error: ErrorEnvelopeSchema.optional(),
-  failure: ErrorEnvelopeSchema.nullable().optional(),
-}).passthrough();
+export const JobEventSchema = z
+  .object({
+    timestamp: z.string().optional().default("unknown"),
+    type: z.string().optional().default("unknown"),
+    agent_id: z.string().optional(),
+    payload: z.any().optional(),
+    error: ErrorEnvelopeSchema.optional(),
+    failure: ErrorEnvelopeSchema.nullable().optional(),
+  })
+  .passthrough();
 
-export const JobSchema = z.object({
-  job_id: z.string().optional().default('unknown'),
-  graph_id: z.string().nullable().optional().default('unknown'),
-  status: z.string().optional().default('unknown'),
-  submitted_at: z.string().nullable().optional(),
-  updated_at: z.string().nullable().optional(),
-  run_id: z.string().nullable().optional(),
-  trace_id: z.string().nullable().optional(),
-  executor_count: z.number().optional(),
-  active_executors: z.number().optional(),
-  type: z.string().nullable().optional(),
-  job_type: z.string().nullable().optional(),
-  live: z.boolean().optional(),
-  'live?': z.boolean().optional(),
-  recovery_status: z.string().nullable().optional(),
-  recovery_requires_review: z.boolean().optional(),
-  recovery: z.record(z.string(), z.unknown()).optional(),
-  failure: ErrorEnvelopeSchema.nullable().optional(),
-}).passthrough();
+export const JobSchema = z
+  .object({
+    job_id: z.string().optional().default("unknown"),
+    graph_id: z.string().nullable().optional().default("unknown"),
+    status: z.string().optional().default("unknown"),
+    submitted_at: z.string().nullable().optional(),
+    updated_at: z.string().nullable().optional(),
+    run_id: z.string().nullable().optional(),
+    trace_id: z.string().nullable().optional(),
+    executor_count: z.number().optional(),
+    active_executors: z.number().optional(),
+    type: z.string().nullable().optional(),
+    job_type: z.string().nullable().optional(),
+    live: z.boolean().optional(),
+    "live?": z.boolean().optional(),
+    recovery_status: z.string().nullable().optional(),
+    recovery_requires_review: z.boolean().optional(),
+    recovery: z.record(z.string(), z.unknown()).optional(),
+    failure: ErrorEnvelopeSchema.nullable().optional(),
+  })
+  .passthrough();
 
-export const StableJobSchema = z.object({
-  job_id: z.string(),
-  type: z.string().nullable().optional(),
-  blueprint_id: z.string().nullable().optional(),
-  graph_id: z.string().nullable().optional(),
-  job_name: z.string().nullable().optional(),
-  owner_node: z.string().nullable().optional(),
-  status: z.string().optional().default('active'),
-  data_generation: z.number().optional().default(1),
-  latest_run_id: z.string().nullable().optional(),
-  run_count: z.number().optional().default(0),
-  schedule_count: z.number().optional().default(0),
-  created_at: z.string().nullable().optional(),
-  updated_at: z.string().nullable().optional(),
-  resolved_configuration: z.record(z.string(), z.unknown()).optional().default({}),
-  schedules: z.array(z.unknown()).optional().default([]),
-  schedule_ids: z.array(z.string()).optional().default([]),
-  storage: z.record(z.string(), z.unknown()).optional().default({}),
-  bundle_ref: z.record(z.string(), z.unknown()).optional(),
-}).passthrough();
+export const StableJobSchema = z
+  .object({
+    job_id: z.string(),
+    type: z.string().nullable().optional(),
+    blueprint_id: z.string().nullable().optional(),
+    graph_id: z.string().nullable().optional(),
+    job_name: z.string().nullable().optional(),
+    owner_node: z.string().nullable().optional(),
+    status: z.string().optional().default("active"),
+    data_generation: z.number().optional().default(1),
+    latest_run_id: z.string().nullable().optional(),
+    run_count: z.number().optional().default(0),
+    schedule_count: z.number().optional().default(0),
+    created_at: z.string().nullable().optional(),
+    updated_at: z.string().nullable().optional(),
+    resolved_configuration: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .default({}),
+    schedules: z.array(z.unknown()).optional().default([]),
+    schedule_ids: z.array(z.string()).optional().default([]),
+    storage: z.record(z.string(), z.unknown()).optional().default({}),
+    bundle_ref: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough();
 
-export const StableRunSchema = z.object({
-  run_id: z.string(),
-  job_id: z.string().nullable().optional(),
-  graph_id: z.string().nullable().optional(),
-  job_name: z.string().nullable().optional(),
-  workflow_id: z.string().nullable().optional(),
-  status: z.string().optional().default('unknown'),
-  type: z.string().nullable().optional(),
-  job_type: z.string().nullable().optional(),
-  attempt: z.number().optional().default(1),
-  attempt_id: z.string().nullable().optional(),
-  data_generation: z.number().optional(),
-  job_data_access: z.string().nullable().optional(),
-  owner_node: z.string().nullable().optional(),
-  submitted_at: z.string().nullable().optional(),
-  started_at: z.string().nullable().optional(),
-  updated_at: z.string().nullable().optional(),
-  completed_at: z.string().nullable().optional(),
-  cancelled_at: z.string().nullable().optional(),
-}).passthrough();
+export const StableRunSchema = z
+  .object({
+    run_id: z.string(),
+    job_id: z.string().nullable().optional(),
+    graph_id: z.string().nullable().optional(),
+    job_name: z.string().nullable().optional(),
+    workflow_id: z.string().nullable().optional(),
+    status: z.string().optional().default("unknown"),
+    type: z.string().nullable().optional(),
+    job_type: z.string().nullable().optional(),
+    attempt: z.number().optional().default(1),
+    attempt_id: z.string().nullable().optional(),
+    data_generation: z.number().optional(),
+    job_data_access: z.string().nullable().optional(),
+    owner_node: z.string().nullable().optional(),
+    submitted_at: z.string().nullable().optional(),
+    started_at: z.string().nullable().optional(),
+    updated_at: z.string().nullable().optional(),
+    completed_at: z.string().nullable().optional(),
+    cancelled_at: z.string().nullable().optional(),
+  })
+  .passthrough();
 
 export const RunSummarySchema = StableRunSchema.extend({
   executor_count: z.number().optional(),
   active_executors: z.number().optional(),
   live: z.boolean().optional(),
-  'live?': z.boolean().optional(),
+  "live?": z.boolean().optional(),
   recovery_status: z.string().nullable().optional(),
   recovery_requires_review: z.boolean().optional(),
   recovery: z.record(z.string(), z.unknown()).optional(),
   failure: ErrorEnvelopeSchema.nullable().optional(),
 }).passthrough();
 
-export const JobDetailsSchema = z.object({
-  job: JobSchema,
-  job_id: z.string().nullable().optional(),
-  summary: z.record(z.string(), z.unknown()).optional(),
-  agents: z.array(AgentSchema).optional().default([]),
-  sandboxes: z.array(z.unknown()).optional().default([]),
-  recent_events: z.array(JobEventSchema).optional().default([]),
-  web_ui: z.record(z.string(), z.unknown()).optional(),
-  web_ui_service: z.record(z.string(), z.unknown()).optional(),
-  blueprint_web_ui_service: z.record(z.string(), z.unknown()).optional(),
-  trace_id: z.string().nullable().optional(),
-  execution_id: z.string().nullable().optional(),
-  runtime_run_id: z.string().nullable().optional(),
-  observability_summary: ObservabilitySummarySchema,
-  failure: ErrorEnvelopeSchema.optional().nullable(),
-}).passthrough();
+export const JobDetailsSchema = z
+  .object({
+    job: JobSchema,
+    job_id: z.string().nullable().optional(),
+    summary: z.record(z.string(), z.unknown()).optional(),
+    agents: z.array(AgentSchema).optional().default([]),
+    sandboxes: z.array(z.unknown()).optional().default([]),
+    recent_events: z.array(JobEventSchema).optional().default([]),
+    web_ui: z.record(z.string(), z.unknown()).optional(),
+    web_ui_service: z.record(z.string(), z.unknown()).optional(),
+    blueprint_web_ui_service: z.record(z.string(), z.unknown()).optional(),
+    trace_id: z.string().nullable().optional(),
+    execution_id: z.string().nullable().optional(),
+    runtime_run_id: z.string().nullable().optional(),
+    observability_summary: ObservabilitySummarySchema,
+    failure: ErrorEnvelopeSchema.optional().nullable(),
+  })
+  .passthrough();
 
-export const AgentGraphNodeSchema = z.object({
-  id: z.string(),
-  alias: z.string().optional(),
-  display_name: z.string().optional(),
-  label: z.string().optional(),
-  role: z.string().optional(),
-  agent_type: z.string().optional().default('unknown'),
-  type: z.string().optional().default('unknown'),
-  assigned_node: z.string().optional().default('unassigned'),
-  status: z.string().optional().default('unknown'),
-  processed_messages: z.number().optional().default(0),
-  mailbox_depth: z.number().optional().default(0),
-}).passthrough();
+export const AgentGraphNodeSchema = z
+  .object({
+    id: z.string(),
+    alias: z.string().optional(),
+    display_name: z.string().optional(),
+    label: z.string().optional(),
+    role: z.string().optional(),
+    agent_type: z.string().optional().default("unknown"),
+    type: z.string().optional().default("unknown"),
+    assigned_node: z.string().optional().default("unassigned"),
+    status: z.string().optional().default("unknown"),
+    processed_messages: z.number().optional().default(0),
+    mailbox_depth: z.number().optional().default(0),
+  })
+  .passthrough();
 
-export const AgentGraphEdgeSchema = z.object({
-  id: z.string(),
-  source: z.string(),
-  target: z.string(),
-  message_type: z.string().optional().default('message'),
-  count: z.number().optional().default(0),
-  last_seen_at: z.string().nullable().optional(),
-  source_event: z.string().optional(),
-}).passthrough();
+export const AgentGraphEdgeSchema = z
+  .object({
+    id: z.string(),
+    source: z.string(),
+    target: z.string(),
+    message_type: z.string().optional().default("message"),
+    count: z.number().optional().default(0),
+    last_seen_at: z.string().nullable().optional(),
+    source_event: z.string().optional(),
+  })
+  .passthrough();
 
-export const AgentGraphSchema = z.object({
-  job_id: z.string(),
-  graph_id: z.string().nullable().optional(),
-  status: z.string().optional().default('unknown'),
-  nodes: z.array(AgentGraphNodeSchema).optional().default([]),
-  edges: z.array(AgentGraphEdgeSchema).optional().default([]),
-  stats: z.object({
-    agent_count: z.number().optional().default(0),
-    edge_count: z.number().optional().default(0),
-    message_count: z.number().optional().default(0),
-    event_count: z.number().optional().default(0),
-  }).optional().default({ agent_count: 0, edge_count: 0, message_count: 0, event_count: 0 }),
-}).passthrough();
+export const AgentGraphSchema = z
+  .object({
+    job_id: z.string(),
+    graph_id: z.string().nullable().optional(),
+    status: z.string().optional().default("unknown"),
+    nodes: z.array(AgentGraphNodeSchema).optional().default([]),
+    edges: z.array(AgentGraphEdgeSchema).optional().default([]),
+    stats: z
+      .object({
+        agent_count: z.number().optional().default(0),
+        edge_count: z.number().optional().default(0),
+        message_count: z.number().optional().default(0),
+        event_count: z.number().optional().default(0),
+      })
+      .optional()
+      .default({
+        agent_count: 0,
+        edge_count: 0,
+        message_count: 0,
+        event_count: 0,
+      }),
+  })
+  .passthrough();
 
-export const SystemSummarySchema = z.object({
-  nodes: z.array(z.object({
-    name: z.string().optional().default('unknown'),
-    connected_nodes: z.array(z.string()).optional().default([]),
-    self: z.boolean().optional(),
-    executor_pools: z.record(z.string(), z.object({
-      capacity: z.number().optional().default(0),
-      available: z.number().optional().default(0),
-      in_use: z.number().optional().default(0),
-      queued: z.number().optional().default(0),
-      active: z.number().optional().default(0),
-    })).optional().default({}),
-  }).passthrough()),
-  jobs: z.array(z.object({
-    job_id: z.string().optional().default('unknown'),
-    status: z.string().optional().default('unknown'),
-  }).passthrough()),
-}).passthrough();
+export const SystemSummarySchema = z
+  .object({
+    nodes: z.array(
+      z
+        .object({
+          name: z.string().optional().default("unknown"),
+          connected_nodes: z.array(z.string()).optional().default([]),
+          self: z.boolean().optional(),
+          executor_pools: z
+            .record(
+              z.string(),
+              z.object({
+                capacity: z.number().optional().default(0),
+                available: z.number().optional().default(0),
+                in_use: z.number().optional().default(0),
+                queued: z.number().optional().default(0),
+                active: z.number().optional().default(0),
+              }),
+            )
+            .optional()
+            .default({}),
+        })
+        .passthrough(),
+    ),
+    jobs: z.array(
+      z
+        .object({
+          job_id: z.string().optional().default("unknown"),
+          status: z.string().optional().default("unknown"),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
 
-export const RuntimeModelCompatibilitySchema = z.object({
-  status: z.string().optional().default('unknown'),
-  ok: z.boolean().optional().default(false),
-  message: z.string().optional().default(''),
-  warnings: z.array(z.string()).optional().default([]),
-}).passthrough().nullable();
+export const RuntimeModelCompatibilitySchema = z
+  .object({
+    status: z.string().optional().default("unknown"),
+    ok: z.boolean().optional().default(false),
+    message: z.string().optional().default(""),
+    warnings: z.array(z.string()).optional().default([]),
+  })
+  .passthrough()
+  .nullable();
 
-export const RuntimeModelSchema = z.object({
-  id: z.string().optional().default('unknown'),
-  name: z.string().optional().default('Runtime model'),
-  provider: z.string().optional().default('docker_model_runner'),
-  model: z.string().optional().default('unknown'),
-  docker_model: z.string().optional().default('unknown'),
-  api_model: z.string().optional(),
-  backend: z.string().optional().default('unknown'),
-  installed: z.boolean().optional().default(true),
-  node: z.string().optional().default('local'),
-  nodes: z.array(z.string()).optional().default([]),
-  used_by: z.array(z.string()).optional().default([]),
-  owner_count: z.number().optional().default(0),
-  orphaned: z.boolean().optional().default(false),
-  manual: z.boolean().optional().default(false),
-  compatibility: RuntimeModelCompatibilitySchema.optional().default(null),
-}).passthrough();
+export const RuntimeModelSchema = z
+  .object({
+    id: z.string().optional().default("unknown"),
+    name: z.string().optional().default("Runtime model"),
+    provider: z.string().optional().default("docker_model_runner"),
+    model: z.string().optional().default("unknown"),
+    docker_model: z.string().optional().default("unknown"),
+    api_model: z.string().optional(),
+    backend: z.string().optional().default("unknown"),
+    installed: z.boolean().optional().default(true),
+    node: z.string().optional().default("local"),
+    nodes: z.array(z.string()).optional().default([]),
+    used_by: z.array(z.string()).optional().default([]),
+    owner_count: z.number().optional().default(0),
+    orphaned: z.boolean().optional().default(false),
+    manual: z.boolean().optional().default(false),
+    compatibility: RuntimeModelCompatibilitySchema.optional().default(null),
+  })
+  .passthrough();
 
-export const RuntimeModelListResponseSchema = z.object({
-  items: z.array(RuntimeModelSchema),
-  next_page_token: z.string().nullable().optional().default(null),
-  node: z.string().optional().default('local'),
-  runner_available: z.boolean().optional().default(false),
-  warnings: z.array(z.string()).optional().default([]),
-}).passthrough();
+export const RuntimeModelListResponseSchema = z
+  .object({
+    items: z.array(RuntimeModelSchema),
+    next_page_token: z.string().nullable().optional().default(null),
+    node: z.string().optional().default("local"),
+    runner_available: z.boolean().optional().default(false),
+    warnings: z.array(z.string()).optional().default([]),
+  })
+  .passthrough();
 
-export const RuntimeModelBenchmarkSchema = z.object({
-  model: z.string().min(1),
-  name: z.string().optional().default('Runtime model'),
-  docker_model: z.string().optional().default('unknown'),
-  api_model: z.string().optional(),
-  node: z.string().optional().default('local'),
-  elapsed_ms: z.number().nonnegative(),
-  first_token_ms: z.number().nullable().optional(),
-  generated_tokens: z.number().optional().default(0),
-  tokens_per_second: z.number().nonnegative(),
-  sample: z.string().optional().default(''),
-  estimated: z.boolean().optional().default(true),
-}).passthrough();
+export const RuntimeModelBenchmarkSchema = z
+  .object({
+    model: z.string().min(1),
+    name: z.string().optional().default("Runtime model"),
+    docker_model: z.string().optional().default("unknown"),
+    api_model: z.string().optional(),
+    node: z.string().optional().default("local"),
+    elapsed_ms: z.number().nonnegative(),
+    first_token_ms: z.number().nullable().optional(),
+    generated_tokens: z.number().optional().default(0),
+    tokens_per_second: z.number().nonnegative(),
+    sample: z.string().optional().default(""),
+    estimated: z.boolean().optional().default(true),
+  })
+  .passthrough();
 
-export const ClusterNodeAddResponseSchema = z.object({
-  ok: z.boolean().optional().default(true),
-  host: z.string().optional().default(''),
-  node_name: z.string().optional().default(''),
-  status: z.string().optional().default('unknown'),
-  message: z.string().optional().default(''),
-}).passthrough();
+export const ClusterNodeAddResponseSchema = z
+  .object({
+    ok: z.boolean().optional().default(true),
+    host: z.string().optional().default(""),
+    node_name: z.string().optional().default(""),
+    status: z.string().optional().default("unknown"),
+    message: z.string().optional().default(""),
+  })
+  .passthrough();
 
-export const JobUiDefinitionSchema = z.object({
-  schema_version: z.string().optional().default('mn.web_ui.external.v1'),
-  renderer: z.string().optional().default('external-url'),
-  job_id: z.string().optional(),
-  title: z.string().optional().default('Blueprint Web UI'),
-  metadata: z.record(z.string(), z.unknown()).optional().default({}),
-}).passthrough();
+export const JobUiDefinitionSchema = z
+  .object({
+    schema_version: z.string().optional().default("mn.web_ui.external.v1"),
+    renderer: z.string().optional().default("external-url"),
+    job_id: z.string().optional(),
+    title: z.string().optional().default("Blueprint Web UI"),
+    metadata: z.record(z.string(), z.unknown()).optional().default({}),
+  })
+  .passthrough();
 
-export const WebUiHandleSchema = z.object({
-  adapter: z.string().optional().default('external-url'),
-  kind: z.string().optional().default('service'),
-  url: z.string().optional().default(''),
-  title: z.string().optional().default('Blueprint Run'),
-  status: z.string().optional().default('unknown'),
-  path: z.string().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional().default({}),
-}).passthrough();
+export const WebUiHandleSchema = z
+  .object({
+    adapter: z.string().optional().default("external-url"),
+    kind: z.string().optional().default("service"),
+    url: z.string().optional().default(""),
+    title: z.string().optional().default("Blueprint Run"),
+    status: z.string().optional().default("unknown"),
+    path: z.string().optional(),
+    metadata: z.record(z.string(), z.unknown()).optional().default({}),
+  })
+  .passthrough();
 
 const DefaultWebUiHandle = (() => {
   const parsed = WebUiHandleSchema.safeParse({});
-  if (!parsed.success) throw new Error('WebUiHandleSchema default is invalid.');
+  if (!parsed.success) throw new Error("WebUiHandleSchema default is invalid.");
   return parsed.data;
 })();
 
-export const JobUiResponseSchema = z.object({
-  job_id: z.string(),
-  ui: JobUiDefinitionSchema,
-  web_ui: WebUiHandleSchema.optional().default(DefaultWebUiHandle),
-}).passthrough();
+export const JobUiResponseSchema = z
+  .object({
+    job_id: z.string(),
+    ui: JobUiDefinitionSchema,
+    web_ui: WebUiHandleSchema.optional().default(DefaultWebUiHandle),
+  })
+  .passthrough();
 
-export const BlueprintSchema = z.object({
-  id: z.string(),
-  version: z.string().optional(),
-  name: z.string().optional(),
-  description: z.string().optional().default(''),
-  category: z.string().optional(),
-  category_slug: z.string().optional(),
-  path: z.string().optional(),
-}).passthrough();
+export const BlueprintSchema = z
+  .object({
+    id: z.string(),
+    version: z.string().optional(),
+    name: z.string().optional(),
+    description: z.string().optional().default(""),
+    category: z.string().optional(),
+    category_slug: z.string().optional(),
+    path: z.string().optional(),
+  })
+  .passthrough();
 
-export const BlueprintListResponseSchema = z.object({
-  items: z.array(BlueprintSchema),
-  next_page_token: z.string().nullable().optional().default(null),
-}).passthrough();
+export const BlueprintListResponseSchema = z
+  .object({
+    items: z.array(BlueprintSchema),
+    next_page_token: z.string().nullable().optional().default(null),
+  })
+  .passthrough();
 
-export const BlueprintLaunchResponseSchema = z.object({
-  id: z.string().nullable().optional(),
-  job_id: z.string().nullable().optional(),
-  run_id: z.string().optional().nullable(),
-  status: z.string().optional().default('pending'),
-  source: z.string().optional(),
-  blueprint: BlueprintSchema.optional(),
-  validation: z.record(z.string(), z.unknown()).optional(),
-  model_install: z.record(z.string(), z.unknown()).optional(),
-  progress_id: z.string().optional().nullable(),
-  progress_url: z.string().optional().nullable(),
-  command: z.string().optional(),
-}).passthrough();
+export const BlueprintLaunchResponseSchema = z
+  .object({
+    id: z.string().nullable().optional(),
+    job_id: z.string().nullable().optional(),
+    run_id: z.string().optional().nullable(),
+    status: z.string().optional().default("pending"),
+    source: z.string().optional(),
+    blueprint: BlueprintSchema.optional(),
+    validation: z.record(z.string(), z.unknown()).optional(),
+    model_install: z.record(z.string(), z.unknown()).optional(),
+    progress_id: z.string().optional().nullable(),
+    progress_url: z.string().optional().nullable(),
+    command: z.string().optional(),
+  })
+  .passthrough();
 
-export const UploadedBundleSchema = z.object({
-  bundle_id: z.string(),
-}).passthrough();
+export const UploadedBundleSchema = z
+  .object({
+    bundle_id: z.string(),
+  })
+  .passthrough();
 
-export const PageSchema = <T extends z.ZodType>(item: T) => z.object({
-  items: z.array(item).optional().default([]),
-  next_page_token: z.string().nullable().optional().default(null),
-});
+export const PageSchema = <T extends z.ZodType>(item: T) =>
+  z.object({
+    items: z.array(item).optional().default([]),
+    next_page_token: z.string().nullable().optional().default(null),
+  });
 
 export type Page<T> = { items: T[]; next_page_token: string | null };
 
-export const OperationCountersSchema = z.object({
-  total: z.number().optional().default(0),
-  started: z.number().optional().default(0),
-  finished: z.number().optional().default(0),
-  succeeded: z.number().optional().default(0),
-  failed: z.number().optional().default(0),
-  deferred: z.number().optional().default(0),
-}).passthrough();
-
-export const OperationSchema = z.object({
-  operation_id: z.string(),
-  kind: z.string().optional().default('operation'),
-  status: z.string().optional().default('running'),
-  counters: OperationCountersSchema.optional().default({
-    total: 0,
-    started: 0,
-    finished: 0,
-    succeeded: 0,
-    failed: 0,
-    deferred: 0,
-  }),
-}).passthrough();
-
-export const StableJobActionResponseSchema = z.object({
-  job_id: z.string(),
-  status: z.string().optional().default('active'),
-  data_generation: z.number().optional(),
-}).passthrough();
-
-export const StableRunActionResponseSchema = z.object({
-  run_id: z.string(),
-  job_id: z.string().nullable().optional(),
-  status: z.string().optional().default('unknown'),
-  replaced_run_ids: z.array(z.string()).optional(),
-  cleanup_deferred: z.boolean().optional(),
-  cleanup_pending_nodes: z.array(z.string()).optional(),
-}).passthrough();
-
-export const RevealArtifactResponseSchema = z.object({
-  ok: z.boolean().optional(),
-  path: z.string().optional(),
-  folder: z.string().optional(),
-  message: z.string().optional(),
-}).passthrough();
-
-export const LaunchProgressEventSchema = z.object({
-  ts: z.string().optional(),
-  phase: z.string().optional().default('launch'),
-  status: z.string().optional().default('pending'),
-  message: z.string().optional().default(''),
-  details: z.record(z.string(), z.unknown()).optional(),
-}).passthrough();
-
-export const LaunchProgressPhaseSchema = z.object({
-  id: z.string().optional(),
-  phase: z.string().optional(),
-  label: z.string().optional(),
-  name: z.string().optional(),
-  status: z.string().optional().default('pending'),
-  message: z.string().optional().default(''),
-  detail: z.string().optional(),
-  expectation: z.string().optional(),
-  details: z.record(z.string(), z.unknown()).optional(),
-  severity: z.string().optional(),
-}).passthrough();
-
-export const LaunchProgressResponseSchema = z.object({
-  progress_id: z.string(),
-  run_id: z.string().nullable().optional(),
-  job_id: z.string().nullable().optional(),
-  status: z.string().optional().default('pending'),
-  current_phase: z.string().nullable().optional(),
-  events: z.array(LaunchProgressEventSchema).optional().default([]),
-  phases: z.array(LaunchProgressPhaseSchema).optional().default([]),
-  latest: LaunchProgressEventSchema.nullable().optional(),
-  completed: z.boolean().optional().default(false),
-  error: z.unknown().optional(),
-}).passthrough();
-
-export const WorkflowActivitySchema = z.object({
-  schema: z.string().optional(),
-  event_id: z.string().optional(),
-  level: z.enum(['debug', 'info', 'warning', 'error']).optional(),
-  owner_blueprint: z.string().optional(),
-  activity_kind: z.enum(['action', 'result', 'finding', 'milestone', 'diagnostic']).optional(),
-  timestamp: z.string().optional(),
-  type: z.string().optional(),
-  category: z.string().optional(),
-  step_id: z.string().optional(),
-  agent_id: z.string().optional(),
-  status: z.string().optional(),
-  message: z.string().optional(),
-  tool_name: z.string().optional(),
-  target: z.string().optional(),
-  duration_ms: z.number().optional(),
-  result_summary: z.string().optional(),
-  details: z.unknown().optional(),
-  payload: z.unknown().optional(),
-  failure: ErrorEnvelopeSchema.optional(),
-}).passthrough();
-
-export const WorkflowProgressAgentSchema = z.object({
-  id: z.string().optional().default('unknown'),
-  alias: z.string().optional(),
-  display_name: z.string().optional(),
-  role: z.string().optional().default('worker'),
-  working_on: z.string().optional().default('worker'),
-  model: z.string().optional().default('runtime'),
-  assigned_node: z.string().optional(),
-  status: z.string().optional().default('pending'),
-  progress: z.number().optional().default(0),
-  progress_source: z.string().optional(),
-  items_done: z.number().nullable().optional(),
-  items_total: z.number().nullable().optional(),
-  live: z.boolean().optional().default(false),
-  mailbox_depth: z.number().nullable().optional(),
-  tokens: z.number().nullable().optional(),
-  tokens_used: z.number().nullable().optional(),
-  token_budget: z.number().nullable().optional(),
-  tools: z.number().nullable().optional(),
-  elapsed_seconds: z.number().optional().default(0),
-  started_at: z.string().nullable().optional(),
-  ended_at: z.string().nullable().optional(),
-  last_event_at: z.string().nullable().optional(),
-  retry_at: z.string().nullable().optional(),
-  deadline_at: z.string().nullable().optional(),
-  heartbeat_deadline_at: z.string().nullable().optional(),
-  attempt: z.number().nullable().optional(),
-  attempt_id: z.string().nullable().optional(),
-  status_reason: z.string().nullable().optional(),
-  failure: ErrorEnvelopeSchema.nullable().optional(),
-  activity_summary: z.string().optional(),
-  last_activity: WorkflowActivitySchema.nullable().optional(),
-  recent_events: z.array(WorkflowActivitySchema).optional(),
-}).passthrough();
-
-export const WorkflowProgressStepSchema = z.object({
-  id: z.string().optional().default('step'),
-  label: z.string().optional().default('Step'),
-  goal: z.string().optional().default(''),
-  status: z.string().optional().default('pending'),
-  current: z.boolean().optional().default(false),
-  parents: z.array(z.string()).optional(),
-  children: z.array(z.string()).optional(),
-  layer: z.number().optional(),
-  requires: z.array(z.string()).optional(),
-  provides: z.array(z.string()).optional(),
-  done_count: z.number().optional().default(0),
-  running_count: z.number().optional().default(0),
-  idle_count: z.number().optional().default(0),
-  ready_count: z.number().optional().default(0),
-  failed_count: z.number().optional().default(0),
-  total_count: z.number().optional().default(0),
-  live: z.boolean().optional().default(false),
-  elapsed_seconds: z.number().optional().default(0),
-  started_at: z.string().nullable().optional(),
-  ended_at: z.string().nullable().optional(),
-  last_event_at: z.string().nullable().optional(),
-  retry_at: z.string().nullable().optional(),
-  deadline_at: z.string().nullable().optional(),
-  heartbeat_deadline_at: z.string().nullable().optional(),
-  attempt: z.number().nullable().optional(),
-  attempt_id: z.string().nullable().optional(),
-  status_reason: z.string().nullable().optional(),
-  failure: ErrorEnvelopeSchema.nullable().optional(),
-  progress_source: z.string().optional(),
-  activity_summary: z.string().optional(),
-  last_activity: WorkflowActivitySchema.nullable().optional(),
-  recent_events: z.array(WorkflowActivitySchema).optional(),
-  agents: z.array(WorkflowProgressAgentSchema).optional().default([]),
-}).passthrough();
-
-const WorkflowProgressObjectSchema = z.object({
-  schema_version: z.union([z.number(), z.string()]).optional().default(1),
-  job_id: z.string().optional().default('unknown'),
-  workflow_id: z.string().optional().default('blueprint'),
-  name: z.string().optional().default('Blueprint'),
-  description: z.string().optional().default(''),
-  status: z.string().optional().default('unknown'),
-  trace_id: z.string().nullable().optional(),
-  sequence: z.number().optional(),
-  graph_revision: z.number().optional(),
-  workflow_kind: z.enum(['batch', 'service']).optional().default('batch'),
-  progress_source: z.string().optional(),
-  failure: ErrorEnvelopeSchema.nullable().optional(),
-  observability_summary: ObservabilitySummarySchema,
-  generated_at: z.string().nullable().optional(),
-  submitted_at: z.string().nullable().optional(),
-  elapsed_seconds: z.number().optional().default(0),
-  agent_count: z.object({
-    done: z.number().optional().default(0),
-    running: z.number().optional().default(0),
-    idle: z.number().optional().default(0),
-    ready: z.number().optional().default(0),
-    failed: z.number().optional().default(0),
+export const OperationCountersSchema = z
+  .object({
     total: z.number().optional().default(0),
-  }).optional().default({ done: 0, running: 0, idle: 0, ready: 0, failed: 0, total: 0 }),
-  current_step_id: z.string().nullable().optional(),
-  current_step_ids: z.array(z.string()).optional(),
-  current_step: WorkflowProgressStepSchema.nullable().optional(),
-  steps: z.array(WorkflowProgressStepSchema).optional().default([]),
-  edges: z.array(z.object({
-    from: z.string(),
-    to: z.string(),
-    event: z.string().optional(),
-  }).passthrough()).optional(),
-  layers: z.array(z.array(z.string())).optional(),
-  messages: z.array(z.string()).optional().default([]),
-  recent_events: z.array(JobEventSchema).optional().default([]),
-}).passthrough();
+    started: z.number().optional().default(0),
+    finished: z.number().optional().default(0),
+    succeeded: z.number().optional().default(0),
+    failed: z.number().optional().default(0),
+    deferred: z.number().optional().default(0),
+  })
+  .passthrough();
 
-export const WorkflowProgressSchema = z.preprocess(normalizeWorkflowProgressPayload, WorkflowProgressObjectSchema);
+export const OperationSchema = z
+  .object({
+    operation_id: z.string(),
+    kind: z.string().optional().default("operation"),
+    status: z.string().optional().default("running"),
+    counters: OperationCountersSchema.optional().default({
+      total: 0,
+      started: 0,
+      finished: 0,
+      succeeded: 0,
+      failed: 0,
+      deferred: 0,
+    }),
+  })
+  .passthrough();
+
+export const StableJobActionResponseSchema = z
+  .object({
+    job_id: z.string(),
+    status: z.string().optional().default("active"),
+    data_generation: z.number().optional(),
+  })
+  .passthrough();
+
+export const StableRunActionResponseSchema = z
+  .object({
+    run_id: z.string(),
+    job_id: z.string().nullable().optional(),
+    status: z.string().optional().default("unknown"),
+    replaced_run_ids: z.array(z.string()).optional(),
+    cleanup_deferred: z.boolean().optional(),
+    cleanup_pending_nodes: z.array(z.string()).optional(),
+  })
+  .passthrough();
+
+export const RevealArtifactResponseSchema = z
+  .object({
+    ok: z.boolean().optional(),
+    path: z.string().optional(),
+    folder: z.string().optional(),
+    message: z.string().optional(),
+  })
+  .passthrough();
+
+export const LaunchProgressEventSchema = z
+  .object({
+    ts: z.string().optional(),
+    phase: z.string().optional().default("launch"),
+    status: z.string().optional().default("pending"),
+    message: z.string().optional().default(""),
+    details: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough();
+
+export const LaunchProgressPhaseSchema = z
+  .object({
+    id: z.string().optional(),
+    phase: z.string().optional(),
+    label: z.string().optional(),
+    name: z.string().optional(),
+    status: z.string().optional().default("pending"),
+    message: z.string().optional().default(""),
+    detail: z.string().optional(),
+    expectation: z.string().optional(),
+    details: z.record(z.string(), z.unknown()).optional(),
+    severity: z.string().optional(),
+  })
+  .passthrough();
+
+export const LaunchProgressResponseSchema = z
+  .object({
+    progress_id: z.string(),
+    run_id: z.string().nullable().optional(),
+    job_id: z.string().nullable().optional(),
+    status: z.string().optional().default("pending"),
+    current_phase: z.string().nullable().optional(),
+    events: z.array(LaunchProgressEventSchema).optional().default([]),
+    phases: z.array(LaunchProgressPhaseSchema).optional().default([]),
+    latest: LaunchProgressEventSchema.nullable().optional(),
+    completed: z.boolean().optional().default(false),
+    error: z.unknown().optional(),
+  })
+  .passthrough();
+
+export const WorkflowActivitySchema = z
+  .object({
+    schema: z.string().optional(),
+    event_id: z.string().optional(),
+    level: z.enum(["debug", "info", "warning", "error"]).optional(),
+    owner_blueprint: z.string().optional(),
+    activity_kind: z
+      .enum(["action", "result", "finding", "milestone", "diagnostic"])
+      .optional(),
+    timestamp: z.string().optional(),
+    type: z.string().optional(),
+    category: z.string().optional(),
+    step_id: z.string().optional(),
+    agent_id: z.string().optional(),
+    status: z.string().optional(),
+    message: z.string().optional(),
+    tool_name: z.string().optional(),
+    target: z.string().optional(),
+    duration_ms: z.number().optional(),
+    result_summary: z.string().optional(),
+    details: z.unknown().optional(),
+    payload: z.unknown().optional(),
+    failure: ErrorEnvelopeSchema.optional(),
+  })
+  .passthrough();
+
+export const WorkflowProgressAgentSchema = z
+  .object({
+    id: z.string().optional().default("unknown"),
+    alias: z.string().optional(),
+    display_name: z.string().optional(),
+    role: z.string().optional().default("worker"),
+    working_on: z.string().optional().default("worker"),
+    model: z.string().optional().default("runtime"),
+    assigned_node: z.string().optional(),
+    status: z.string().optional().default("pending"),
+    progress: z.number().optional().default(0),
+    progress_source: z.string().optional(),
+    items_done: z.number().nullable().optional(),
+    items_total: z.number().nullable().optional(),
+    live: z.boolean().optional().default(false),
+    mailbox_depth: z.number().nullable().optional(),
+    tokens: z.number().nullable().optional(),
+    tokens_used: z.number().nullable().optional(),
+    token_budget: z.number().nullable().optional(),
+    tools: z.number().nullable().optional(),
+    elapsed_seconds: z.number().optional().default(0),
+    started_at: z.string().nullable().optional(),
+    ended_at: z.string().nullable().optional(),
+    last_event_at: z.string().nullable().optional(),
+    retry_at: z.string().nullable().optional(),
+    deadline_at: z.string().nullable().optional(),
+    heartbeat_deadline_at: z.string().nullable().optional(),
+    attempt: z.number().nullable().optional(),
+    attempt_id: z.string().nullable().optional(),
+    status_reason: z.string().nullable().optional(),
+    failure: ErrorEnvelopeSchema.nullable().optional(),
+    activity_summary: z.string().optional(),
+    last_activity: WorkflowActivitySchema.nullable().optional(),
+    recent_events: z.array(WorkflowActivitySchema).optional(),
+  })
+  .passthrough();
+
+export const WorkflowProgressStepSchema = z
+  .object({
+    id: z.string().optional().default("step"),
+    label: z.string().optional().default("Step"),
+    goal: z.string().optional().default(""),
+    status: z.string().optional().default("pending"),
+    current: z.boolean().optional().default(false),
+    parents: z.array(z.string()).optional(),
+    children: z.array(z.string()).optional(),
+    layer: z.number().optional(),
+    requires: z.array(z.string()).optional(),
+    provides: z.array(z.string()).optional(),
+    done_count: z.number().optional().default(0),
+    running_count: z.number().optional().default(0),
+    idle_count: z.number().optional().default(0),
+    ready_count: z.number().optional().default(0),
+    failed_count: z.number().optional().default(0),
+    total_count: z.number().optional().default(0),
+    live: z.boolean().optional().default(false),
+    elapsed_seconds: z.number().optional().default(0),
+    started_at: z.string().nullable().optional(),
+    ended_at: z.string().nullable().optional(),
+    last_event_at: z.string().nullable().optional(),
+    retry_at: z.string().nullable().optional(),
+    deadline_at: z.string().nullable().optional(),
+    heartbeat_deadline_at: z.string().nullable().optional(),
+    attempt: z.number().nullable().optional(),
+    attempt_id: z.string().nullable().optional(),
+    status_reason: z.string().nullable().optional(),
+    failure: ErrorEnvelopeSchema.nullable().optional(),
+    progress_source: z.string().optional(),
+    activity_summary: z.string().optional(),
+    last_activity: WorkflowActivitySchema.nullable().optional(),
+    recent_events: z.array(WorkflowActivitySchema).optional(),
+    agents: z.array(WorkflowProgressAgentSchema).optional().default([]),
+  })
+  .passthrough();
+
+const WorkflowProgressObjectSchema = z
+  .object({
+    schema_version: z.union([z.number(), z.string()]).optional().default(1),
+    job_id: z.string().optional().default("unknown"),
+    workflow_id: z.string().optional().default("blueprint"),
+    name: z.string().optional().default("Blueprint"),
+    description: z.string().optional().default(""),
+    status: z.string().optional().default("unknown"),
+    trace_id: z.string().nullable().optional(),
+    sequence: z.number().optional(),
+    graph_revision: z.number().optional(),
+    workflow_kind: z.enum(["batch", "service"]).optional().default("batch"),
+    progress_source: z.string().optional(),
+    failure: ErrorEnvelopeSchema.nullable().optional(),
+    observability_summary: ObservabilitySummarySchema,
+    generated_at: z.string().nullable().optional(),
+    submitted_at: z.string().nullable().optional(),
+    elapsed_seconds: z.number().optional().default(0),
+    agent_count: z
+      .object({
+        done: z.number().optional().default(0),
+        running: z.number().optional().default(0),
+        idle: z.number().optional().default(0),
+        ready: z.number().optional().default(0),
+        failed: z.number().optional().default(0),
+        total: z.number().optional().default(0),
+      })
+      .optional()
+      .default({ done: 0, running: 0, idle: 0, ready: 0, failed: 0, total: 0 }),
+    current_step_id: z.string().nullable().optional(),
+    current_step_ids: z.array(z.string()).optional(),
+    current_step: WorkflowProgressStepSchema.nullable().optional(),
+    steps: z.array(WorkflowProgressStepSchema).optional().default([]),
+    edges: z
+      .array(
+        z
+          .object({
+            from: z.string(),
+            to: z.string(),
+            event: z.string().optional(),
+          })
+          .passthrough(),
+      )
+      .optional(),
+    layers: z.array(z.array(z.string())).optional(),
+    messages: z.array(z.string()).optional().default([]),
+    recent_events: z.array(JobEventSchema).optional().default([]),
+  })
+  .passthrough();
+
+export const WorkflowProgressSchema = z.preprocess(
+  normalizeWorkflowProgressPayload,
+  WorkflowProgressObjectSchema,
+);
 
 export type Agent = z.infer<typeof AgentSchema>;
 export type ErrorEnvelope = z.infer<typeof ErrorEnvelopeSchema>;
@@ -553,23 +684,37 @@ export type JobDetails = z.infer<typeof JobDetailsSchema>;
 export type AgentGraph = z.infer<typeof AgentGraphSchema>;
 export type SystemSummary = z.infer<typeof SystemSummarySchema>;
 export type RuntimeModel = z.infer<typeof RuntimeModelSchema>;
-export type RuntimeModelListResponse = z.infer<typeof RuntimeModelListResponseSchema>;
+export type RuntimeModelListResponse = z.infer<
+  typeof RuntimeModelListResponseSchema
+>;
 export type RuntimeModelBenchmark = z.infer<typeof RuntimeModelBenchmarkSchema>;
-export type ClusterNodeAddResponse = z.infer<typeof ClusterNodeAddResponseSchema>;
+export type ClusterNodeAddResponse = z.infer<
+  typeof ClusterNodeAddResponseSchema
+>;
 export type JobUiDefinition = z.infer<typeof JobUiDefinitionSchema>;
 export type WebUiHandle = z.infer<typeof WebUiHandleSchema>;
 export type JobUiResponse = z.infer<typeof JobUiResponseSchema>;
 export type Blueprint = z.infer<typeof BlueprintSchema>;
 export type BlueprintListResponse = z.infer<typeof BlueprintListResponseSchema>;
-export type BlueprintLaunchResponse = z.infer<typeof BlueprintLaunchResponseSchema>;
+export type BlueprintLaunchResponse = z.infer<
+  typeof BlueprintLaunchResponseSchema
+>;
 export type UploadedBundle = z.infer<typeof UploadedBundleSchema>;
 export type Operation = z.infer<typeof OperationSchema>;
-export type StableJobActionResponse = z.infer<typeof StableJobActionResponseSchema>;
-export type StableRunActionResponse = z.infer<typeof StableRunActionResponseSchema>;
-export type RevealArtifactResponse = z.infer<typeof RevealArtifactResponseSchema>;
+export type StableJobActionResponse = z.infer<
+  typeof StableJobActionResponseSchema
+>;
+export type StableRunActionResponse = z.infer<
+  typeof StableRunActionResponseSchema
+>;
+export type RevealArtifactResponse = z.infer<
+  typeof RevealArtifactResponseSchema
+>;
 export type LaunchProgressEvent = z.infer<typeof LaunchProgressEventSchema>;
 export type LaunchProgressPhase = z.infer<typeof LaunchProgressPhaseSchema>;
-export type LaunchProgressResponse = z.infer<typeof LaunchProgressResponseSchema>;
+export type LaunchProgressResponse = z.infer<
+  typeof LaunchProgressResponseSchema
+>;
 export type WorkflowActivity = z.infer<typeof WorkflowActivitySchema>;
 export type WorkflowProgressAgent = z.infer<typeof WorkflowProgressAgentSchema>;
 export type WorkflowProgressStep = z.infer<typeof WorkflowProgressStepSchema>;

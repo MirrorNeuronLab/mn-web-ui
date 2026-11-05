@@ -1,21 +1,54 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import type { ReactNode } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchJobUi, streamWorkflowProgress, cancelRun, pauseRun, resumeRun } from '../api';
-import type { AgentGraph, ErrorEnvelope, JobDetails as JobDetailsType, JobEvent, WebUiHandle, WorkflowProgress } from '../api';
-import { format } from 'date-fns';
-import { PlayCircle, CheckCircle, XCircle, Clock, AlertCircle, Ban, PauseCircle, Play, Loader2, Network, MessageSquare, List, Code2, FileText } from 'lucide-react';
-import { WorkflowAgentGraph } from '../components/WorkflowAgentGraph';
-import { WorkflowProgressPanel } from '../components/WorkflowProgressPanel';
-import FailurePanel from '../components/FailurePanel';
-import ObservabilitySummaryPanel, { type ObservabilityArtifactRef } from '../components/ObservabilitySummaryPanel';
-import { confirmActionDialog } from '../components/ui/confirm-action';
-import { Tooltip } from '../components/ui/tooltip';
-import { buildDisplayGraph } from '../utils/agentGraph';
-import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
-import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { useEffect, useRef, useState, useCallback } from "react";
+import type { ReactNode } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  fetchJobDetails,
+  fetchJobEvents,
+  fetchJobAgentGraph,
+  fetchJobUi,
+  streamWorkflowProgress,
+  cancelRun,
+  pauseRun,
+  resumeRun,
+} from "../api";
+import type {
+  AgentGraph,
+  ErrorEnvelope,
+  JobDetails as JobDetailsType,
+  JobEvent,
+  WebUiHandle,
+  WorkflowProgress,
+} from "../api";
+import { format } from "date-fns";
+import {
+  PlayCircle,
+  CheckCircle,
+  XCircle,
+  Clock,
+  AlertCircle,
+  Ban,
+  PauseCircle,
+  Play,
+  Loader2,
+  Network,
+  MessageSquare,
+  List,
+  Code2,
+  FileText,
+} from "lucide-react";
+import { WorkflowAgentGraph } from "../components/WorkflowAgentGraph";
+import { WorkflowProgressPanel } from "../components/WorkflowProgressPanel";
+import FailurePanel from "../components/FailurePanel";
+import ObservabilitySummaryPanel, {
+  type ObservabilityArtifactRef,
+} from "../components/ObservabilitySummaryPanel";
+import { confirmActionDialog } from "../components/ui/confirm-action";
+import { Tooltip } from "../components/ui/tooltip";
+import { buildDisplayGraph } from "../utils/agentGraph";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Card } from "../components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -23,11 +56,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '../components/ui/table';
-import { cn } from '../lib/utils';
-import { apiErrorMessage } from '../utils/apiErrors';
-import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
-import { buildOutputResources } from '../utils/workflowResources';
+} from "../components/ui/table";
+import { cn } from "../lib/utils";
+import { apiErrorMessage } from "../utils/apiErrors";
+import { formatElapsed, workflowStepCounts } from "../utils/workflowProgress";
+import { buildOutputResources } from "../utils/workflowResources";
 import {
   webUiInfoFromRecord,
   stringValue,
@@ -39,59 +72,83 @@ import {
   displayStatusFromSources,
   inferredTerminalStatusFromProgress,
   formattedTimestamp,
-} from '../utils/jobDetailsView';
-import { isTerminalRunStatus, runStatusBadgeClass } from '../utils/jobStatus';
-import { isRecord } from '../utils/records';
-import { applyWorkflowShape, type WorkflowShape } from '../api/workflowShape';
-import { usePollingEffect } from '../hooks/usePollingEffect';
-import { useRuntimeSignals } from '../hooks/useRuntimeSignals';
-import { RuntimeSignalsPanel } from '../components/RuntimeSignalsPanel';
+} from "../utils/jobDetailsView";
+import { isTerminalRunStatus, runStatusBadgeClass } from "../utils/jobStatus";
+import { isRecord } from "../utils/records";
+import { applyWorkflowShape, type WorkflowShape } from "../api/workflowShape";
+import { usePollingEffect } from "../hooks/usePollingEffect";
+import { useRuntimeSignals } from "../hooks/useRuntimeSignals";
+import { RuntimeSignalsPanel } from "../components/RuntimeSignalsPanel";
 
 const StatusIcon = ({ status }: { status: string }) => {
   const normalized = status.trim().toLowerCase();
   switch (normalized) {
-    case 'running':
-    case 'active': return <PlayCircle className="h-3.5 w-3.5 text-neutral-700" />;
-    case 'completed':
-    case 'done':
-    case 'finished':
-    case 'succeeded':
-    case 'success': return <CheckCircle className="h-3.5 w-3.5 text-neutral-700" />;
-    case 'failed':
-    case 'error': return <XCircle className="h-3.5 w-3.5 text-neutral-700" />;
-    case 'pending':
-    case 'scheduled':
-    case 'queued': return <Clock className="h-3.5 w-3.5 text-neutral-700" />;
-    case 'paused':
-    case 'pausing': return <PauseCircle className="h-3.5 w-3.5 text-neutral-700" />;
-    case 'cancelled':
-    case 'canceled': return <Ban className="h-3.5 w-3.5 text-neutral-500" />;
-    default: return <AlertCircle className="h-3.5 w-3.5 text-neutral-400" />;
+    case "running":
+    case "active":
+      return <PlayCircle className="h-3.5 w-3.5 text-neutral-700" />;
+    case "completed":
+    case "done":
+    case "finished":
+    case "succeeded":
+    case "success":
+      return <CheckCircle className="h-3.5 w-3.5 text-neutral-700" />;
+    case "failed":
+    case "error":
+      return <XCircle className="h-3.5 w-3.5 text-neutral-700" />;
+    case "pending":
+    case "scheduled":
+    case "queued":
+      return <Clock className="h-3.5 w-3.5 text-neutral-700" />;
+    case "paused":
+    case "pausing":
+      return <PauseCircle className="h-3.5 w-3.5 text-neutral-700" />;
+    case "cancelled":
+    case "canceled":
+      return <Ban className="h-3.5 w-3.5 text-neutral-500" />;
+    default:
+      return <AlertCircle className="h-3.5 w-3.5 text-neutral-400" />;
   }
 };
 
-const SummaryCard = ({ icon, value, label }: { icon: ReactNode; value: string | number; label: string }) => (
+const SummaryCard = ({
+  icon,
+  value,
+  label,
+}: {
+  icon: ReactNode;
+  value: string | number;
+  label: string;
+}) => (
   <Card className="p-3">
     <div className="mb-2 text-neutral-400">{icon}</div>
-    <div className="text-xl font-semibold leading-6 text-neutral-950">{value}</div>
-    <div className="mt-0.5 text-[11px] font-medium leading-4 text-neutral-500">{label}</div>
+    <div className="text-xl font-semibold leading-6 text-neutral-950">
+      {value}
+    </div>
+    <div className="mt-0.5 text-[11px] font-medium leading-4 text-neutral-500">
+      {label}
+    </div>
   </Card>
 );
 
-type ProgressStreamState = 'connecting' | 'live' | 'stale' | 'disconnected' | 'closed';
+type ProgressStreamState =
+  | "connecting"
+  | "live"
+  | "stale"
+  | "disconnected"
+  | "closed";
 
 const progressStreamBadgeClass = (state: ProgressStreamState) => {
   switch (state) {
-    case 'live':
-      return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-    case 'stale':
-      return 'border-amber-200 bg-amber-50 text-amber-700';
-    case 'disconnected':
-      return 'border-red-200 bg-red-50 text-red-700';
-    case 'closed':
-      return 'border-neutral-200 bg-neutral-50 text-neutral-600';
+    case "live":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "stale":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "disconnected":
+      return "border-red-200 bg-red-50 text-red-700";
+    case "closed":
+      return "border-neutral-200 bg-neutral-50 text-neutral-600";
     default:
-      return 'border-sky-200 bg-sky-50 text-sky-700';
+      return "border-sky-200 bg-sky-50 text-sky-700";
   }
 };
 
@@ -105,59 +162,67 @@ function JobDetailsView({ id }: { id?: string }) {
   const [details, setDetails] = useState<JobDetailsType | null>(null);
   const [events, setEvents] = useState<JobEvent[]>([]);
   const [graph, setGraph] = useState<AgentGraph | null>(null);
-  const [workflowProgress, setWorkflowProgress] = useState<WorkflowProgress | null>(null);
+  const [workflowProgress, setWorkflowProgress] =
+    useState<WorkflowProgress | null>(null);
   const [jobWebUi, setJobWebUi] = useState<WebUiHandle | null>(null);
-  const [activeTab, setActiveTab] = useState<'progress' | 'agents' | 'logs'>('progress');
-  const [agentView, setAgentView] = useState<'list' | 'graph' | 'code'>('list');
-  const [loadError, setLoadError] = useState('');
+  const [activeTab, setActiveTab] = useState<"progress" | "agents" | "logs">(
+    "progress",
+  );
+  const [agentView, setAgentView] = useState<"list" | "graph" | "code">("list");
+  const [loadError, setLoadError] = useState("");
   const [loadFailed, setLoadFailed] = useState(false);
-  const [eventsError, setEventsError] = useState('');
-  const [graphError, setGraphError] = useState('');
+  const [eventsError, setEventsError] = useState("");
+  const [graphError, setGraphError] = useState("");
   const [eventsLoading, setEventsLoading] = useState(true);
   const [graphLoading, setGraphLoading] = useState(true);
-  
+
   const [isCancelling, setIsCancelling] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
-  const [progressStreamState, setProgressStreamState] = useState<ProgressStreamState>('connecting');
-  const [streamError, setStreamError] = useState('');
+  const [progressStreamState, setProgressStreamState] =
+    useState<ProgressStreamState>("connecting");
+  const [streamError, setStreamError] = useState("");
   const [streamAttempt, setStreamAttempt] = useState(0);
   const signals = useRuntimeSignals(id, streamAttempt);
   const terminalRefreshRef = useRef<string | null>(null);
-  const load = useCallback(async (signal?: AbortSignal) => {
-    if (!id) return;
-    try {
-      const d = await fetchJobDetails(id);
-      if (signal?.aborted) return;
-      setDetails(d);
-      setLoadError('');
-      setLoadFailed(false);
-      const root = d as Record<string, unknown>;
-      const jobId = stringValue(root.job_id);
-      if (!jobId) {
-        setJobWebUi(null);
-      } else {
-        const jobUi = await fetchJobUi(jobId).catch((err) => {
-          // A Job does not need to publish a dedicated blueprint dashboard.
-          // Keep the progress UI quiet when that optional resource is absent.
-          if (responseStatusFromError(err) !== 404) {
-            console.error('Failed to load job web UI.');
-          }
-          return null;
-        });
-        if (!signal?.aborted) setJobWebUi(jobUi?.web_ui || null);
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!id) return;
+      try {
+        const d = await fetchJobDetails(id);
+        if (signal?.aborted) return;
+        setDetails(d);
+        setLoadError("");
+        setLoadFailed(false);
+        const root = d as Record<string, unknown>;
+        const jobId = stringValue(root.job_id);
+        if (!jobId) {
+          setJobWebUi(null);
+        } else {
+          const jobUi = await fetchJobUi(jobId).catch((err) => {
+            // A Job does not need to publish a dedicated blueprint dashboard.
+            // Keep the progress UI quiet when that optional resource is absent.
+            if (responseStatusFromError(err) !== 404) {
+              console.error("Failed to load job web UI.");
+            }
+            return null;
+          });
+          if (!signal?.aborted) setJobWebUi(jobUi?.web_ui || null);
+        }
+      } catch (err) {
+        if (signal?.aborted) return;
+        const status = responseStatusFromError(err);
+        setLoadError(
+          status === 404
+            ? "Run not found. It may have been cleaned up or the link is incorrect."
+            : apiErrorMessage(err, "Failed to load run details. Try again."),
+        );
+        setLoadFailed(true);
       }
-
-    } catch (err) {
-      if (signal?.aborted) return;
-      const status = responseStatusFromError(err);
-      setLoadError(status === 404
-        ? 'Run not found. It may have been cleaned up or the link is incorrect.'
-        : apiErrorMessage(err, 'Failed to load run details. Try again.'));
-      setLoadFailed(true);
-    }
-  }, [id]);
+    },
+    [id],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -180,34 +245,52 @@ function JobDetailsView({ id }: { id?: string }) {
     return () => window.clearTimeout(timer);
   }, [actionStatus]);
 
-  const loadEvents = useCallback(async (signal?: AbortSignal) => {
-    if (!id) return;
-    try {
-      const next = await fetchJobEvents(id);
-      if (signal?.aborted) return;
-      setEvents(next);
-      setEventsError('');
-    } catch (err) {
-      if (!signal?.aborted) setEventsError(apiErrorMessage(err, 'Failed to load events. Try again.'));
-    } finally {
-      if (!signal?.aborted) setEventsLoading(false);
-    }
-  }, [id]);
-  const loadGraph = useCallback(async (signal?: AbortSignal) => {
-    if (!id) return;
-    try {
-      const next = await fetchJobAgentGraph(id);
-      if (signal?.aborted) return;
-      setGraph(next);
-      setGraphError('');
-    } catch (err) {
-      if (!signal?.aborted) setGraphError(apiErrorMessage(err, 'Failed to load the agent graph. Try again.'));
-    } finally {
-      if (!signal?.aborted) setGraphLoading(false);
-    }
-  }, [id]);
-  usePollingEffect(loadEvents, { intervalMs: 5000, enabled: activeTab === 'logs' });
-  usePollingEffect(loadGraph, { intervalMs: 5000, enabled: activeTab === 'agents' });
+  const loadEvents = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!id) return;
+      try {
+        const next = await fetchJobEvents(id);
+        if (signal?.aborted) return;
+        setEvents(next);
+        setEventsError("");
+      } catch (err) {
+        if (!signal?.aborted)
+          setEventsError(
+            apiErrorMessage(err, "Failed to load events. Try again."),
+          );
+      } finally {
+        if (!signal?.aborted) setEventsLoading(false);
+      }
+    },
+    [id],
+  );
+  const loadGraph = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!id) return;
+      try {
+        const next = await fetchJobAgentGraph(id);
+        if (signal?.aborted) return;
+        setGraph(next);
+        setGraphError("");
+      } catch (err) {
+        if (!signal?.aborted)
+          setGraphError(
+            apiErrorMessage(err, "Failed to load the agent graph. Try again."),
+          );
+      } finally {
+        if (!signal?.aborted) setGraphLoading(false);
+      }
+    },
+    [id],
+  );
+  usePollingEffect(loadEvents, {
+    intervalMs: 5000,
+    enabled: activeTab === "logs",
+  });
+  usePollingEffect(loadGraph, {
+    intervalMs: 5000,
+    enabled: activeTab === "agents",
+  });
 
   useEffect(() => {
     if (!id) return;
@@ -218,52 +301,74 @@ function JobDetailsView({ id }: { id?: string }) {
     let disconnectedTimer: number | undefined;
     const clearHealthTimers = () => {
       if (staleTimer !== undefined) window.clearTimeout(staleTimer);
-      if (disconnectedTimer !== undefined) window.clearTimeout(disconnectedTimer);
+      if (disconnectedTimer !== undefined)
+        window.clearTimeout(disconnectedTimer);
       staleTimer = undefined;
       disconnectedTimer = undefined;
     };
     const markLive = () => {
       if (cancelled || terminalObserved) return;
-      setProgressStreamState('live');
+      setProgressStreamState("live");
       clearHealthTimers();
-      staleTimer = window.setTimeout(() => setProgressStreamState('stale'), 15_000);
-      disconnectedTimer = window.setTimeout(() => setProgressStreamState('disconnected'), 30_000);
+      staleTimer = window.setTimeout(
+        () => setProgressStreamState("stale"),
+        15_000,
+      );
+      disconnectedTimer = window.setTimeout(
+        () => setProgressStreamState("disconnected"),
+        30_000,
+      );
     };
     const connectTimer = window.setTimeout(() => {
-      if (!cancelled && !terminalObserved) setProgressStreamState('connecting');
+      if (!cancelled && !terminalObserved) setProgressStreamState("connecting");
     }, 0);
-    streamWorkflowProgress(id, (snapshot) => {
-      if (cancelled) return;
-      setStreamError('');
-      if (isTerminalRunStatus(snapshot.status)) {
-        terminalObserved = true;
-        clearHealthTimers();
-        setProgressStreamState('closed');
-        setActionStatus(null);
-        controller.abort();
-      } else {
-        markLive();
-      }
-      setWorkflowProgress(snapshot);
-      if (isTerminalRunStatus(snapshot.status) && terminalRefreshRef.current !== snapshot.status) {
-        terminalRefreshRef.current = snapshot.status || 'terminal';
-        void load(controller.signal);
-      }
-    }, controller.signal, markLive).then(() => {
-      if (!cancelled) {
-        clearHealthTimers();
-        setProgressStreamState('closed');
-      }
-    }).catch((err) => {
-      if (!cancelled && err?.name !== 'AbortError') {
-        clearHealthTimers();
-        if (!terminalObserved) {
-          setProgressStreamState('disconnected');
-          setStreamError(apiErrorMessage(err, 'Workflow progress stream disconnected. Retry to reconnect.'));
+    streamWorkflowProgress(
+      id,
+      (snapshot) => {
+        if (cancelled) return;
+        setStreamError("");
+        if (isTerminalRunStatus(snapshot.status)) {
+          terminalObserved = true;
+          clearHealthTimers();
+          setProgressStreamState("closed");
+          setActionStatus(null);
+          controller.abort();
+        } else {
+          markLive();
         }
-        console.error('Workflow progress stream closed.');
-      }
-    });
+        setWorkflowProgress(snapshot);
+        if (
+          isTerminalRunStatus(snapshot.status) &&
+          terminalRefreshRef.current !== snapshot.status
+        ) {
+          terminalRefreshRef.current = snapshot.status || "terminal";
+          void load(controller.signal);
+        }
+      },
+      controller.signal,
+      markLive,
+    )
+      .then(() => {
+        if (!cancelled) {
+          clearHealthTimers();
+          setProgressStreamState("closed");
+        }
+      })
+      .catch((err) => {
+        if (!cancelled && err?.name !== "AbortError") {
+          clearHealthTimers();
+          if (!terminalObserved) {
+            setProgressStreamState("disconnected");
+            setStreamError(
+              apiErrorMessage(
+                err,
+                "Workflow progress stream disconnected. Retry to reconnect.",
+              ),
+            );
+          }
+          console.error("Workflow progress stream closed.");
+        }
+      });
     return () => {
       cancelled = true;
       window.clearTimeout(connectTimer);
@@ -275,13 +380,28 @@ function JobDetailsView({ id }: { id?: string }) {
   if (!details || !details.job) {
     if (loadFailed) {
       return (
-        <div role="alert" className="space-y-3 rounded-md border border-red-200 bg-red-50 p-5 text-sm text-red-800">
-          <div className="font-semibold">{loadError || 'Failed to load run details.'}</div>
+        <div
+          role="alert"
+          className="space-y-3 rounded-md border border-red-200 bg-red-50 p-5 text-sm text-red-800"
+        >
+          <div className="font-semibold">
+            {loadError || "Failed to load run details."}
+          </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void load()}
+            >
               Retry
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => navigate('/runs')}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/runs")}
+            >
               Back to runs
             </Button>
           </div>
@@ -290,44 +410,101 @@ function JobDetailsView({ id }: { id?: string }) {
     }
     return <div className="p-5 text-sm text-neutral-500">Loading run…</div>;
   }
-  const durableJobId = knownStringValue((details as Record<string, unknown>).job_id);
+  const durableJobId = knownStringValue(
+    (details as Record<string, unknown>).job_id,
+  );
   const resolvedWebUi = webUiInfoFromRecord(jobWebUi);
-  const webUi = resolvedWebUi && durableJobId
-    ? { ...resolvedWebUi, href: `/jobs/${encodeURIComponent(durableJobId)}/ui` }
-    : resolvedWebUi;
-  const jobId = id || 'run';
-  const shapedProgress = workflowProgress ? applyWorkflowShape(workflowProgress, details.workflow_shape as WorkflowShape | undefined) : null;
-  const progressTerminalStatus = inferredTerminalStatusFromProgress(shapedProgress);
+  const webUi =
+    resolvedWebUi && durableJobId
+      ? {
+          ...resolvedWebUi,
+          href: `/jobs/${encodeURIComponent(durableJobId)}/ui`,
+        }
+      : resolvedWebUi;
+  const jobId = id || "run";
+  const shapedProgress = workflowProgress
+    ? applyWorkflowShape(
+        workflowProgress,
+        details.workflow_shape as WorkflowShape | undefined,
+      )
+    : null;
+  const progressTerminalStatus =
+    inferredTerminalStatusFromProgress(shapedProgress);
   // actionStatus is an optimistic hint: it wins for at most 15s (see the
   // expiry timer above) while terminal progress always wins immediately.
-  const displayStatus = displayStatusFromSources(actionStatus, progressTerminalStatus || workflowProgress?.status, details.job.status, graph?.status);
-  const graphId = knownStringValue(details.job.graph_id, workflowProgress?.workflow_id, graph?.graph_id);
-  const submittedAt = formattedTimestamp(details.job.submitted_at, workflowProgress?.submitted_at);
-  const displayWorkflowProgress = shapedProgress && displayStatus ? { ...shapedProgress, status: displayStatus } : shapedProgress;
-  const displayGraph = buildDisplayGraph(graph, details.agents || [], jobId, graphId, displayStatus, displayWorkflowProgress);
+  const displayStatus = displayStatusFromSources(
+    actionStatus,
+    progressTerminalStatus || workflowProgress?.status,
+    details.job.status,
+    graph?.status,
+  );
+  const graphId = knownStringValue(
+    details.job.graph_id,
+    workflowProgress?.workflow_id,
+    graph?.graph_id,
+  );
+  const submittedAt = formattedTimestamp(
+    details.job.submitted_at,
+    workflowProgress?.submitted_at,
+  );
+  const displayWorkflowProgress =
+    shapedProgress && displayStatus
+      ? { ...shapedProgress, status: displayStatus }
+      : shapedProgress;
+  const displayGraph = buildDisplayGraph(
+    graph,
+    details.agents || [],
+    jobId,
+    graphId,
+    displayStatus,
+    displayWorkflowProgress,
+  );
   const displayAgents = displayGraph.nodes;
   const graphCode = JSON.stringify(displayGraph, null, 2);
-  const progressOutputs = displayWorkflowProgress ? buildOutputResources(displayWorkflowProgress, details) : [];
+  const progressOutputs = displayWorkflowProgress
+    ? buildOutputResources(displayWorkflowProgress, details)
+    : [];
   const detailRoot = details as Record<string, unknown>;
   const summaryRecord = isRecord(details.summary) ? details.summary : {};
-  const summaryFailure = isRecord(summaryRecord.failure) ? summaryRecord.failure as ErrorEnvelope : undefined;
-  const failure = displayWorkflowProgress?.failure || details.failure || details.job.failure || summaryFailure;
-  const artifactRefs = [detailRoot.artifacts, detailRoot.output_files, details.job.artifacts]
-    .find((candidate) => Array.isArray(candidate)) as ObservabilityArtifactRef[] | undefined;
-  const observabilitySummary = observabilitySummaryFrom(details, displayWorkflowProgress || null, summaryRecord);
-  const traceId = traceIdFrom(details, displayWorkflowProgress || null, summaryRecord, observabilitySummary);
+  const summaryFailure = isRecord(summaryRecord.failure)
+    ? (summaryRecord.failure as ErrorEnvelope)
+    : undefined;
+  const failure =
+    displayWorkflowProgress?.failure ||
+    details.failure ||
+    details.job.failure ||
+    summaryFailure;
+  const artifactRefs = [
+    detailRoot.artifacts,
+    detailRoot.output_files,
+    details.job.artifacts,
+  ].find((candidate) => Array.isArray(candidate)) as
+    | ObservabilityArtifactRef[]
+    | undefined;
+  const observabilitySummary = observabilitySummaryFrom(
+    details,
+    displayWorkflowProgress || null,
+    summaryRecord,
+  );
+  const traceId = traceIdFrom(
+    details,
+    displayWorkflowProgress || null,
+    summaryRecord,
+    observabilitySummary,
+  );
   const runningAgentCount = displayWorkflowProgress
     ? displayWorkflowProgress.agent_count.running
-    : displayGraph.nodes.filter((agent) => agent.status === 'running').length;
+    : displayGraph.nodes.filter((agent) => agent.status === "running").length;
   const totalAgentCount = displayWorkflowProgress
     ? displayWorkflowProgress.agent_count.total
     : displayGraph.stats.agent_count;
-  const progressSummaryIsLive = displayWorkflowProgress?.workflow_kind === 'service';
+  const progressSummaryIsLive =
+    displayWorkflowProgress?.workflow_kind === "service";
   const stepCounts = workflowStepCounts(displayWorkflowProgress);
   const progressAgentValue = progressSummaryIsLive
     ? `${runningAgentCount}/${totalAgentCount}`
     : `${stepCounts.done}/${stepCounts.total}`;
-  const progressAgentLabel = progressSummaryIsLive ? 'Live Agents' : 'Steps';
+  const progressAgentLabel = progressSummaryIsLive ? "Live Agents" : "Steps";
   const eventCount = Math.max(
     displayWorkflowProgress?.recent_events?.length || 0,
     displayWorkflowProgress?.messages?.length || 0,
@@ -338,22 +515,23 @@ function JobDetailsView({ id }: { id?: string }) {
 
   const confirmCancel = () => {
     confirmActionDialog({
-      tone: 'danger',
+      tone: "danger",
       id: `job-cancel-${jobId}`,
-      title: 'Cancel this run?',
-      description: 'This action stops the execution and interrupts its running agents. The persistent job and shared data remain.',
-      confirmLabel: 'Cancel run',
-      cancelLabel: 'Keep running',
+      title: "Cancel this run?",
+      description:
+        "This action stops the execution and interrupts its running agents. The persistent job and shared data remain.",
+      confirmLabel: "Cancel run",
+      cancelLabel: "Keep running",
       loading: {
-        title: 'Cancelling run',
+        title: "Cancelling run",
         description: jobId,
       },
       success: {
-        title: 'Run cancelled',
+        title: "Run cancelled",
         description: jobId,
       },
       error: {
-        title: 'Cancel failed',
+        title: "Cancel failed",
         description: `Failed to cancel ${jobId}.`,
       },
       onConfirm: async () => {
@@ -361,7 +539,7 @@ function JobDetailsView({ id }: { id?: string }) {
         try {
           await cancelRun(jobId);
           setIsCancelling(false);
-          navigate('/runs');
+          navigate("/runs");
         } catch (err: unknown) {
           setIsCancelling(false);
           throw err;
@@ -373,27 +551,28 @@ function JobDetailsView({ id }: { id?: string }) {
   const confirmPause = () => {
     confirmActionDialog({
       id: `job-pause-${jobId}`,
-      title: 'Pause this run?',
-      description: 'The execution will stop accepting work until it is resumed.',
-      confirmLabel: 'Pause run',
-      cancelLabel: 'Keep running',
+      title: "Pause this run?",
+      description:
+        "The execution will stop accepting work until it is resumed.",
+      confirmLabel: "Pause run",
+      cancelLabel: "Keep running",
       loading: {
-        title: 'Pausing run',
+        title: "Pausing run",
         description: jobId,
       },
       success: {
-        title: 'Run paused',
+        title: "Run paused",
         description: jobId,
       },
       error: {
-        title: 'Pause failed',
+        title: "Pause failed",
         description: `Failed to pause ${jobId}.`,
       },
       onConfirm: async () => {
         setIsPausing(true);
         try {
           const response = await pauseRun(jobId);
-          setActionStatus(canonicalActionStatus(response, 'paused'));
+          setActionStatus(canonicalActionStatus(response, "paused"));
           await load();
         } finally {
           setIsPausing(false);
@@ -405,27 +584,28 @@ function JobDetailsView({ id }: { id?: string }) {
   const confirmResume = () => {
     confirmActionDialog({
       id: `job-resume-${jobId}`,
-      title: 'Resume this run?',
-      description: 'The execution will continue accepting work and processing queued agents.',
-      confirmLabel: 'Resume run',
-      cancelLabel: 'Keep paused',
+      title: "Resume this run?",
+      description:
+        "The execution will continue accepting work and processing queued agents.",
+      confirmLabel: "Resume run",
+      cancelLabel: "Keep paused",
       loading: {
-        title: 'Resuming run',
+        title: "Resuming run",
         description: jobId,
       },
       success: {
-        title: 'Run resumed',
+        title: "Run resumed",
         description: jobId,
       },
       error: {
-        title: 'Resume failed',
+        title: "Resume failed",
         description: `Failed to resume ${jobId}.`,
       },
       onConfirm: async () => {
         setIsResuming(true);
         try {
           const response = await resumeRun(jobId);
-          setActionStatus(canonicalActionStatus(response, 'running'));
+          setActionStatus(canonicalActionStatus(response, "running"));
           await load();
         } finally {
           setIsResuming(false);
@@ -434,232 +614,421 @@ function JobDetailsView({ id }: { id?: string }) {
     });
   };
 
-  const selectActiveTab = (value: 'progress' | 'agents' | 'logs') => {
+  const selectActiveTab = (value: "progress" | "agents" | "logs") => {
     setActiveTab(value);
   };
 
   return (
     <div className="flex h-full flex-col space-y-4 font-sans">
-      {typeof details.workflow_shape_warning === 'string' ? <div role="status" className="text-xs text-amber-800">{details.workflow_shape_warning}</div> : null}
+      {typeof details.workflow_shape_warning === "string" ? (
+        <div role="status" className="text-xs text-amber-800">
+          {details.workflow_shape_warning}
+        </div>
+      ) : null}
       <div className="grid shrink-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_560px]">
         <Card className="flex flex-col items-start justify-between gap-4 p-4 sm:flex-row">
-        <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap items-center gap-2.5">
-            <h2 className="break-all text-lg font-bold leading-6 text-neutral-950">{jobId}</h2>
-            {displayStatus ? (
-              <Badge variant="outline" className={cn('gap-1.5 capitalize', runStatusBadgeClass(displayStatus))}>
-                <StatusIcon status={displayStatus} />
-                {displayStatus}
-              </Badge>
-            ) : null}
-            <Badge variant="outline" className={cn('gap-1.5 capitalize', progressStreamBadgeClass(progressStreamState))}>
-              <span className="h-1.5 w-1.5 rounded-full bg-current" />
-              {progressStreamState}
-            </Badge>
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs leading-5 text-neutral-500">
-            {graphId ? <span>Workflow: <strong className="text-neutral-700">{graphId}</strong></span> : null}
-            {submittedAt ? <span>Submitted: <strong className="text-neutral-700">{submittedAt}</strong></span> : null}
-          </div>
-        </div>
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-          {displayStatus === 'running' ? (
-            <Tooltip content="Pause this run after confirmation.">
-              <span className="inline-flex">
-                <Button type="button" variant="outline" size="sm" disabled={isPausing} onClick={confirmPause}>
-                  {isPausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PauseCircle className="h-3.5 w-3.5" />} Pause
-                </Button>
-              </span>
-            </Tooltip>
-          ) : displayStatus === 'paused' ? (
-            <Tooltip content="Resume this paused run after confirmation.">
-              <span className="inline-flex">
-                <Button type="button" variant="outline" size="sm" disabled={isResuming} onClick={confirmResume}>
-                  {isResuming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Resume
-                </Button>
-              </span>
-            </Tooltip>
-          ) : null}
-          {(displayStatus === 'running' || displayStatus === 'pending' || displayStatus === 'paused') ? (
-            <Tooltip content="Cancel this run after confirmation. Running agents will stop.">
-              <span className="inline-flex">
-                <Button
-                  type="button"
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2.5">
+              <h2 className="break-all text-lg font-bold leading-6 text-neutral-950">
+                {jobId}
+              </h2>
+              {displayStatus ? (
+                <Badge
                   variant="outline"
-                  size="sm"
-                  className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
-                  disabled={isCancelling}
-                  onClick={confirmCancel}
+                  className={cn(
+                    "gap-1.5 capitalize",
+                    runStatusBadgeClass(displayStatus),
+                  )}
                 >
-                  {isCancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />} Cancel
-                </Button>
-              </span>
-            </Tooltip>
-          ) : null}
-        </div>
-      </Card>
+                  <StatusIcon status={displayStatus} />
+                  {displayStatus}
+                </Badge>
+              ) : null}
+              <Badge
+                variant="outline"
+                className={cn(
+                  "gap-1.5 capitalize",
+                  progressStreamBadgeClass(progressStreamState),
+                )}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                {progressStreamState}
+              </Badge>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs leading-5 text-neutral-500">
+              {graphId ? (
+                <span>
+                  Workflow:{" "}
+                  <strong className="text-neutral-700">{graphId}</strong>
+                </span>
+              ) : null}
+              {submittedAt ? (
+                <span>
+                  Submitted:{" "}
+                  <strong className="text-neutral-700">{submittedAt}</strong>
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+            {displayStatus === "running" ? (
+              <Tooltip content="Pause this run after confirmation.">
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isPausing}
+                    onClick={confirmPause}
+                  >
+                    {isPausing ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <PauseCircle className="h-3.5 w-3.5" />
+                    )}{" "}
+                    Pause
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : displayStatus === "paused" ? (
+              <Tooltip content="Resume this paused run after confirmation.">
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isResuming}
+                    onClick={confirmResume}
+                  >
+                    {isResuming ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5" />
+                    )}{" "}
+                    Resume
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : null}
+            {displayStatus === "running" ||
+            displayStatus === "pending" ||
+            displayStatus === "paused" ? (
+              <Tooltip content="Cancel this run after confirmation. Running agents will stop.">
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                    disabled={isCancelling}
+                    onClick={confirmCancel}
+                  >
+                    {isCancelling ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Ban className="h-3.5 w-3.5" />
+                    )}{" "}
+                    Cancel
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : null}
+          </div>
+        </Card>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <SummaryCard icon={<CheckCircle className="h-3.5 w-3.5" />} value={progressAgentValue} label={progressAgentLabel} />
-          <SummaryCard icon={<FileText className="h-3.5 w-3.5" />} value={progressOutputs.length} label="Artifacts" />
-          <SummaryCard icon={<MessageSquare className="h-3.5 w-3.5" />} value={eventCount} label="Events" />
-          <SummaryCard icon={<Clock className="h-3.5 w-3.5" />} value={runtime} label="Runtime" />
+          <SummaryCard
+            icon={<CheckCircle className="h-3.5 w-3.5" />}
+            value={progressAgentValue}
+            label={progressAgentLabel}
+          />
+          <SummaryCard
+            icon={<FileText className="h-3.5 w-3.5" />}
+            value={progressOutputs.length}
+            label="Artifacts"
+          />
+          <SummaryCard
+            icon={<MessageSquare className="h-3.5 w-3.5" />}
+            value={eventCount}
+            label="Events"
+          />
+          <SummaryCard
+            icon={<Clock className="h-3.5 w-3.5" />}
+            value={runtime}
+            label="Runtime"
+          />
         </div>
         <div className="space-y-3 xl:col-span-2">
-          <FailurePanel failure={failure} title="Run failure" artifacts={artifactRefs} />
-          <ObservabilitySummaryPanel summary={observabilitySummary} traceId={traceId} artifacts={artifactRefs} />
+          <FailurePanel
+            failure={failure}
+            title="Run failure"
+            artifacts={artifactRefs}
+          />
+          <ObservabilitySummaryPanel
+            summary={observabilitySummary}
+            traceId={traceId}
+            artifacts={artifactRefs}
+          />
         </div>
       </div>
 
       <div className="max-h-48 overflow-y-auto">
-        <RuntimeSignalsPanel events={signals.events} unavailable={signals.unavailable} />
+        <RuntimeSignalsPanel
+          events={signals.events}
+          unavailable={signals.unavailable}
+        />
       </div>
       <Card className="flex min-h-[560px] flex-1 flex-col overflow-hidden">
         <Tabs
           value={activeTab}
-          onValueChange={(value) => selectActiveTab(value as 'progress' | 'agents' | 'logs')}
+          onValueChange={(value) =>
+            selectActiveTab(value as "progress" | "agents" | "logs")
+          }
           className="flex min-h-0 flex-1 flex-col"
         >
           <div className="border-b border-neutral-200 bg-neutral-50 px-3">
             <TabsList className="h-auto rounded-none bg-transparent p-0">
-              <TabsTrigger className="h-10 rounded-none border-b-2 border-transparent bg-transparent px-3 data-[state=active]:border-neutral-950 data-[state=active]:bg-transparent data-[state=active]:shadow-none" value="progress" onClick={() => selectActiveTab('progress')}>Progress</TabsTrigger>
-              <TabsTrigger className="h-10 rounded-none border-b-2 border-transparent bg-transparent px-3 data-[state=active]:border-neutral-950 data-[state=active]:bg-transparent data-[state=active]:shadow-none" value="agents" onClick={() => selectActiveTab('agents')}>Agents</TabsTrigger>
-              <TabsTrigger className="h-10 rounded-none border-b-2 border-transparent bg-transparent px-3 data-[state=active]:border-neutral-950 data-[state=active]:bg-transparent data-[state=active]:shadow-none" value="logs" onClick={() => selectActiveTab('logs')}>Communication Logs</TabsTrigger>
+              <TabsTrigger
+                className="h-10 rounded-none border-b-2 border-transparent bg-transparent px-3 data-[state=active]:border-neutral-950 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                value="progress"
+                onClick={() => selectActiveTab("progress")}
+              >
+                Progress
+              </TabsTrigger>
+              <TabsTrigger
+                className="h-10 rounded-none border-b-2 border-transparent bg-transparent px-3 data-[state=active]:border-neutral-950 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                value="agents"
+                onClick={() => selectActiveTab("agents")}
+              >
+                Agents
+              </TabsTrigger>
+              <TabsTrigger
+                className="h-10 rounded-none border-b-2 border-transparent bg-transparent px-3 data-[state=active]:border-neutral-950 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                value="logs"
+                onClick={() => selectActiveTab("logs")}
+              >
+                Communication Logs
+              </TabsTrigger>
             </TabsList>
           </div>
 
-        <div className="relative flex-1">
-          {activeTab === 'progress' && (
-            <WorkflowProgressPanel
-              progress={displayWorkflowProgress}
-              details={details}
-              webUi={webUi}
-              showFailurePanel={!failure}
-              streamState={progressStreamState}
-              streamError={streamError}
-              onRetryStream={() => {
-                setStreamError('');
-                setProgressStreamState('connecting');
-                setStreamAttempt((attempt) => attempt + 1);
-              }}
-            />
-          )}
+          <div className="relative flex-1">
+            {activeTab === "progress" && (
+              <WorkflowProgressPanel
+                progress={displayWorkflowProgress}
+                details={details}
+                webUi={webUi}
+                showFailurePanel={!failure}
+                streamState={progressStreamState}
+                streamError={streamError}
+                onRetryStream={() => {
+                  setStreamError("");
+                  setProgressStreamState("connecting");
+                  setStreamAttempt((attempt) => attempt + 1);
+                }}
+              />
+            )}
 
-          {activeTab === 'agents' && (
-            <div className="absolute inset-0 flex flex-col bg-white">
-              {graphError ? <div role="alert" className="flex items-center justify-between gap-2 border-b border-red-200 bg-red-50 p-3 text-xs text-red-800"><span>{graphError}</span><Button variant="outline" size="sm" onClick={() => void loadGraph()}>Retry graph</Button></div> : null}
-              <div className="flex items-center justify-end border-b border-neutral-200 bg-white px-3 py-2">
-                <div className="flex overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
-                  <Tooltip content="Show agents in a scan-friendly table.">
+            {activeTab === "agents" && (
+              <div className="absolute inset-0 flex flex-col bg-white">
+                {graphError ? (
+                  <div
+                    role="alert"
+                    className="flex items-center justify-between gap-2 border-b border-red-200 bg-red-50 p-3 text-xs text-red-800"
+                  >
+                    <span>{graphError}</span>
                     <Button
-                      type="button"
-                      variant={agentView === 'list' ? 'default' : 'ghost'}
+                      variant="outline"
                       size="sm"
-                      aria-label="Show agents as list"
-                      aria-pressed={agentView === 'list'}
-                      onClick={() => setAgentView('list')}
-                      className="rounded-none border-r border-neutral-200"
+                      onClick={() => void loadGraph()}
                     >
-                      <List className="h-3.5 w-3.5" />
-                      List
+                      Retry graph
                     </Button>
-                  </Tooltip>
-                  <Tooltip content="Show agents as a workflow graph.">
-                    <Button
-                      type="button"
-                      variant={agentView === 'graph' ? 'default' : 'ghost'}
-                      size="sm"
-                      aria-label="Show agents as graph"
-                      aria-pressed={agentView === 'graph'}
-                      onClick={() => setAgentView('graph')}
-                      className="rounded-none border-r border-neutral-200"
-                    >
-                      <Network className="h-3.5 w-3.5" />
-                      Graph
-                    </Button>
-                  </Tooltip>
-                  <Tooltip content="Show the raw graph model as JSON.">
-                    <Button
-                      type="button"
-                      variant={agentView === 'code' ? 'default' : 'ghost'}
-                      size="sm"
-                      aria-label="Show agents as code"
-                      aria-pressed={agentView === 'code'}
-                      onClick={() => setAgentView('code')}
-                      className="rounded-none"
-                    >
-                      <Code2 className="h-3.5 w-3.5" />
-                      Code
-                    </Button>
-                  </Tooltip>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-end border-b border-neutral-200 bg-white px-3 py-2">
+                  <div className="flex overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
+                    <Tooltip content="Show agents in a scan-friendly table.">
+                      <Button
+                        type="button"
+                        variant={agentView === "list" ? "default" : "ghost"}
+                        size="sm"
+                        aria-label="Show agents as list"
+                        aria-pressed={agentView === "list"}
+                        onClick={() => setAgentView("list")}
+                        className="rounded-none border-r border-neutral-200"
+                      >
+                        <List className="h-3.5 w-3.5" />
+                        List
+                      </Button>
+                    </Tooltip>
+                    <Tooltip content="Show agents as a workflow graph.">
+                      <Button
+                        type="button"
+                        variant={agentView === "graph" ? "default" : "ghost"}
+                        size="sm"
+                        aria-label="Show agents as graph"
+                        aria-pressed={agentView === "graph"}
+                        onClick={() => setAgentView("graph")}
+                        className="rounded-none border-r border-neutral-200"
+                      >
+                        <Network className="h-3.5 w-3.5" />
+                        Graph
+                      </Button>
+                    </Tooltip>
+                    <Tooltip content="Show the raw graph model as JSON.">
+                      <Button
+                        type="button"
+                        variant={agentView === "code" ? "default" : "ghost"}
+                        size="sm"
+                        aria-label="Show agents as code"
+                        aria-pressed={agentView === "code"}
+                        onClick={() => setAgentView("code")}
+                        className="rounded-none"
+                      >
+                        <Code2 className="h-3.5 w-3.5" />
+                        Code
+                      </Button>
+                    </Tooltip>
+                  </div>
+                </div>
+                <div className="relative flex-1">
+                  {agentView === "graph" ? (
+                    <WorkflowAgentGraph
+                      graph={graph}
+                      agents={details.agents || []}
+                      fallbackJobId={jobId}
+                      fallbackGraphId={graphId}
+                      fallbackStatus={displayStatus}
+                      progress={displayWorkflowProgress}
+                    />
+                  ) : agentView === "code" ? (
+                    <div className="absolute inset-0 overflow-auto bg-neutral-950 p-3">
+                      <pre className="font-mono text-[11px] leading-5 text-neutral-200">
+                        {graphCode}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="overflow-auto absolute inset-0">
+                      {displayAgents.length === 0 ? (
+                        <div className="flex h-full items-center justify-center text-xs text-neutral-500">
+                          {graphLoading
+                            ? "Loading agents…"
+                            : graphError
+                              ? "Agent data is unavailable."
+                              : "No agents reported yet."}
+                        </div>
+                      ) : (
+                        <Table>
+                          <TableHeader className="sticky top-0 bg-neutral-50">
+                            <TableRow className="text-[11px] text-neutral-500">
+                              <TableHead className="px-4 py-2">
+                                Agent ID
+                              </TableHead>
+                              <TableHead className="px-4 py-2">Type</TableHead>
+                              <TableHead className="px-4 py-2">
+                                Status
+                              </TableHead>
+                              <TableHead className="px-4 py-2">
+                                Messages
+                              </TableHead>
+                              <TableHead className="px-4 py-2">Node</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {displayAgents.map((agent, i) => (
+                              <TableRow
+                                key={agent.id || i}
+                                className="hover:bg-neutral-50"
+                              >
+                                <TableCell className="px-4 py-2 font-mono text-xs font-medium text-neutral-950">
+                                  {agent.label || agent.id || "Unnamed agent"}
+                                </TableCell>
+                                <TableCell className="px-4 py-2 text-xs text-neutral-600">
+                                  {agent.agent_type || "Not reported"} /{" "}
+                                  {agent.type || "Not reported"}
+                                </TableCell>
+                                <TableCell className="px-4 py-2 text-xs">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "capitalize",
+                                      runStatusBadgeClass(agent.status),
+                                    )}
+                                  >
+                                    {agent.status || "Not reported"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="px-4 py-2 text-xs text-neutral-600">
+                                  {(agent as { countsUnknown?: boolean })
+                                    .countsUnknown
+                                    ? "Activity not reported"
+                                    : `${agent.processed_messages ?? 0} processed, ${agent.mailbox_depth ?? 0} in queue`}
+                                </TableCell>
+                                <TableCell className="px-4 py-2 text-xs text-neutral-500">
+                                  {agent.assigned_node || "unassigned"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="relative flex-1">
-                {agentView === 'graph' ? (
-                  <WorkflowAgentGraph
-                    graph={graph}
-                    agents={details.agents || []}
-                    fallbackJobId={jobId}
-                    fallbackGraphId={graphId}
-                    fallbackStatus={displayStatus}
-                    progress={displayWorkflowProgress}
-                  />
-                ) : agentView === 'code' ? (
-                  <div className="absolute inset-0 overflow-auto bg-neutral-950 p-3">
-                    <pre className="font-mono text-[11px] leading-5 text-neutral-200">{graphCode}</pre>
+            )}
+
+            {activeTab === "logs" && (
+              <div className="absolute inset-0 overflow-auto bg-neutral-950 p-3 font-mono text-xs leading-5 text-neutral-300">
+                {eventsError ? (
+                  <div
+                    role="alert"
+                    className="mb-3 flex items-center justify-between gap-2 text-red-300"
+                  >
+                    <span>{eventsError}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void loadEvents()}
+                    >
+                      Retry events
+                    </Button>
                   </div>
-                ) : (
-                  <div className="overflow-auto absolute inset-0">
-                    {displayAgents.length === 0 ? (
-                      <div className="flex h-full items-center justify-center text-xs text-neutral-500">
-                        {graphLoading ? 'Loading agents…' : graphError ? 'Agent data is unavailable.' : 'No agents reported yet.'}
-                      </div>
-                    ) : (
-                      <Table>
-                        <TableHeader className="sticky top-0 bg-neutral-50">
-                          <TableRow className="text-[11px] text-neutral-500">
-                            <TableHead className="px-4 py-2">Agent ID</TableHead>
-                            <TableHead className="px-4 py-2">Type</TableHead>
-                            <TableHead className="px-4 py-2">Status</TableHead>
-                            <TableHead className="px-4 py-2">Messages</TableHead>
-                            <TableHead className="px-4 py-2">Node</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {displayAgents.map((agent, i) => (
-                            <TableRow key={agent.id || i} className="hover:bg-neutral-50">
-                              <TableCell className="px-4 py-2 font-mono text-xs font-medium text-neutral-950">{agent.label || agent.id || 'Unnamed agent'}</TableCell>
-                              <TableCell className="px-4 py-2 text-xs text-neutral-600">{agent.agent_type || 'Not reported'} / {agent.type || 'Not reported'}</TableCell>
-                              <TableCell className="px-4 py-2 text-xs">
-                                <Badge variant="outline" className={cn('capitalize', runStatusBadgeClass(agent.status))}>{agent.status || 'Not reported'}</Badge>
-                              </TableCell>
-                              <TableCell className="px-4 py-2 text-xs text-neutral-600">{(agent as { countsUnknown?: boolean }).countsUnknown ? 'Activity not reported' : `${agent.processed_messages ?? 0} processed, ${agent.mailbox_depth ?? 0} in queue`}</TableCell>
-                              <TableCell className="px-4 py-2 text-xs text-neutral-500">{agent.assigned_node || 'unassigned'}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    )}
+                ) : null}
+                {(events || [])
+                  .slice()
+                  .reverse()
+                  .map((ev, i) => (
+                    <div key={i} className="mb-1">
+                      <span className="text-neutral-500">
+                        {ev.timestamp &&
+                        Number.isFinite(new Date(ev.timestamp).getTime())
+                          ? format(new Date(ev.timestamp), "HH:mm:ss.SSS")
+                          : "Not reported"}
+                      </span>{" "}
+                      <span className="text-neutral-300">[{ev.type}]</span>{" "}
+                      {ev.agent_id && (
+                        <span className="text-neutral-300 font-bold">
+                          {ev.agent_id}
+                        </span>
+                      )}{" "}
+                      <span className="text-neutral-300">
+                        {ev.payload ? JSON.stringify(ev.payload) : ""}
+                      </span>
+                    </div>
+                  ))}
+                {events.length === 0 && (
+                  <div className="text-neutral-500 italic">
+                    {eventsLoading
+                      ? "Loading events…"
+                      : eventsError
+                        ? "Event data is unavailable."
+                        : "No events recorded."}
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {activeTab === 'logs' && (
-            <div className="absolute inset-0 overflow-auto bg-neutral-950 p-3 font-mono text-xs leading-5 text-neutral-300">
-              {eventsError ? <div role="alert" className="mb-3 flex items-center justify-between gap-2 text-red-300"><span>{eventsError}</span><Button variant="outline" size="sm" onClick={() => void loadEvents()}>Retry events</Button></div> : null}
-              {(events || []).slice().reverse().map((ev, i) => (
-                <div key={i} className="mb-1">
-                  <span className="text-neutral-500">{ev.timestamp && Number.isFinite(new Date(ev.timestamp).getTime()) ? format(new Date(ev.timestamp), 'HH:mm:ss.SSS') : 'Not reported'}</span>{' '}
-                  <span className="text-neutral-300">[{ev.type}]</span>{' '}
-                  {ev.agent_id && <span className="text-neutral-300 font-bold">{ev.agent_id}</span>}{' '}
-                  <span className="text-neutral-300">{ev.payload ? JSON.stringify(ev.payload) : ''}</span>
-                </div>
-              ))}
-              {events.length === 0 && <div className="text-neutral-500 italic">{eventsLoading ? 'Loading events…' : eventsError ? 'Event data is unavailable.' : 'No events recorded.'}</div>}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
         </Tabs>
       </Card>
     </div>

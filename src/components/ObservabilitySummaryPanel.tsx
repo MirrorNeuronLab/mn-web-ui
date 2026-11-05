@@ -1,8 +1,8 @@
-import { Network } from 'lucide-react';
-import { artifactDisplayName, isOpenableHref } from '../utils/artifacts';
-import { isRecord } from '../utils/records';
-import { formatElapsed } from '../utils/workflowProgress';
-import ArtifactLink from './ArtifactLink';
+import { Network } from "lucide-react";
+import { artifactDisplayName, isOpenableHref } from "../utils/artifacts";
+import { isRecord } from "../utils/records";
+import { formatElapsed } from "../utils/workflowProgress";
+import ArtifactLink from "./ArtifactLink";
 
 export type ObservabilityArtifactRef = {
   artifact_id?: string;
@@ -20,28 +20,39 @@ type Props = {
 
 const numericValue = (...values: unknown[]): number | undefined => {
   for (const value of values) {
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-    if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value);
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (
+      typeof value === "string" &&
+      value.trim() &&
+      Number.isFinite(Number(value))
+    )
+      return Number(value);
   }
   return undefined;
 };
 
-const artifactLink = (artifacts: ObservabilityArtifactRef[] | undefined, artifactId: string): ObservabilityArtifactRef | undefined => (
-  artifacts?.find((artifact) => artifact.artifact_id === artifactId)
-);
+const artifactLink = (
+  artifacts: ObservabilityArtifactRef[] | undefined,
+  artifactId: string,
+): ObservabilityArtifactRef | undefined =>
+  artifacts?.find((artifact) => artifact.artifact_id === artifactId);
 
 const formatCount = (value: unknown): string => {
   const number = numericValue(value);
-  return typeof number === 'number' ? number.toLocaleString() : '0';
+  return typeof number === "number" ? number.toLocaleString() : "0";
 };
 
 const formatPeak = (value: unknown, suffix: string): string | undefined => {
   const number = numericValue(value);
-  if (typeof number !== 'number') return undefined;
+  if (typeof number !== "number") return undefined;
   return `${Math.round(number * 10) / 10}${suffix}`;
 };
 
-export default function ObservabilitySummaryPanel({ summary, traceId, artifacts }: Props) {
+export default function ObservabilitySummaryPanel({
+  summary,
+  traceId,
+  artifacts,
+}: Props) {
   if (!summary && !traceId) return null;
   const summaryCounts = summary?.counts;
   const summaryResources = summary?.resource_peaks;
@@ -50,15 +61,18 @@ export default function ObservabilitySummaryPanel({ summary, traceId, artifacts 
   const resources = isRecord(summaryResources) ? summaryResources : {};
   const tokens = isRecord(summaryTokens) ? summaryTokens : {};
   const durationMs = numericValue(summary?.duration_ms);
-  const durationText = typeof durationMs === 'number' ? formatElapsed(durationMs / 1000) : 'unknown';
-  const memoryPeak = formatPeak(resources.max_memory_rss_mb, ' MB');
-  const cpuPeak = formatPeak(resources.max_cpu_pct, '% CPU');
+  const durationText =
+    typeof durationMs === "number"
+      ? formatElapsed(durationMs / 1000)
+      : "unknown";
+  const memoryPeak = formatPeak(resources.max_memory_rss_mb, " MB");
+  const cpuPeak = formatPeak(resources.max_cpu_pct, "% CPU");
   const tokenTotal = numericValue(tokens.total_tokens);
   const links = [
-    ['timeline_jsonl', 'Timeline'],
-    ['events_jsonl', 'Events'],
-    ['logs_jsonl', 'Logs'],
-    ['errors_jsonl', 'Errors'],
+    ["timeline_jsonl", "Timeline"],
+    ["events_jsonl", "Events"],
+    ["logs_jsonl", "Logs"],
+    ["errors_jsonl", "Errors"],
   ] as const;
 
   return (
@@ -68,24 +82,48 @@ export default function ObservabilitySummaryPanel({ summary, traceId, artifacts 
           <Network className="h-4 w-4 text-neutral-500" />
           Observability Summary
         </div>
-        {traceId ? <span className="font-mono text-[11px] text-neutral-500">{traceId}</span> : null}
+        {traceId ? (
+          <span className="font-mono text-[11px] text-neutral-500">
+            {traceId}
+          </span>
+        ) : null}
       </div>
       <div className="grid grid-cols-2 gap-3 text-xs md:grid-cols-4">
         <div>
-          <div className="text-[11px] font-medium text-neutral-500">Duration</div>
-          <div className="mt-0.5 font-semibold text-neutral-950">{durationText}</div>
+          <div className="text-[11px] font-medium text-neutral-500">
+            Duration
+          </div>
+          <div className="mt-0.5 font-semibold text-neutral-950">
+            {durationText}
+          </div>
         </div>
         <div>
-          <div className="text-[11px] font-medium text-neutral-500">Events / Logs / Errors</div>
-          <div className="mt-0.5 font-semibold text-neutral-950">{formatCount(counts.events)} / {formatCount(counts.logs)} / {formatCount(counts.errors)}</div>
+          <div className="text-[11px] font-medium text-neutral-500">
+            Events / Logs / Errors
+          </div>
+          <div className="mt-0.5 font-semibold text-neutral-950">
+            {formatCount(counts.events)} / {formatCount(counts.logs)} /{" "}
+            {formatCount(counts.errors)}
+          </div>
         </div>
         <div>
-          <div className="text-[11px] font-medium text-neutral-500">Warnings / Retries</div>
-          <div className="mt-0.5 font-semibold text-neutral-950">{formatCount(counts.warnings)} / {formatCount(summary?.retry_count)}</div>
+          <div className="text-[11px] font-medium text-neutral-500">
+            Warnings / Retries
+          </div>
+          <div className="mt-0.5 font-semibold text-neutral-950">
+            {formatCount(counts.warnings)} / {formatCount(summary?.retry_count)}
+          </div>
         </div>
         <div>
-          <div className="text-[11px] font-medium text-neutral-500">Resources / Tokens</div>
-          <div className="mt-0.5 font-semibold text-neutral-950">{memoryPeak || cpuPeak || 'none'}{typeof tokenTotal === 'number' && tokenTotal > 0 ? ` / ${tokenTotal.toLocaleString()}` : ''}</div>
+          <div className="text-[11px] font-medium text-neutral-500">
+            Resources / Tokens
+          </div>
+          <div className="mt-0.5 font-semibold text-neutral-950">
+            {memoryPeak || cpuPeak || "none"}
+            {typeof tokenTotal === "number" && tokenTotal > 0
+              ? ` / ${tokenTotal.toLocaleString()}`
+              : ""}
+          </div>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -93,9 +131,16 @@ export default function ObservabilitySummaryPanel({ summary, traceId, artifacts 
           const artifact = artifactLink(artifacts, artifactId);
           if (!artifact?.url || !isOpenableHref(artifact.url)) return null;
           const displayLabel = artifactDisplayName(artifact, label);
-          const className = "rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-medium text-neutral-700 hover:border-neutral-300 hover:bg-white";
+          const className =
+            "rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-medium text-neutral-700 hover:border-neutral-300 hover:bg-white";
           return (
-            <ArtifactLink key={artifactId} href={artifact.url} target="_blank" rel="noreferrer noopener" className={className}>
+            <ArtifactLink
+              key={artifactId}
+              href={artifact.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className={className}
+            >
               {displayLabel}
             </ArtifactLink>
           );

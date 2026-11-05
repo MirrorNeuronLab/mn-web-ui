@@ -1,4 +1,4 @@
-import { isRecord } from './records';
+import { isRecord } from "./records";
 
 type ValidationIssue = {
   code?: string;
@@ -20,7 +20,9 @@ type ApiError = {
 
 type ApiErrorData = {
   error?: string;
-  detail?: string | { error?: string; message?: string; errors?: ValidationIssue[] };
+  detail?:
+    | string
+    | { error?: string; message?: string; errors?: ValidationIssue[] };
   message?: string;
   model_install?: {
     models?: Array<{ id?: string; model?: string }>;
@@ -33,21 +35,24 @@ type ApiErrorData = {
 };
 
 const numberValue = (value: unknown) => {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
 };
 
-const stringValue = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+const stringValue = (value: unknown) =>
+  typeof value === "string" && value.trim() ? value.trim() : null;
 
 const issueText = (issue: ValidationIssue) => {
-  const file = stringValue(issue.file) || stringValue(issue.location?.file) || '';
-  const pointer = stringValue(issue.pointer) || stringValue(issue.location?.path) || '';
-  const path = file || pointer ? `${file}${pointer}: ` : '';
-  return `${path}${issue.message || issue.help || 'Validation issue'}`;
+  const file =
+    stringValue(issue.file) || stringValue(issue.location?.file) || "";
+  const pointer =
+    stringValue(issue.pointer) || stringValue(issue.location?.path) || "";
+  const path = file || pointer ? `${file}${pointer}: ` : "";
+  return `${path}${issue.message || issue.help || "Validation issue"}`;
 };
 
 const formatGpuMemory = (memoryMb: number) => {
@@ -57,27 +62,29 @@ const formatGpuMemory = (memoryMb: number) => {
 
 const memoryComparisonText = (operator: string | null, memoryMb: number) => {
   const memory = formatGpuMemory(memoryMb);
-  if (operator === '>') return `more than ${memory} GPU memory`;
-  if (operator === '==') return `exactly ${memory} GPU memory`;
+  if (operator === ">") return `more than ${memory} GPU memory`;
+  if (operator === "==") return `exactly ${memory} GPU memory`;
   return `at least ${memory} GPU memory`;
 };
 
-const apiComparisonText = (driver: string, operator: string | null, version: string) => {
-  if (operator === '>') return `${driver} newer than ${version}`;
-  if (operator === '==') return `${driver} ${version}`;
+const apiComparisonText = (
+  driver: string,
+  operator: string | null,
+  version: string,
+) => {
+  if (operator === ">") return `${driver} newer than ${version}`;
+  if (operator === "==") return `${driver} ${version}`;
   return `${driver} ${version} or newer`;
 };
 
-const isHardwareRequirementIssue = (issue: ValidationIssue) => (
-  issue.code?.startsWith('requirements.gpu') ||
-  (issue.location?.source === 'requirements' && issue.location?.path === 'gpu')
-);
+const isHardwareRequirementIssue = (issue: ValidationIssue) =>
+  issue.code?.startsWith("requirements.gpu") ||
+  (issue.location?.source === "requirements" && issue.location?.path === "gpu");
 
-const isRuntimeModelIssue = (issue: ValidationIssue) => (
-  issue.code === 'runtime_model_install_failed' ||
-  issue.code === 'blueprint_model_install_failed' ||
-  issue.code === 'unknown_runtime_model'
-);
+const isRuntimeModelIssue = (issue: ValidationIssue) =>
+  issue.code === "runtime_model_install_failed" ||
+  issue.code === "blueprint_model_install_failed" ||
+  issue.code === "unknown_runtime_model";
 
 const modelNameFromText = (value: string | undefined) => {
   if (!value) return null;
@@ -89,25 +96,44 @@ const modelNameFromText = (value: string | undefined) => {
 
 const modelNameFromInstall = (data: ApiErrorData | undefined) => {
   const models = data?.model_install?.models || [];
-  const first = models.find((model) => stringValue(model.id) || stringValue(model.model));
+  const first = models.find(
+    (model) => stringValue(model.id) || stringValue(model.model),
+  );
   return stringValue(first?.id) || stringValue(first?.model) || null;
 };
 
-const runtimeModelIssueText = (issue: ValidationIssue, data: ApiErrorData | undefined) => {
-  const model = modelNameFromText(issue.message) || modelNameFromText(issue.help) || modelNameFromInstall(data) || 'the required runtime model';
+const runtimeModelIssueText = (
+  issue: ValidationIssue,
+  data: ApiErrorData | undefined,
+) => {
+  const model =
+    modelNameFromText(issue.message) ||
+    modelNameFromText(issue.help) ||
+    modelNameFromInstall(data) ||
+    "the required runtime model";
   return `Required runtime model ${model} could not be prepared. Check model installation/runtime model settings and try again.`;
 };
 
 const hardwareRequirementText = (issue: ValidationIssue) => {
   const expected = isRecord(issue.expected) ? issue.expected : {};
-  const vendor = (stringValue(expected.vendor) || 'NVIDIA').toUpperCase();
-  const driver = (stringValue(expected.driver) || 'CUDA').toUpperCase();
+  const vendor = (stringValue(expected.vendor) || "NVIDIA").toUpperCase();
+  const driver = (stringValue(expected.driver) || "CUDA").toUpperCase();
   const phrases: string[] = [];
   const memoryMb = numberValue(expected.min_memory_mb);
-  if (memoryMb !== null) phrases.push(memoryComparisonText(stringValue(expected.memory_operator), memoryMb));
+  if (memoryMb !== null)
+    phrases.push(
+      memoryComparisonText(stringValue(expected.memory_operator), memoryMb),
+    );
   const apiVersion = stringValue(expected.min_api_version);
-  if (apiVersion) phrases.push(apiComparisonText(driver, stringValue(expected.api_version_operator), apiVersion));
-  const details = phrases.length > 0 ? ` with ${phrases.join(' and ')}` : '';
+  if (apiVersion)
+    phrases.push(
+      apiComparisonText(
+        driver,
+        stringValue(expected.api_version_operator),
+        apiVersion,
+      ),
+    );
+  const details = phrases.length > 0 ? ` with ${phrases.join(" and ")}` : "";
   return `This blueprint needs an ${vendor} ${driver} runtime node${details}. Add or connect an ${vendor} node, then launch again.`;
 };
 
@@ -116,17 +142,20 @@ export const apiErrorMessage = (err: unknown, fallback: string) => {
   const data = apiError.response?.data;
   const detail = isRecord(data?.detail) ? data.detail : {};
   const rawIssues = data?.validation?.issues || data?.errors || detail.errors;
-  const validationIssues = Array.isArray(rawIssues) ? rawIssues.filter(isRecord) as ValidationIssue[] : [];
+  const validationIssues = Array.isArray(rawIssues)
+    ? (rawIssues.filter(isRecord) as ValidationIssue[])
+    : [];
   const hardwareIssue = validationIssues.find(isHardwareRequirementIssue);
   if (hardwareIssue) return hardwareRequirementText(hardwareIssue);
   const runtimeModelIssue = validationIssues.find(isRuntimeModelIssue);
   if (runtimeModelIssue) return runtimeModelIssueText(runtimeModelIssue, data);
   const validationErrors = data?.validation?.errors || [];
-  if (validationErrors.length > 0) return validationErrors.join('\n');
-  if (validationIssues.length > 0) return validationIssues.map(issueText).join('\n');
+  if (validationErrors.length > 0) return validationErrors.join("\n");
+  if (validationIssues.length > 0)
+    return validationIssues.map(issueText).join("\n");
   if (data?.error) return data.error;
   if (data?.message) return data.message;
-  if (typeof data?.detail === 'string') return data.detail;
+  if (typeof data?.detail === "string") return data.detail;
   if (data?.detail?.error) return data.detail.error;
   if (data?.detail?.message) return data.detail.message;
   return apiError.message || fallback;

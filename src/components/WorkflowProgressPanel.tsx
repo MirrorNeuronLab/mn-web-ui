@@ -1,11 +1,26 @@
-import { useState } from 'react';
-import { Activity, Check, Circle, Clock3, ListTree, Loader2, Workflow, X } from 'lucide-react';
-import type { JobDetails, WorkflowActivity, WorkflowProgress, WorkflowProgressAgent, WorkflowProgressStep } from '../api';
-import { displayAgentName } from '../utils/agentGraph';
-import { formatElapsed, workflowStepCounts } from '../utils/workflowProgress';
-import { artifactsFromDetails } from '../utils/workflowResources';
-import { firstString, isRecord, uniqueStrings } from '../utils/records';
-import type { WebUiInfo } from '../utils/jobDetailsView';
+import { useState } from "react";
+import {
+  Activity,
+  Check,
+  Circle,
+  Clock3,
+  ListTree,
+  Loader2,
+  Workflow,
+  X,
+} from "lucide-react";
+import type {
+  JobDetails,
+  WorkflowActivity,
+  WorkflowProgress,
+  WorkflowProgressAgent,
+  WorkflowProgressStep,
+} from "../api";
+import { displayAgentName } from "../utils/agentGraph";
+import { formatElapsed, workflowStepCounts } from "../utils/workflowProgress";
+import { artifactsFromDetails } from "../utils/workflowResources";
+import { firstString, isRecord, uniqueStrings } from "../utils/records";
+import type { WebUiInfo } from "../utils/jobDetailsView";
 import {
   activityCategory,
   activityDetailText,
@@ -14,9 +29,9 @@ import {
   filterLabel,
   uniqueActivities,
   type ActivityFilter,
-} from '../utils/workflowActivity';
-import FailurePanel, { ErrorSummary } from './FailurePanel';
-import WorkflowTopologyGraph from './WorkflowTopologyGraph';
+} from "../utils/workflowActivity";
+import FailurePanel, { ErrorSummary } from "./FailurePanel";
+import WorkflowTopologyGraph from "./WorkflowTopologyGraph";
 
 type WorkflowProgressPanelProps = {
   progress: WorkflowProgress | null;
@@ -24,90 +39,139 @@ type WorkflowProgressPanelProps = {
   details?: JobDetails | null;
   showFailurePanel?: boolean;
   webUi?: WebUiInfo | null;
-  streamState?: 'connecting' | 'live' | 'stale' | 'disconnected' | 'closed';
+  streamState?: "connecting" | "live" | "stale" | "disconnected" | "closed";
   streamError?: string | null;
   onRetryStream?: () => void;
 };
 
 const statusTone = (status: string | undefined) => {
-  const normalized = String(status || '').toLowerCase();
-  if (['completed', 'done', 'succeeded', 'success', 'finished'].includes(normalized)) return 'text-emerald-700';
-  if (['partial', 'skipped'].includes(normalized)) return 'text-amber-700';
-  if (['failed', 'cancelled', 'canceled', 'error'].includes(normalized)) return 'text-red-700';
-  if (['running', 'active'].includes(normalized)) return 'text-sky-700';
-  if (['retry_wait', 'blocked', 'paused', 'pausing', 'queued'].includes(normalized)) return 'text-amber-700';
-  if (['idle', 'ready'].includes(normalized)) return 'text-neutral-600';
-  return 'text-neutral-500';
+  const normalized = String(status || "").toLowerCase();
+  if (
+    ["completed", "done", "succeeded", "success", "finished"].includes(
+      normalized,
+    )
+  )
+    return "text-emerald-700";
+  if (["partial", "skipped"].includes(normalized)) return "text-amber-700";
+  if (["failed", "cancelled", "canceled", "error"].includes(normalized))
+    return "text-red-700";
+  if (["running", "active"].includes(normalized)) return "text-sky-700";
+  if (
+    ["retry_wait", "blocked", "paused", "pausing", "queued"].includes(
+      normalized,
+    )
+  )
+    return "text-amber-700";
+  if (["idle", "ready"].includes(normalized)) return "text-neutral-600";
+  return "text-neutral-500";
 };
 
-const StatusGlyph = ({ status, current }: { status?: string; current?: boolean }) => {
-  const normalized = String(status || '').toLowerCase();
-  if (['completed', 'done', 'succeeded', 'success', 'finished'].includes(normalized)) return <Check className="h-3.5 w-3.5 text-emerald-700" />;
-  if (['partial', 'skipped'].includes(normalized)) return <Circle className="h-3.5 w-3.5 text-amber-600" />;
-  if (['failed', 'cancelled', 'canceled', 'error'].includes(normalized)) return <X className="h-3.5 w-3.5 text-red-700" />;
-  if (current || ['running', 'active'].includes(normalized)) return <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-700" />;
-  if (['retry_wait', 'blocked', 'paused', 'pausing', 'queued'].includes(normalized)) return <Clock3 className="h-3.5 w-3.5 text-amber-600" />;
-  if (['idle', 'ready'].includes(normalized)) return <Circle className="h-3.5 w-3.5 text-neutral-500" />;
-  if (['pending', 'scheduled', 'validated', 'preparing'].includes(normalized)) return <Clock3 className="h-3.5 w-3.5 text-neutral-500" />;
+const StatusGlyph = ({
+  status,
+  current,
+}: {
+  status?: string;
+  current?: boolean;
+}) => {
+  const normalized = String(status || "").toLowerCase();
+  if (
+    ["completed", "done", "succeeded", "success", "finished"].includes(
+      normalized,
+    )
+  )
+    return <Check className="h-3.5 w-3.5 text-emerald-700" />;
+  if (["partial", "skipped"].includes(normalized))
+    return <Circle className="h-3.5 w-3.5 text-amber-600" />;
+  if (["failed", "cancelled", "canceled", "error"].includes(normalized))
+    return <X className="h-3.5 w-3.5 text-red-700" />;
+  if (current || ["running", "active"].includes(normalized))
+    return <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-700" />;
+  if (
+    ["retry_wait", "blocked", "paused", "pausing", "queued"].includes(
+      normalized,
+    )
+  )
+    return <Clock3 className="h-3.5 w-3.5 text-amber-600" />;
+  if (["idle", "ready"].includes(normalized))
+    return <Circle className="h-3.5 w-3.5 text-neutral-500" />;
+  if (["pending", "scheduled", "validated", "preparing"].includes(normalized))
+    return <Clock3 className="h-3.5 w-3.5 text-neutral-500" />;
   return <Circle className="h-3.5 w-3.5 text-neutral-400" />;
 };
 
 const formatProgress = (agent: WorkflowProgressAgent) => {
-  const source = agent.progress_source || 'estimated';
-  const inferred = !['explicit', 'items', 'complete'].includes(source);
-  const percent = `${Math.round(Math.max(0, Math.min(1, agent.progress || 0)) * 100)}%${inferred ? ' est.' : ''}`;
+  const source = agent.progress_source || "estimated";
+  const inferred = !["explicit", "items", "complete"].includes(source);
+  const percent = `${Math.round(Math.max(0, Math.min(1, agent.progress || 0)) * 100)}%${inferred ? " est." : ""}`;
   const parts = [percent];
-  const legacyTokensAreBudget = Boolean(agent.token_budget && agent.tokens === agent.token_budget && !agent.tokens_used);
-  if (agent.items_total) parts.push(`${agent.items_done || 0}/${agent.items_total} items`);
+  const legacyTokensAreBudget = Boolean(
+    agent.token_budget &&
+      agent.tokens === agent.token_budget &&
+      !agent.tokens_used,
+  );
+  if (agent.items_total)
+    parts.push(`${agent.items_done || 0}/${agent.items_total} items`);
   if (agent.tokens_used && agent.token_budget) {
-    parts.push(`${formatTokens(agent.tokens_used)}/${formatTokens(agent.token_budget)} tok`);
+    parts.push(
+      `${formatTokens(agent.tokens_used)}/${formatTokens(agent.token_budget)} tok`,
+    );
   } else if (agent.tokens_used || (agent.tokens && !legacyTokensAreBudget)) {
     parts.push(`${formatTokens(agent.tokens_used || agent.tokens || 0)} tok`);
   } else if (agent.token_budget) {
     parts.push(`${formatTokens(agent.token_budget)} tok budget`);
   }
-  if (agent.tools !== null && agent.tools !== undefined) parts.push(`${agent.tools} tools`);
+  if (agent.tools !== null && agent.tools !== undefined)
+    parts.push(`${agent.tools} tools`);
   if (agent.elapsed_seconds) parts.push(formatElapsed(agent.elapsed_seconds));
-  return parts.join(' · ');
+  return parts.join(" · ");
 };
 
 const formatTokens = (tokens: number) => {
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(tokens % 1000 === 0 ? 0 : 1)}k`;
+  if (tokens >= 1000)
+    return `${(tokens / 1000).toFixed(tokens % 1000 === 0 ? 0 : 1)}k`;
   return String(tokens);
 };
 
 const formatTimestamp = (value?: string | null) => {
-  if (!value) return '';
+  if (!value) return "";
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime())) return value;
   return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
   });
 };
 
 const formatClock = (value?: string | null) => {
-  if (!value) return '';
+  if (!value) return "";
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime())) return value;
   return parsed.toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
   });
 };
 
 const formatList = (values?: string[]) => {
   const filtered = (values || []).filter(Boolean);
-  return filtered.length ? filtered.join(', ') : 'None';
+  return filtered.length ? filtered.join(", ") : "None";
 };
 
 const nestedId = (value: unknown) => {
   const record = isRecord(value) ? value : {};
-  return firstString(record.id, record.step_id, record.stepId, record.node_id, record.nodeId, record.name, record.label);
+  return firstString(
+    record.id,
+    record.step_id,
+    record.stepId,
+    record.node_id,
+    record.nodeId,
+    record.name,
+    record.label,
+  );
 };
 
 const stepAssociationIds = (step: WorkflowProgressStep, index: number) => {
@@ -139,16 +203,19 @@ const agentStepIds = (agent: WorkflowProgressAgent) => {
 
 const topLevelAgents = (progress: WorkflowProgress) => {
   const agents = (progress as unknown as { agents?: unknown }).agents;
-  return Array.isArray(agents) ? agents.filter(isRecord) as unknown as WorkflowProgressAgent[] : [];
+  return Array.isArray(agents)
+    ? (agents.filter(isRecord) as unknown as WorkflowProgressAgent[])
+    : [];
 };
 
-const stepMatchesId = (step: WorkflowProgressStep, index: number, id: string | null) => (
-  Boolean(id && stepAssociationIds(step, index).includes(id))
-);
+const stepMatchesId = (
+  step: WorkflowProgressStep,
+  index: number,
+  id: string | null,
+) => Boolean(id && stepAssociationIds(step, index).includes(id));
 
-const eventKey = (event: WorkflowActivity, index: number) => (
-  `${event.timestamp || 'unknown'}-${event.type || 'event'}-${event.step_id || ''}-${event.agent_id || ''}-${index}`
-);
+const eventKey = (event: WorkflowActivity, index: number) =>
+  `${event.timestamp || "unknown"}-${event.type || "event"}-${event.step_id || ""}-${event.agent_id || ""}-${index}`;
 
 const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
   const progress = Math.max(0, Math.min(1, agent.progress || 0));
@@ -161,93 +228,189 @@ const AgentRow = ({ agent }: { agent: WorkflowProgressAgent }) => {
     <tr className="border-b border-neutral-100 last:border-0">
       <td className="max-w-[260px] px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <StatusGlyph status={agent.status} current={agent.status === 'running'} />
-          <span className="truncate font-mono text-xs font-medium text-neutral-950" title={agent.id}>{agentName}</span>
+          <StatusGlyph
+            status={agent.status}
+            current={agent.status === "running"}
+          />
+          <span
+            className="truncate font-mono text-xs font-medium text-neutral-950"
+            title={agent.id}
+          >
+            {agentName}
+          </span>
         </div>
       </td>
       <td className="w-[110px] px-3 py-2 text-xs">
-        <span className={`capitalize ${statusTone(agent.status)}`}>{agent.status || 'Not reported'}</span>
+        <span className={`capitalize ${statusTone(agent.status)}`}>
+          {agent.status || "Not reported"}
+        </span>
       </td>
       <td className="max-w-[320px] px-3 py-2 text-xs text-neutral-700">
         {agent.failure ? (
           <ErrorSummary failure={agent.failure} />
         ) : (
           <div className="space-y-0.5">
-            <div className="truncate" title={agent.status_reason || agent.working_on || undefined}>
-              {agent.status_reason || agent.working_on || agent.role || 'worker'}
+            <div
+              className="truncate"
+              title={agent.status_reason || agent.working_on || undefined}
+            >
+              {agent.status_reason ||
+                agent.working_on ||
+                agent.role ||
+                "worker"}
             </div>
-            {agent.activity_summary && agent.activity_summary !== agent.status_reason ? (
-              <div className="truncate text-[11px] text-neutral-500" title={agent.activity_summary}>{agent.activity_summary}</div>
+            {agent.activity_summary &&
+            agent.activity_summary !== agent.status_reason ? (
+              <div
+                className="truncate text-[11px] text-neutral-500"
+                title={agent.activity_summary}
+              >
+                {agent.activity_summary}
+              </div>
             ) : null}
           </div>
         )}
       </td>
       <td className="max-w-[210px] px-3 py-2 text-xs text-neutral-600">
-        <div className="truncate">{agent.model || 'runtime'}</div>
-        {agent.assigned_node ? <div className="truncate text-[11px] text-neutral-400">{agent.assigned_node}</div> : null}
+        <div className="truncate">{agent.model || "runtime"}</div>
+        {agent.assigned_node ? (
+          <div className="truncate text-[11px] text-neutral-400">
+            {agent.assigned_node}
+          </div>
+        ) : null}
       </td>
       <td className="w-[180px] px-3 py-2 text-xs text-neutral-600">
         <div className="space-y-0.5">
-          <div className="whitespace-nowrap">{formatElapsed(agent.elapsed_seconds || 0)}</div>
-          {agent.attempt ? <div className="whitespace-nowrap text-[11px] text-neutral-500">Attempt {agent.attempt}</div> : null}
-          {agent.retry_at ? <div className="whitespace-nowrap text-[11px] text-amber-700">Retry {formatClock(agent.retry_at)}</div> : null}
-          {agent.deadline_at ? <div className="whitespace-nowrap text-[11px] text-neutral-500">Deadline {formatClock(agent.deadline_at)}</div> : null}
+          <div className="whitespace-nowrap">
+            {formatElapsed(agent.elapsed_seconds || 0)}
+          </div>
+          {agent.attempt ? (
+            <div className="whitespace-nowrap text-[11px] text-neutral-500">
+              Attempt {agent.attempt}
+            </div>
+          ) : null}
+          {agent.retry_at ? (
+            <div className="whitespace-nowrap text-[11px] text-amber-700">
+              Retry {formatClock(agent.retry_at)}
+            </div>
+          ) : null}
+          {agent.deadline_at ? (
+            <div className="whitespace-nowrap text-[11px] text-neutral-500">
+              Deadline {formatClock(agent.deadline_at)}
+            </div>
+          ) : null}
         </div>
       </td>
       <td className="w-[220px] px-3 py-2">
         <div className="flex items-center gap-2">
           <div className="h-1.5 w-20 overflow-hidden rounded-full bg-neutral-100">
-            <div className="h-full bg-neutral-950" style={{ width: `${progress * 100}%` }} />
+            <div
+              className="h-full bg-neutral-950"
+              style={{ width: `${progress * 100}%` }}
+            />
           </div>
-          <span className="whitespace-nowrap font-mono text-[11px] text-neutral-600" title={`Progress source: ${agent.progress_source || 'estimated'}`}>{formatProgress(agent)}</span>
+          <span
+            className="whitespace-nowrap font-mono text-[11px] text-neutral-600"
+            title={`Progress source: ${agent.progress_source || "estimated"}`}
+          >
+            {formatProgress(agent)}
+          </span>
         </div>
       </td>
     </tr>
   );
 };
 
-const DetailStat = ({ label, value, tone }: { label: string; value: string | number; tone?: string }) => (
+const DetailStat = ({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  tone?: string;
+}) => (
   <div className="min-w-0 rounded-md border border-neutral-200 bg-white px-2.5 py-2">
     <div className="text-[11px] font-medium text-neutral-500">{label}</div>
-    <div className={`mt-0.5 truncate text-xs font-semibold ${tone || 'text-neutral-950'}`} title={String(value)}>{value}</div>
+    <div
+      className={`mt-0.5 truncate text-xs font-semibold ${tone || "text-neutral-950"}`}
+      title={String(value)}
+    >
+      {value}
+    </div>
   </div>
 );
 
-const MonitorStat = ({ label, value, tone }: { label: string; value: string | number; tone?: string }) => (
+const MonitorStat = ({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  tone?: string;
+}) => (
   <div className="min-w-0">
     <div className="text-[11px] font-medium text-neutral-500">{label}</div>
-    <div className={`mt-0.5 truncate text-sm font-semibold ${tone || 'text-neutral-950'}`} title={String(value)}>{value}</div>
+    <div
+      className={`mt-0.5 truncate text-sm font-semibold ${tone || "text-neutral-950"}`}
+      title={String(value)}
+    >
+      {value}
+    </div>
   </div>
 );
 
 const StepMetadata = ({ step }: { step: WorkflowProgressStep }) => {
   const metadata = [
-    ['Started', formatTimestamp(step.started_at)],
-    ['Ended', formatTimestamp(step.ended_at)],
-    ['Last activity', formatTimestamp(step.last_activity?.timestamp || step.last_event_at)],
-    ['Retry', formatTimestamp(step.retry_at)],
-    ['Deadline', formatTimestamp(step.deadline_at)],
-    ['Heartbeat', formatTimestamp(step.heartbeat_deadline_at)],
-    ['Requires', formatList(step.requires)],
-    ['Provides', formatList(step.provides)],
-  ].filter(([, value]) => value && value !== 'None');
+    ["Started", formatTimestamp(step.started_at)],
+    ["Ended", formatTimestamp(step.ended_at)],
+    [
+      "Last activity",
+      formatTimestamp(step.last_activity?.timestamp || step.last_event_at),
+    ],
+    ["Retry", formatTimestamp(step.retry_at)],
+    ["Deadline", formatTimestamp(step.deadline_at)],
+    ["Heartbeat", formatTimestamp(step.heartbeat_deadline_at)],
+    ["Requires", formatList(step.requires)],
+    ["Provides", formatList(step.provides)],
+  ].filter(([, value]) => value && value !== "None");
   return metadata.length ? (
     <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-      {metadata.map(([label, value]) => <DetailStat key={label} label={label} value={value} />)}
+      {metadata.map(([label, value]) => (
+        <DetailStat key={label} label={label} value={value} />
+      ))}
     </div>
   ) : null;
 };
 
-const ActivityList = ({ activities, fallbackMessages }: { activities: WorkflowActivity[]; fallbackMessages: string[] }) => {
-  const [filter, setFilter] = useState<ActivityFilter>('all');
-  const filters: ActivityFilter[] = ['all', 'agent', 'tool', 'system', 'artifact', 'error'];
-  const visibleActivities = activities.filter((event) => filter === 'all' || activityCategory(event) === filter);
+const ActivityList = ({
+  activities,
+  fallbackMessages,
+}: {
+  activities: WorkflowActivity[];
+  fallbackMessages: string[];
+}) => {
+  const [filter, setFilter] = useState<ActivityFilter>("all");
+  const filters: ActivityFilter[] = [
+    "all",
+    "agent",
+    "tool",
+    "system",
+    "artifact",
+    "error",
+  ];
+  const visibleActivities = activities.filter(
+    (event) => filter === "all" || activityCategory(event) === filter,
+  );
   const rows = visibleActivities.slice(-12);
 
   return (
     <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-2.5">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Recent activity</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+          Recent activity
+        </div>
         {activities.length ? (
           <div className="flex flex-wrap gap-1">
             {filters.map((item) => (
@@ -255,7 +418,7 @@ const ActivityList = ({ activities, fallbackMessages }: { activities: WorkflowAc
                 key={item}
                 type="button"
                 onClick={() => setFilter(item)}
-                className={`h-6 rounded-md border px-2 text-[11px] font-medium ${filter === item ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100'}`}
+                className={`h-6 rounded-md border px-2 text-[11px] font-medium ${filter === item ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100"}`}
               >
                 {filterLabel(item)}
               </button>
@@ -264,58 +427,103 @@ const ActivityList = ({ activities, fallbackMessages }: { activities: WorkflowAc
         ) : null}
       </div>
       <div className="space-y-1.5 font-mono text-xs text-neutral-600">
-        {rows.length ? rows.map((event, index) => {
-          const category = activityCategory(event);
-          const detailText = activityDetailText(event);
-          return (
-            <div key={eventKey(event, index)} className="rounded-md bg-white px-2 py-1.5">
-              <div className="grid grid-cols-[72px_76px_1fr] gap-2">
-                <span className="text-neutral-400">{formatClock(event.timestamp) || 'unknown'}</span>
-                <span className={`inline-flex h-5 w-fit items-center rounded border px-1.5 text-[10px] font-semibold uppercase tracking-wide ${categoryTone(category)}`}>
-                  {filterLabel(category)}
-                </span>
-                <span className="min-w-0 truncate" title={activityMessage(event)}>
-                  {event.agent_id ? `${event.agent_id}: ` : ''}{activityMessage(event)}
-                </span>
+        {rows.length
+          ? rows.map((event, index) => {
+              const category = activityCategory(event);
+              const detailText = activityDetailText(event);
+              return (
+                <div
+                  key={eventKey(event, index)}
+                  className="rounded-md bg-white px-2 py-1.5"
+                >
+                  <div className="grid grid-cols-[72px_76px_1fr] gap-2">
+                    <span className="text-neutral-400">
+                      {formatClock(event.timestamp) || "unknown"}
+                    </span>
+                    <span
+                      className={`inline-flex h-5 w-fit items-center rounded border px-1.5 text-[10px] font-semibold uppercase tracking-wide ${categoryTone(category)}`}
+                    >
+                      {filterLabel(category)}
+                    </span>
+                    <span
+                      className="min-w-0 truncate"
+                      title={activityMessage(event)}
+                    >
+                      {event.agent_id ? `${event.agent_id}: ` : ""}
+                      {activityMessage(event)}
+                    </span>
+                  </div>
+                  {event.type ||
+                  event.target ||
+                  event.result_summary ||
+                  detailText ? (
+                    <details className="mt-1 pl-[148px] text-[11px] text-neutral-500">
+                      <summary className="cursor-pointer select-none truncate">
+                        {"Details"}
+                      </summary>
+                      <div>
+                        {[event.level, event.owner_blueprint, event.type]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                      {event.result_summary ? (
+                        <div className="mt-1 whitespace-pre-wrap">
+                          {event.result_summary}
+                        </div>
+                      ) : null}
+                      {detailText ? (
+                        <pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2">
+                          {detailText}
+                        </pre>
+                      ) : null}
+                    </details>
+                  ) : null}
+                </div>
+              );
+            })
+          : fallbackMessages.slice(-4).map((message, index) => (
+              <div key={`${message}-${index}`} className="truncate">
+                {message}
               </div>
-              {(event.type || event.target || event.result_summary || detailText) ? (
-                <details className="mt-1 pl-[148px] text-[11px] text-neutral-500">
-                  <summary className="cursor-pointer select-none truncate">
-                    {'Details'}
-                  </summary>
-                  <div>{[event.level, event.owner_blueprint, event.type].filter(Boolean).join(' · ')}</div>
-                  {event.result_summary ? <div className="mt-1 whitespace-pre-wrap">{event.result_summary}</div> : null}
-                  {detailText ? <pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2">{detailText}</pre> : null}
-                </details>
-              ) : null}
-            </div>
-          );
-        }) : fallbackMessages.slice(-4).map((message, index) => (
-          <div key={`${message}-${index}`} className="truncate">{message}</div>
-        ))}
-        {activities.length > 0 && rows.length === 0 ? <div>No activity matches this filter.</div> : null}
-        {activities.length === 0 && fallbackMessages.length === 0 ? <div>No workflow events observed yet.</div> : null}
+            ))}
+        {activities.length > 0 && rows.length === 0 ? (
+          <div>No activity matches this filter.</div>
+        ) : null}
+        {activities.length === 0 && fallbackMessages.length === 0 ? (
+          <div>No workflow events observed yet.</div>
+        ) : null}
       </div>
     </div>
   );
 };
 
-export function WorkflowProgressPanel({ progress, details, webUi, showFailurePanel = true, streamState = 'connecting', streamError = null, onRetryStream }: WorkflowProgressPanelProps) {
+export function WorkflowProgressPanel({
+  progress,
+  details,
+  webUi,
+  showFailurePanel = true,
+  streamState = "connecting",
+  streamError = null,
+  onRetryStream,
+}: WorkflowProgressPanelProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'graph'>('list');
+  const [viewMode, setViewMode] = useState<"list" | "graph">("list");
 
   if (!progress) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-white p-6">
-        <div className="max-w-sm space-y-2 text-center" role={streamState === 'disconnected' ? 'alert' : 'status'}>
+        <div
+          className="max-w-sm space-y-2 text-center"
+          role={streamState === "disconnected" ? "alert" : "status"}
+        >
           <div className="font-mono text-xs text-neutral-500">
-            {streamState === 'disconnected'
-              ? (streamError || 'Workflow progress stream disconnected.')
-              : streamState === 'stale'
-                ? 'Workflow progress updates are stale. Waiting to reconnect…'
-                : 'Waiting for public v2 workflow progress…'}
+            {streamState === "disconnected"
+              ? streamError || "Workflow progress stream disconnected."
+              : streamState === "stale"
+                ? "Workflow progress updates are stale. Waiting to reconnect…"
+                : "Waiting for public v2 workflow progress…"}
           </div>
-          {streamState === 'disconnected' && onRetryStream ? (
+          {streamState === "disconnected" && onRetryStream ? (
             <button
               type="button"
               onClick={onRetryStream}
@@ -330,28 +538,62 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
   }
 
   const workflowAgents = topLevelAgents(progress);
-  const currentStep = progress.current_step || progress.steps.find((step) => step.current) || progress.steps[0];
-  const effectiveSelectedStepId = selectedStepId && progress.steps.some((step, index) => stepMatchesId(step, index, selectedStepId)) ? selectedStepId : null;
+  const currentStep =
+    progress.current_step ||
+    progress.steps.find((step) => step.current) ||
+    progress.steps[0];
+  const effectiveSelectedStepId =
+    selectedStepId &&
+    progress.steps.some((step, index) =>
+      stepMatchesId(step, index, selectedStepId),
+    )
+      ? selectedStepId
+      : null;
   const selectedStep = effectiveSelectedStepId
-    ? progress.steps.find((step, index) => stepMatchesId(step, index, effectiveSelectedStepId)) || (currentStep?.id === effectiveSelectedStepId ? currentStep : undefined)
+    ? progress.steps.find((step, index) =>
+        stepMatchesId(step, index, effectiveSelectedStepId),
+      ) ||
+      (currentStep?.id === effectiveSelectedStepId ? currentStep : undefined)
     : undefined;
-  const currentStepIds = new Set(uniqueStrings([
-    ...(progress.current_step_ids?.length ? progress.current_step_ids : []),
-    progress.current_step_id || '',
-    currentStep?.id || '',
-    ...progress.steps.flatMap((step, index) => step.current ? stepAssociationIds(step, index) : []),
-  ]));
+  const currentStepIds = new Set(
+    uniqueStrings([
+      ...(progress.current_step_ids?.length ? progress.current_step_ids : []),
+      progress.current_step_id || "",
+      currentStep?.id || "",
+      ...progress.steps.flatMap((step, index) =>
+        step.current ? stepAssociationIds(step, index) : [],
+      ),
+    ]),
+  );
   const activeSteps = currentStepIds.size
     ? progress.steps
-        .filter((step, index) => stepAssociationIds(step, index).some((id) => currentStepIds.has(id)))
-        .map((step) => currentStep?.id === step.id && (currentStep.agents || []).length ? currentStep : step)
-    : (currentStep ? [currentStep] : []);
+        .filter((step, index) =>
+          stepAssociationIds(step, index).some((id) => currentStepIds.has(id)),
+        )
+        .map((step) =>
+          currentStep?.id === step.id && (currentStep.agents || []).length
+            ? currentStep
+            : step,
+        )
+    : currentStep
+      ? [currentStep]
+      : [];
   const detailSteps = selectedStep ? [selectedStep] : activeSteps;
   const stepAgents = detailSteps.flatMap((step) => step.agents || []);
-  const detailStepIds = new Set(detailSteps.flatMap((step, index) => stepAssociationIds(step, index)));
-  const matchingWorkflowAgents = workflowAgents.filter((agent) => agentStepIds(agent).some((id) => detailStepIds.has(id)));
-  const hasWorkflowAgentStepIds = workflowAgents.some((agent) => agentStepIds(agent).length > 0);
-  const selectedStepsAreActive = detailSteps.some((step) => step.current || ['running', 'active'].includes(String(step.status || '').toLowerCase()));
+  const detailStepIds = new Set(
+    detailSteps.flatMap((step, index) => stepAssociationIds(step, index)),
+  );
+  const matchingWorkflowAgents = workflowAgents.filter((agent) =>
+    agentStepIds(agent).some((id) => detailStepIds.has(id)),
+  );
+  const hasWorkflowAgentStepIds = workflowAgents.some(
+    (agent) => agentStepIds(agent).length > 0,
+  );
+  const selectedStepsAreActive = detailSteps.some(
+    (step) =>
+      step.current ||
+      ["running", "active"].includes(String(step.status || "").toLowerCase()),
+  );
   const agents = stepAgents.length
     ? stepAgents
     : matchingWorkflowAgents.length
@@ -360,232 +602,385 @@ export function WorkflowProgressPanel({ progress, details, webUi, showFailurePan
         ? workflowAgents
         : [];
   const primaryStep = selectedStep || currentStep;
-  const visibleFailure = progress.failure || primaryStep?.failure || agents.find((agent) => agent.failure)?.failure;
+  const visibleFailure =
+    progress.failure ||
+    primaryStep?.failure ||
+    agents.find((agent) => agent.failure)?.failure;
   const failureArtifacts = artifactsFromDetails(details);
-  const activityEvents = uniqueActivities(detailSteps.flatMap((step) => step.recent_events || []))
-    .sort((left, right) => String(left.timestamp || '').localeCompare(String(right.timestamp || '')));
+  const activityEvents = uniqueActivities(
+    detailSteps.flatMap((step) => step.recent_events || []),
+  ).sort((left, right) =>
+    String(left.timestamp || "").localeCompare(String(right.timestamp || "")),
+  );
   const stepTitle = selectedStep
     ? selectedStep.label
     : activeSteps.length > 1
       ? `${activeSteps.length} active steps`
-      : (currentStep?.label || 'Agents');
+      : currentStep?.label || "Agents";
   const stepSubtitle = selectedStep
-    ? (selectedStep.goal || selectedStep.activity_summary || selectedStep.id || '')
+    ? selectedStep.goal ||
+      selectedStep.activity_summary ||
+      selectedStep.id ||
+      ""
     : activeSteps.length > 1
-      ? activeSteps.map((step) => step.label).join(' / ')
-      : (currentStep?.goal || currentStep?.activity_summary || '');
-  const detailStatus = selectedStep?.status || currentStep?.status || progress.status;
+      ? activeSteps.map((step) => step.label).join(" / ")
+      : currentStep?.goal || currentStep?.activity_summary || "";
+  const detailStatus =
+    selectedStep?.status || currentStep?.status || progress.status;
   const stepCounts = workflowStepCounts(progress);
-  const serviceWorkflow = progress.workflow_kind === 'service';
-  const workflowTotal = serviceWorkflow ? progress.agent_count.total : stepCounts.total;
-  const workflowDone = serviceWorkflow ? progress.agent_count.done : stepCounts.done;
-  const workflowRunning = serviceWorkflow ? progress.agent_count.running : stepCounts.running;
-  const workflowFailed = serviceWorkflow ? progress.agent_count.failed : stepCounts.failed;
-  const monitorActivity = primaryStep?.activity_summary
-    || primaryStep?.status_reason
-    || agents.find((agent) => agent.activity_summary)?.activity_summary
-    || agents.find((agent) => agent.status_reason)?.status_reason
-    || agents.find((agent) => agent.working_on)?.working_on
-    || '';
-  const workflowLabel = progress.name || progress.workflow_id || 'Workflow';
-  const currentLabel = primaryStep?.label || progress.current_step_id || 'None';
+  const serviceWorkflow = progress.workflow_kind === "service";
+  const workflowTotal = serviceWorkflow
+    ? progress.agent_count.total
+    : stepCounts.total;
+  const workflowDone = serviceWorkflow
+    ? progress.agent_count.done
+    : stepCounts.done;
+  const workflowRunning = serviceWorkflow
+    ? progress.agent_count.running
+    : stepCounts.running;
+  const workflowFailed = serviceWorkflow
+    ? progress.agent_count.failed
+    : stepCounts.failed;
+  const monitorActivity =
+    primaryStep?.activity_summary ||
+    primaryStep?.status_reason ||
+    agents.find((agent) => agent.activity_summary)?.activity_summary ||
+    agents.find((agent) => agent.status_reason)?.status_reason ||
+    agents.find((agent) => agent.working_on)?.working_on ||
+    "";
+  const workflowLabel = progress.name || progress.workflow_id || "Workflow";
+  const currentLabel = primaryStep?.label || progress.current_step_id || "None";
 
   return (
     <div className="absolute inset-0 overflow-auto bg-white font-sans">
       <section className="min-w-0 p-3">
-          <div className="mb-3 border-b border-neutral-200 pb-3">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0">
-                <div className="truncate text-xs font-semibold text-neutral-950">{workflowLabel}</div>
-                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-500">
-                  <span>Current: <strong className="font-medium text-neutral-700">{currentLabel}</strong></span>
-                  <span className={`capitalize ${statusTone(progress.status)}`}>{progress.status || 'Not reported'}</span>
-                  {progress.progress_source ? <span>Source: {progress.progress_source}</span> : null}
-                  {webUi ? (
-                    <span>
-                      Web UI:{' '}
-                      <a
-                        className="font-medium text-neutral-950 underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-950"
-                        href={webUi.href || webUi.url}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                      >
-                        {webUi.title}
-                      </a>
-                    </span>
-                  ) : null}
-                </div>
+        <div className="mb-3 border-b border-neutral-200 pb-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0">
+              <div className="truncate text-xs font-semibold text-neutral-950">
+                {workflowLabel}
               </div>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
-                <MonitorStat label="Done" value={`${workflowDone}/${workflowTotal}`} />
-                <MonitorStat label="Running" value={workflowRunning} tone={workflowRunning ? 'text-sky-700' : undefined} />
-                <MonitorStat label="Failed" value={workflowFailed} tone={workflowFailed ? 'text-red-700' : undefined} />
-                <MonitorStat label="Elapsed" value={formatElapsed(progress.elapsed_seconds || 0)} />
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-500">
+                <span>
+                  Current:{" "}
+                  <strong className="font-medium text-neutral-700">
+                    {currentLabel}
+                  </strong>
+                </span>
+                <span className={`capitalize ${statusTone(progress.status)}`}>
+                  {progress.status || "Not reported"}
+                </span>
+                {progress.progress_source ? (
+                  <span>Source: {progress.progress_source}</span>
+                ) : null}
+                {webUi ? (
+                  <span>
+                    Web UI:{" "}
+                    <a
+                      className="font-medium text-neutral-950 underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-950"
+                      href={webUi.href || webUi.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                    >
+                      {webUi.title}
+                    </a>
+                  </span>
+                ) : null}
               </div>
             </div>
-            {monitorActivity ? (
-              <div className="mt-2 truncate rounded-md bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-600" title={monitorActivity}>
-                {monitorActivity}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+              <MonitorStat
+                label="Done"
+                value={`${workflowDone}/${workflowTotal}`}
+              />
+              <MonitorStat
+                label="Running"
+                value={workflowRunning}
+                tone={workflowRunning ? "text-sky-700" : undefined}
+              />
+              <MonitorStat
+                label="Failed"
+                value={workflowFailed}
+                tone={workflowFailed ? "text-red-700" : undefined}
+              />
+              <MonitorStat
+                label="Elapsed"
+                value={formatElapsed(progress.elapsed_seconds || 0)}
+              />
+            </div>
+          </div>
+          {monitorActivity ? (
+            <div
+              className="mt-2 truncate rounded-md bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-600"
+              title={monitorActivity}
+            >
+              {monitorActivity}
+            </div>
+          ) : null}
+        </div>
+        {showFailurePanel && visibleFailure ? (
+          <div className="mb-3">
+            <FailurePanel
+              failure={visibleFailure}
+              title={progress.failure ? "Job Failure" : "Step Failure"}
+              artifacts={failureArtifacts}
+            />
+          </div>
+        ) : null}
+        <div className="mb-3 flex justify-end">
+          <div
+            className="inline-flex overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm"
+            role="group"
+            aria-label="Workflow display mode"
+          >
+            <button
+              type="button"
+              aria-pressed={viewMode === "list"}
+              onClick={() => setViewMode("list")}
+              className={`inline-flex h-8 items-center gap-1.5 border-r border-neutral-200 px-3 text-xs font-medium ${viewMode === "list" ? "bg-neutral-950 text-white" : "text-neutral-600 hover:bg-neutral-50"}`}
+            >
+              <ListTree className="h-3.5 w-3.5" />
+              List
+            </button>
+            <button
+              type="button"
+              aria-pressed={viewMode === "graph"}
+              onClick={() => setViewMode("graph")}
+              className={`inline-flex h-8 items-center gap-1.5 px-3 text-xs font-medium ${viewMode === "graph" ? "bg-neutral-950 text-white" : "text-neutral-600 hover:bg-neutral-50"}`}
+            >
+              <Workflow className="h-3.5 w-3.5" />
+              Graph
+            </button>
+          </div>
+        </div>
+        {viewMode === "graph" ? (
+          <WorkflowTopologyGraph
+            progress={progress}
+            selectedStepId={effectiveSelectedStepId}
+            onSelectStep={setSelectedStepId}
+          />
+        ) : (
+          <div className="mb-3 grid overflow-hidden rounded-lg border border-neutral-200 bg-white lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
+            <aside
+              className="border-b border-neutral-200 bg-neutral-50 p-2.5 lg:border-b-0 lg:border-r"
+              aria-label="Workflow steps"
+            >
+              <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_3.5rem] gap-2 px-2 text-[11px] font-medium text-neutral-500">
+                <span>Steps</span>
+                <span className="text-right">Work</span>
+              </div>
+              <div className="max-h-[28rem] space-y-1 overflow-auto">
+                {progress.steps.map((step, index) => {
+                  const focused = Boolean(
+                    primaryStep && stepMatchesId(step, index, primaryStep.id),
+                  );
+                  // Step ids are fuzzy-matched aliases and may repeat (e.g.
+                  // synthesized `step-N` fallbacks), so the React key mixes
+                  // the canonical id with position for stable focus.
+                  const stepKey = `${step.id || "step"}#${index}`;
+                  return (
+                    <button
+                      key={stepKey}
+                      type="button"
+                      aria-pressed={focused}
+                      aria-label={`${index + 1}. ${step.label} ${step.done_count}/${step.total_count}`}
+                      onClick={() => setSelectedStepId(step.id)}
+                      className={`grid w-full grid-cols-[1rem_minmax(0,1fr)_3.5rem] items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition ${focused ? "bg-white shadow-sm ring-1 ring-neutral-200" : "hover:bg-white/80"}`}
+                    >
+                      <StatusGlyph
+                        status={step.status}
+                        current={step.current}
+                      />
+                      <span
+                        className={`truncate font-medium ${statusTone(step.status)}`}
+                      >
+                        {index + 1}. {step.label}
+                      </span>
+                      <span className="text-right font-mono text-[11px] tabular-nums text-neutral-600">
+                        {step.done_count}/{step.total_count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </aside>
+            <div className="min-w-0 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate text-base font-semibold text-neutral-950">
+                    {primaryStep?.label || "Workflow step"}
+                  </div>
+                  <div className="mt-1 text-sm leading-5 text-neutral-600">
+                    {primaryStep?.goal ||
+                      primaryStep?.activity_summary ||
+                      progress.description ||
+                      "Runtime activity is being monitored."}
+                  </div>
+                </div>
+                <div
+                  className={`inline-flex items-center gap-1.5 text-xs font-medium capitalize ${statusTone(primaryStep?.status || progress.status)}`}
+                >
+                  <StatusGlyph
+                    status={primaryStep?.status || progress.status}
+                    current={primaryStep?.current}
+                  />
+                  {primaryStep?.status || progress.status || "Not reported"}
+                </div>
+              </div>
+              {primaryStep ? (
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <DetailStat
+                    label="Done"
+                    value={`${primaryStep.done_count}/${primaryStep.total_count}`}
+                  />
+                  <DetailStat
+                    label="Running"
+                    value={primaryStep.running_count}
+                    tone={
+                      primaryStep.running_count ? "text-sky-700" : undefined
+                    }
+                  />
+                  <DetailStat
+                    label="Failed"
+                    value={primaryStep.failed_count}
+                    tone={primaryStep.failed_count ? "text-red-700" : undefined}
+                  />
+                  <DetailStat
+                    label="Elapsed"
+                    value={formatElapsed(primaryStep.elapsed_seconds || 0)}
+                  />
+                </div>
+              ) : null}
+              {monitorActivity ? (
+                <div className="mt-3 rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
+                  {monitorActivity}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        )}
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="truncate text-xs font-semibold text-neutral-950">
+              {stepTitle} · {agents.length} agents
+            </div>
+            {stepSubtitle ? (
+              <div className="truncate text-xs text-neutral-500">
+                {stepSubtitle}
               </div>
             ) : null}
           </div>
-          {showFailurePanel && visibleFailure ? (
-            <div className="mb-3">
-              <FailurePanel failure={visibleFailure} title={progress.failure ? 'Job Failure' : 'Step Failure'} artifacts={failureArtifacts} />
-            </div>
-          ) : null}
-          <div className="mb-3 flex justify-end">
-            <div className="inline-flex overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm" role="group" aria-label="Workflow display mode">
+          <div className="flex items-center gap-2">
+            {selectedStep ? (
               <button
                 type="button"
-                aria-pressed={viewMode === 'list'}
-                onClick={() => setViewMode('list')}
-                className={`inline-flex h-8 items-center gap-1.5 border-r border-neutral-200 px-3 text-xs font-medium ${viewMode === 'list' ? 'bg-neutral-950 text-white' : 'text-neutral-600 hover:bg-neutral-50'}`}
+                onClick={() => setSelectedStepId(null)}
+                className="inline-flex h-7 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2 text-[11px] font-medium text-neutral-700 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2"
               >
-                <ListTree className="h-3.5 w-3.5" />
-                List
+                <Activity className="h-3.5 w-3.5" />
+                Show active steps
               </button>
-              <button
-                type="button"
-                aria-pressed={viewMode === 'graph'}
-                onClick={() => setViewMode('graph')}
-                className={`inline-flex h-8 items-center gap-1.5 px-3 text-xs font-medium ${viewMode === 'graph' ? 'bg-neutral-950 text-white' : 'text-neutral-600 hover:bg-neutral-50'}`}
-              >
-                <Workflow className="h-3.5 w-3.5" />
-                Graph
-              </button>
+            ) : null}
+            <div
+              className={`text-[11px] font-medium capitalize ${statusTone(detailStatus)}`}
+            >
+              {detailStatus || "Not reported"}
             </div>
           </div>
-          {viewMode === 'graph' ? (
-            <WorkflowTopologyGraph
-              progress={progress}
-              selectedStepId={effectiveSelectedStepId}
-              onSelectStep={setSelectedStepId}
-            />
-          ) : (
-            <div className="mb-3 grid overflow-hidden rounded-lg border border-neutral-200 bg-white lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
-              <aside className="border-b border-neutral-200 bg-neutral-50 p-2.5 lg:border-b-0 lg:border-r" aria-label="Workflow steps">
-                <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_3.5rem] gap-2 px-2 text-[11px] font-medium text-neutral-500">
-                  <span>Steps</span>
-                  <span className="text-right">Work</span>
-                </div>
-                <div className="max-h-[28rem] space-y-1 overflow-auto">
-                  {progress.steps.map((step, index) => {
-                    const focused = Boolean(primaryStep && stepMatchesId(step, index, primaryStep.id));
-                    // Step ids are fuzzy-matched aliases and may repeat (e.g.
-                    // synthesized `step-N` fallbacks), so the React key mixes
-                    // the canonical id with position for stable focus.
-                    const stepKey = `${step.id || 'step'}#${index}`;
-                    return (
-                      <button
-                        key={stepKey}
-                        type="button"
-                        aria-pressed={focused}
-                        aria-label={`${index + 1}. ${step.label} ${step.done_count}/${step.total_count}`}
-                        onClick={() => setSelectedStepId(step.id)}
-                        className={`grid w-full grid-cols-[1rem_minmax(0,1fr)_3.5rem] items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition ${focused ? 'bg-white shadow-sm ring-1 ring-neutral-200' : 'hover:bg-white/80'}`}
-                      >
-                        <StatusGlyph status={step.status} current={step.current} />
-                        <span className={`truncate font-medium ${statusTone(step.status)}`}>{index + 1}. {step.label}</span>
-                        <span className="text-right font-mono text-[11px] tabular-nums text-neutral-600">{step.done_count}/{step.total_count}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </aside>
-              <div className="min-w-0 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-base font-semibold text-neutral-950">{primaryStep?.label || 'Workflow step'}</div>
-                    <div className="mt-1 text-sm leading-5 text-neutral-600">
-                      {primaryStep?.goal || primaryStep?.activity_summary || progress.description || 'Runtime activity is being monitored.'}
-                    </div>
-                  </div>
-                  <div className={`inline-flex items-center gap-1.5 text-xs font-medium capitalize ${statusTone(primaryStep?.status || progress.status)}`}>
-                    <StatusGlyph status={primaryStep?.status || progress.status} current={primaryStep?.current} />
-                    {primaryStep?.status || progress.status || 'Not reported'}
-                  </div>
-                </div>
-                {primaryStep ? (
-                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <DetailStat label="Done" value={`${primaryStep.done_count}/${primaryStep.total_count}`} />
-                    <DetailStat label="Running" value={primaryStep.running_count} tone={primaryStep.running_count ? 'text-sky-700' : undefined} />
-                    <DetailStat label="Failed" value={primaryStep.failed_count} tone={primaryStep.failed_count ? 'text-red-700' : undefined} />
-                    <DetailStat label="Elapsed" value={formatElapsed(primaryStep.elapsed_seconds || 0)} />
-                  </div>
+        </div>
+
+        {selectedStep ? (
+          <div className="mb-3 rounded-md border border-neutral-200 bg-neutral-50 p-2.5">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+              <DetailStat
+                label="Done"
+                value={`${selectedStep.done_count}/${selectedStep.total_count}`}
+              />
+              <DetailStat
+                label="Running"
+                value={selectedStep.running_count}
+                tone={selectedStep.running_count ? "text-sky-700" : undefined}
+              />
+              <DetailStat label="Idle" value={selectedStep.idle_count} />
+              <DetailStat
+                label="Failed"
+                value={selectedStep.failed_count}
+                tone={selectedStep.failed_count ? "text-red-700" : undefined}
+              />
+              <DetailStat
+                label="Elapsed"
+                value={formatElapsed(selectedStep.elapsed_seconds || 0)}
+              />
+            </div>
+            {selectedStep.status_reason ||
+            selectedStep.activity_summary ||
+            selectedStep.attempt ||
+            selectedStep.attempt_id ? (
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-600">
+                {selectedStep.status_reason ? (
+                  <span className="rounded-md bg-white px-2 py-1">
+                    {selectedStep.status_reason}
+                  </span>
                 ) : null}
-                {monitorActivity ? (
-                  <div className="mt-3 rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">{monitorActivity}</div>
+                {selectedStep.activity_summary ? (
+                  <span className="rounded-md bg-white px-2 py-1">
+                    {selectedStep.activity_summary}
+                  </span>
+                ) : null}
+                {selectedStep.attempt ? (
+                  <span className="rounded-md bg-white px-2 py-1">
+                    Attempt {selectedStep.attempt}
+                  </span>
+                ) : null}
+                {selectedStep.attempt_id ? (
+                  <span className="rounded-md bg-white px-2 py-1 font-mono">
+                    {selectedStep.attempt_id}
+                  </span>
                 ) : null}
               </div>
-            </div>
-          )}
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="truncate text-xs font-semibold text-neutral-950">
-                {stepTitle} · {agents.length} agents
-              </div>
-              {stepSubtitle ? <div className="truncate text-xs text-neutral-500">{stepSubtitle}</div> : null}
-            </div>
-            <div className="flex items-center gap-2">
-              {selectedStep ? (
-                <button
-                  type="button"
-                  onClick={() => setSelectedStepId(null)}
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2 text-[11px] font-medium text-neutral-700 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2"
-                >
-                  <Activity className="h-3.5 w-3.5" />
-                  Show active steps
-                </button>
-              ) : null}
-              <div className={`text-[11px] font-medium capitalize ${statusTone(detailStatus)}`}>{detailStatus || 'Not reported'}</div>
-            </div>
+            ) : null}
+            <StepMetadata step={selectedStep} />
           </div>
+        ) : null}
 
-          {selectedStep ? (
-            <div className="mb-3 rounded-md border border-neutral-200 bg-neutral-50 p-2.5">
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-                <DetailStat label="Done" value={`${selectedStep.done_count}/${selectedStep.total_count}`} />
-                <DetailStat label="Running" value={selectedStep.running_count} tone={selectedStep.running_count ? 'text-sky-700' : undefined} />
-                <DetailStat label="Idle" value={selectedStep.idle_count} />
-                <DetailStat label="Failed" value={selectedStep.failed_count} tone={selectedStep.failed_count ? 'text-red-700' : undefined} />
-                <DetailStat label="Elapsed" value={formatElapsed(selectedStep.elapsed_seconds || 0)} />
-              </div>
-              {(selectedStep.status_reason || selectedStep.activity_summary || selectedStep.attempt || selectedStep.attempt_id) ? (
-                <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-600">
-                  {selectedStep.status_reason ? <span className="rounded-md bg-white px-2 py-1">{selectedStep.status_reason}</span> : null}
-                  {selectedStep.activity_summary ? <span className="rounded-md bg-white px-2 py-1">{selectedStep.activity_summary}</span> : null}
-                  {selectedStep.attempt ? <span className="rounded-md bg-white px-2 py-1">Attempt {selectedStep.attempt}</span> : null}
-                  {selectedStep.attempt_id ? <span className="rounded-md bg-white px-2 py-1 font-mono">{selectedStep.attempt_id}</span> : null}
-                </div>
-              ) : null}
-              <StepMetadata step={selectedStep} />
-            </div>
-          ) : null}
-
-          <div className="overflow-hidden rounded-md border border-neutral-200">
-            <table className="w-full min-w-[900px] table-fixed text-left">
-              <thead className="bg-neutral-50 text-[11px] text-neutral-500">
+        <div className="overflow-hidden rounded-md border border-neutral-200">
+          <table className="w-full min-w-[900px] table-fixed text-left">
+            <thead className="bg-neutral-50 text-[11px] text-neutral-500">
+              <tr>
+                <th className="px-3 py-2 font-medium">Agent</th>
+                <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium">Working on</th>
+                <th className="px-3 py-2 font-medium">Runtime</th>
+                <th className="px-3 py-2 font-medium">Timing</th>
+                <th className="px-3 py-2 font-medium">Progress</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agents.length ? (
+                agents.map((agent, index) => (
+                  <AgentRow
+                    key={`${agent.id || "agent"}-${index}`}
+                    agent={agent}
+                  />
+                ))
+              ) : (
                 <tr>
-                  <th className="px-3 py-2 font-medium">Agent</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium">Working on</th>
-                  <th className="px-3 py-2 font-medium">Runtime</th>
-                  <th className="px-3 py-2 font-medium">Timing</th>
-                  <th className="px-3 py-2 font-medium">Progress</th>
+                  <td
+                    className="px-3 py-6 text-xs text-neutral-500"
+                    colSpan={6}
+                  >
+                    No agents reported for this step yet.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {agents.length ? agents.map((agent, index) => <AgentRow key={`${agent.id || 'agent'}-${index}`} agent={agent} />) : (
-                  <tr>
-                    <td className="px-3 py-6 text-xs text-neutral-500" colSpan={6}>No agents reported for this step yet.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-          <ActivityList activities={activityEvents} fallbackMessages={progress.messages || []} />
+        <ActivityList
+          activities={activityEvents}
+          fallbackMessages={progress.messages || []}
+        />
       </section>
     </div>
   );

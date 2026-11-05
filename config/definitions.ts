@@ -1,5 +1,11 @@
-export type ConfigEnvironment = 'dev' | 'test' | 'production';
-export type ConfigValueType = 'string' | 'int' | 'bool' | 'list' | 'url' | 'path';
+export type ConfigEnvironment = "dev" | "test" | "production";
+export type ConfigValueType =
+  | "string"
+  | "int"
+  | "bool"
+  | "list"
+  | "url"
+  | "path";
 
 export type RawConfigValue = string | number | boolean | string[] | undefined;
 
@@ -32,73 +38,75 @@ export type AppConfig = {
   publicAppUrl: string;
 };
 
-const LOG_LEVELS = new Set(['trace', 'debug', 'info', 'warn', 'error']);
+const LOG_LEVELS = new Set(["trace", "debug", "info", "warn", "error"]);
 
 export const CONFIG_KEYS: ConfigDefinitions = {
   env: {
-    env: 'MN_ENV',
-    type: 'string',
-    defaultValue: 'dev',
+    env: "MN_ENV",
+    type: "string",
+    defaultValue: "dev",
   },
   home: {
-    env: 'MN_HOME',
-    type: 'path',
-    defaultValue: '~/.mirrorneuron',
+    env: "MN_HOME",
+    type: "path",
+    defaultValue: "~/.mirrorneuron",
   },
   logLevel: {
-    env: 'MN_LOG_LEVEL',
-    type: 'string',
-    defaultValue: 'info',
+    env: "MN_LOG_LEVEL",
+    type: "string",
+    defaultValue: "info",
   },
   apiHost: {
-    env: 'MN_API_HOST',
-    type: 'string',
-    defaultValue: 'localhost',
+    env: "MN_API_HOST",
+    type: "string",
+    defaultValue: "localhost",
   },
   apiPort: {
-    env: 'MN_API_PORT',
-    type: 'int',
+    env: "MN_API_PORT",
+    type: "int",
     defaultValue: 54001,
   },
   webUiHost: {
-    env: 'MN_WEB_UI_HOST',
-    type: 'string',
-    defaultValue: 'localhost',
+    env: "MN_WEB_UI_HOST",
+    type: "string",
+    defaultValue: "localhost",
   },
   webUiPort: {
-    env: 'MN_WEB_UI_PORT',
-    type: 'int',
+    env: "MN_WEB_UI_PORT",
+    type: "int",
     defaultValue: 55173,
   },
   webApiBaseUrl: {
-    env: 'MN_WEB_API_BASE_URL',
-    type: 'string',
-    defaultValue: '/api/v1',
+    env: "MN_WEB_API_BASE_URL",
+    type: "string",
+    defaultValue: "/api/v1",
   },
   webApiToken: {
-    env: 'MN_WEB_API_TOKEN',
-    type: 'string',
-    defaultValue: '',
+    env: "MN_WEB_API_TOKEN",
+    type: "string",
+    defaultValue: "",
     sensitive: true,
   },
   enableDebugPanel: {
-    env: 'MN_ENABLE_DEBUG_PANEL',
-    type: 'bool',
+    env: "MN_ENABLE_DEBUG_PANEL",
+    type: "bool",
     defaultValue: false,
   },
   allowedOrigins: {
-    env: 'MN_ALLOWED_ORIGINS',
-    type: 'list',
+    env: "MN_ALLOWED_ORIGINS",
+    type: "list",
     defaultValue: [],
   },
   publicAppUrl: {
-    env: 'MN_PUBLIC_APP_URL',
-    type: 'url',
-    defaultValue: '',
+    env: "MN_PUBLIC_APP_URL",
+    type: "url",
+    defaultValue: "",
   },
 };
 
-export const CONFIG_ENV_NAMES = Object.values(CONFIG_KEYS).map((definition) => definition.env);
+export const CONFIG_ENV_NAMES = Object.values(CONFIG_KEYS).map(
+  (definition) => definition.env,
+);
 export const BROWSER_CONFIG_ENV_NAMES = [
   CONFIG_KEYS.env.env,
   CONFIG_KEYS.logLevel.env,
@@ -111,21 +119,25 @@ export const BROWSER_CONFIG_ENV_NAMES = [
 export class ConfigError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'ConfigError';
+    this.name = "ConfigError";
   }
 }
 
-export function normalizeConfigEnvironment(value: RawConfigValue): ConfigEnvironment {
-  const normalized = String(value || 'dev').trim().toLowerCase();
+export function normalizeConfigEnvironment(
+  value: RawConfigValue,
+): ConfigEnvironment {
+  const normalized = String(value || "dev")
+    .trim()
+    .toLowerCase();
 
-  if (normalized === 'dev' || normalized === 'development') {
-    return 'dev';
+  if (normalized === "dev" || normalized === "development") {
+    return "dev";
   }
-  if (normalized === 'test') {
-    return 'test';
+  if (normalized === "test") {
+    return "test";
   }
-  if (normalized === 'prod' || normalized === 'production') {
-    return 'production';
+  if (normalized === "prod" || normalized === "production") {
+    return "production";
   }
 
   throw new ConfigError(
@@ -134,8 +146,8 @@ export function normalizeConfigEnvironment(value: RawConfigValue): ConfigEnviron
 }
 
 export function envFileSuffixFor(environment: ConfigEnvironment) {
-  if (environment === 'production') {
-    return 'prod';
+  if (environment === "production") {
+    return "prod";
   }
   return environment;
 }
@@ -150,13 +162,17 @@ export function createAppConfig(
     Object.entries(CONFIG_KEYS).map(([key, definition]) => {
       const appConfigKey = key as keyof AppConfig;
       const rawValue = rawConfig[definition.env];
-      const value = rawValue === undefined || rawValue === ''
-        ? definition.defaultValue
-        : rawValue;
-      const required = Boolean(definition.required) || requiredKeys.has(appConfigKey);
+      const value =
+        rawValue === undefined || rawValue === ""
+          ? definition.defaultValue
+          : rawValue;
+      const required =
+        Boolean(definition.required) || requiredKeys.has(appConfigKey);
 
-      if ((value === undefined || value === '') && required) {
-        throw new ConfigError(`Missing required config variable: ${definition.env}`);
+      if ((value === undefined || value === "") && required) {
+        throw new ConfigError(
+          `Missing required config variable: ${definition.env}`,
+        );
       }
 
       return [key, parseConfigValue(definition.env, definition.type, value)];
@@ -178,29 +194,33 @@ export function loggableConfig(config: AppConfig) {
   return Object.fromEntries(
     Object.entries(CONFIG_KEYS).map(([key, definition]) => {
       const value = config[key as keyof AppConfig];
-      return [definition.env, definition.sensitive ? '[redacted]' : value];
+      return [definition.env, definition.sensitive ? "[redacted]" : value];
     }),
   );
 }
 
-function parseConfigValue(envName: string, type: ConfigValueType, value: RawConfigValue) {
+function parseConfigValue(
+  envName: string,
+  type: ConfigValueType,
+  value: RawConfigValue,
+) {
   if (value === undefined) {
     return undefined;
   }
 
-  if (type === 'int') {
+  if (type === "int") {
     return parseInteger(envName, value);
   }
-  if (type === 'bool') {
+  if (type === "bool") {
     return parseBoolean(envName, value);
   }
-  if (type === 'list') {
+  if (type === "list") {
     return parseList(value);
   }
-  if (type === 'url') {
+  if (type === "url") {
     return parseUrl(envName, value);
   }
-  if (type === 'path') {
+  if (type === "path") {
     return String(value).trim();
   }
 
@@ -218,15 +238,15 @@ function parseInteger(envName: string, value: RawConfigValue) {
 }
 
 function parseBoolean(envName: string, value: RawConfigValue) {
-  if (typeof value === 'boolean') {
+  if (typeof value === "boolean") {
     return value;
   }
 
   const normalized = String(value).trim().toLowerCase();
-  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) {
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) {
     return true;
   }
-  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) {
+  if (["0", "false", "no", "n", "off"].includes(normalized)) {
     return false;
   }
 
@@ -239,7 +259,7 @@ function parseList(value: RawConfigValue) {
   }
 
   return String(value)
-    .split(',')
+    .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -248,11 +268,11 @@ function parseUrl(envName: string, value: RawConfigValue) {
   const trimmed = String(value).trim();
 
   if (!trimmed) {
-    return '';
+    return "";
   }
 
   try {
-    return new URL(trimmed).toString().replace(/\/+$/, '');
+    return new URL(trimmed).toString().replace(/\/+$/, "");
   } catch {
     throw new ConfigError(`Invalid URL for ${envName}: "${trimmed}"`);
   }

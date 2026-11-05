@@ -4,13 +4,17 @@ export type ConfigOverrideParseResult =
   | { ok: true; value: ConfigOverrides; count: number }
   | { ok: false; error: string };
 
-const setConfigPath = (target: ConfigOverrides, dottedPath: string, value: unknown) => {
-  const parts = dottedPath.split('.');
+const setConfigPath = (
+  target: ConfigOverrides,
+  dottedPath: string,
+  value: unknown,
+) => {
+  const parts = dottedPath.split(".");
   let cursor = target;
 
   parts.slice(0, -1).forEach((part) => {
     const current = cursor[part];
-    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
       cursor[part] = {};
     }
     cursor = cursor[part] as ConfigOverrides;
@@ -19,14 +23,16 @@ const setConfigPath = (target: ConfigOverrides, dottedPath: string, value: unkno
   cursor[parts[parts.length - 1]] = value;
 };
 
-export const parseConfigOverrideAssignments = (source: string): ConfigOverrideParseResult => {
+export const parseConfigOverrideAssignments = (
+  source: string,
+): ConfigOverrideParseResult => {
   const overrides: ConfigOverrides = {};
   let count = 0;
 
   for (const [index, assignment] of source.split(/\r?\n/).entries()) {
     if (!assignment.trim()) continue;
 
-    const separator = assignment.indexOf('=');
+    const separator = assignment.indexOf("=");
     if (separator < 0) {
       return {
         ok: false,
@@ -37,7 +43,7 @@ export const parseConfigOverrideAssignments = (source: string): ConfigOverridePa
     const rawPath = assignment.slice(0, separator);
     const rawValue = assignment.slice(separator + 1);
     const path = rawPath.trim();
-    if (!path || path.split('.').some((part) => !part)) {
+    if (!path || path.split(".").some((part) => !part)) {
       return {
         ok: false,
         error: `Line ${index + 1}: expected non-empty dotted path segments.`,

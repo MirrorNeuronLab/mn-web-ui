@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import type { z } from "zod";
 
 type StreamOptions<T> = {
   schema: z.ZodType<T>;
@@ -34,18 +34,33 @@ const handleWorkflowProgressStreamData = <T>(
   try {
     payload = JSON.parse(data);
   } catch {
-    throw new Error(`${options.validationLabel(id)} returned invalid stream data.`);
+    throw new Error(
+      `${options.validationLabel(id)} returned invalid stream data.`,
+    );
   }
 
-  let candidate = payload && typeof payload === 'object' && !Array.isArray(payload) && 'data' in payload
-    ? (payload as { data: unknown }).data
-    : payload;
+  let candidate =
+    payload &&
+    typeof payload === "object" &&
+    !Array.isArray(payload) &&
+    "data" in payload
+      ? (payload as { data: unknown }).data
+      : payload;
   // Terminal events carry a canonical Run resource, not workflow progress.
   // Retain the last public steps, counts and topology instead of replacing
   // them with the Run parser's empty defaults.
-  if (['run.completed', 'run.unavailable'].includes(eventName) && previous && typeof candidate === 'object' && candidate !== null) {
+  if (
+    ["run.completed", "run.unavailable"].includes(eventName) &&
+    previous &&
+    typeof candidate === "object" &&
+    candidate !== null
+  ) {
     const terminal = candidate as Record<string, unknown>;
-    candidate = { ...previous, status: terminal.status, ...(terminal.failure ? { failure: terminal.failure } : {}) };
+    candidate = {
+      ...previous,
+      status: terminal.status,
+      ...(terminal.failure ? { failure: terminal.failure } : {}),
+    };
   }
   const parsed = options.schema.safeParse(candidate);
   if (parsed.success) {
@@ -59,14 +74,19 @@ const handleWorkflowProgressStreamData = <T>(
     onSnapshot(parsed.data);
     return parsed.data;
   } else {
-    throw new Error(`${options.validationLabel(id)} returned invalid stream data.`);
+    throw new Error(
+      `${options.validationLabel(id)} returned invalid stream data.`,
+    );
   }
 };
 
-const delayCancellable = (delayMs: number, signal?: AbortSignal): Promise<void> => (
+const delayCancellable = (
+  delayMs: number,
+  signal?: AbortSignal,
+): Promise<void> =>
   new Promise<void>((resolve) => {
     const finish = () => {
-      signal?.removeEventListener('abort', onAbort);
+      signal?.removeEventListener("abort", onAbort);
       resolve();
     };
     const timeout = globalThis.setTimeout(finish, delayMs) as unknown as number;
@@ -80,174 +100,246 @@ const delayCancellable = (delayMs: number, signal?: AbortSignal): Promise<void> 
       finish();
       return;
     }
-    signal.addEventListener('abort', onAbort, { once: true });
-  })
-);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 
-export const createWorkflowProgressStreamer = <T>(options: StreamOptions<T>) => async (
-  id: string,
-  onSnapshot: (snapshot: T) => void,
-  signal?: AbortSignal,
-  onHeartbeat?: () => void,
-) => {
-  const maxReconnectAttempts = options.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS;
-  const maxReconnectDelayMs = options.maxReconnectDelayMs ?? DEFAULT_MAX_RECONNECT_DELAY_MS;
-  const reportError = (error: unknown) => {
-    if (signal?.aborted) return;
-    if (error instanceof Error && error.name === 'AbortError') return;
-    options.onError?.(error);
-  };
-  const headers = options.authHeader();
-  let previous: T | undefined;
-  if (typeof EventSource !== 'undefined' && Object.keys(headers).length === 0) {
-    await new Promise<void>((resolve, reject) => {
-      const source = new EventSource(options.streamUrl(id));
-      let settled = false;
-      let failures = 0;
-      const seenEventIds = new Set<string>();
-      const finish = (error?: Error) => {
-        if (settled) return;
-        settled = true;
-        source.close();
-        signal?.removeEventListener('abort', abort);
-        if (error) {
-          reportError(error);
-          reject(error);
-        } else resolve();
-      };
-      const abort = () => finish();
-      const track = (event: MessageEvent) => {
-        const messageEvent = event as MessageEvent & { lastEventId?: string };
-        try {
-          const snapshot = handleWorkflowProgressStreamData(options, id, messageEvent.data, seenEventIds, messageEvent.lastEventId || undefined, onSnapshot, event.type, previous);
-          if (snapshot) {
-            previous = snapshot;
-            failures = 0;
-          }
-        } catch (error) {
-          finish(error instanceof Error ? error : new Error('Invalid workflow progress.'));
-        }
-      };
-      source.addEventListener('snapshot', track as EventListener);
-      source.addEventListener('run.snapshot', track as EventListener);
-      source.addEventListener('run.completed', (event) => {
-        track(event as MessageEvent);
-        finish();
-      });
-      source.addEventListener('run.unavailable', (event) => {
-        track(event as MessageEvent);
-        finish(new Error('Runtime control is unavailable. Reconnect the runtime and try again.'));
-      });
-      source.addEventListener('heartbeat', () => {
-        onHeartbeat?.();
-      });
-      source.onerror = () => {
-        if (signal?.aborted) {
-          finish();
-          return;
-        }
-        // Access errors close native EventSource permanently; there will be
-        // no second error event to exhaust the reconnect counter.
-        if (source.readyState === EventSource.CLOSED) {
-          finish(new Error('Workflow progress is unavailable. Check the runtime connection and access settings.'));
-          return;
-        }
-        failures += 1;
-        if (failures > maxReconnectAttempts) {
-          finish(new Error(`${options.validationLabel(id)} reconnect limit reached (${maxReconnectAttempts}).`));
-        }
-        // Otherwise the native EventSource keeps its own bounded retry loop.
-      };
-      signal?.addEventListener('abort', abort, { once: true });
-      if (signal?.aborted) abort();
-    });
-    return;
-  }
-
-  let lastEventId = '';
-  const seenEventIds = new Set<string>();
-  let reconnectDelayMs = 250;
-  let attempts = 0;
-  while (!signal?.aborted) {
-    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-    try {
-      const response = await fetch(options.streamUrl(id), {
-        headers: lastEventId ? { ...headers, 'Last-Event-ID': lastEventId } : headers,
-        signal,
-      });
-      if (!response.ok || !response.body) {
-        if ([400, 401, 403, 404].includes(response.status)) {
-          throw Object.assign(new Error(`Workflow progress is unavailable (HTTP ${response.status}). Check the runtime connection and access settings.`), { terminal: true });
-        }
-        throw new Error(`workflow progress stream failed: ${response.status}`);
-      }
-      reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let completed = false;
-      while (!signal?.aborted) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const chunks = buffer.split(/\r?\n\r?\n/);
-        buffer = chunks.pop() || '';
-        for (const chunk of chunks) {
-          const lines = chunk.split(/\r?\n/);
-          const eventId = lines.find((line) => line.startsWith('id:'))?.slice(3).trim();
-          if (eventId) lastEventId = eventId;
-          if (lines.every((line) => line.startsWith(':'))) {
-            onHeartbeat?.();
-            continue;
-          }
-          const eventName = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message';
-          const data = lines
-            .filter((line) => line.startsWith('data:'))
-            .map((line) => line.slice(5).trimStart())
-            .join('\n');
-          if (eventName === 'heartbeat') {
-            onHeartbeat?.();
-            continue;
-          }
-          if (!['snapshot', 'run.snapshot', 'run.completed', 'run.unavailable'].includes(eventName) || !data) continue;
-          const snapshot = handleWorkflowProgressStreamData(options, id, data, seenEventIds, eventId, onSnapshot, eventName, previous);
-          if (snapshot) {
-            previous = snapshot;
-            attempts = 0;
-            reconnectDelayMs = 250;
-          }
-          if (eventName === 'run.unavailable') throw Object.assign(new Error('Runtime control is unavailable. Reconnect the runtime and try again.'), { terminal: true });
-          if (eventName === 'run.completed') {
-            completed = true;
-            break;
-          }
-        }
-        if (completed) break;
-      }
-      if (completed) return;
-      throw new Error('Workflow progress stream ended before completion.');
-    } catch (error) {
+export const createWorkflowProgressStreamer =
+  <T>(options: StreamOptions<T>) =>
+  async (
+    id: string,
+    onSnapshot: (snapshot: T) => void,
+    signal?: AbortSignal,
+    onHeartbeat?: () => void,
+  ) => {
+    const maxReconnectAttempts =
+      options.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS;
+    const maxReconnectDelayMs =
+      options.maxReconnectDelayMs ?? DEFAULT_MAX_RECONNECT_DELAY_MS;
+    const reportError = (error: unknown) => {
       if (signal?.aborted) return;
-      if (error instanceof Error && error.name === 'AbortError') return;
-      attempts += 1;
-      reportError(error);
-      if (error && typeof error === 'object' && 'terminal' in error) throw error;
-      if (attempts > maxReconnectAttempts) {
-        throw error;
-      }
-    } finally {
-      try {
-        await reader?.cancel();
-      } catch {
-        // Reader may already be closed; cleanup is best-effort.
-      }
-      try {
-        reader?.releaseLock();
-      } catch {
-        // Lock may already be released.
-      }
+      if (error instanceof Error && error.name === "AbortError") return;
+      options.onError?.(error);
+    };
+    const headers = options.authHeader();
+    let previous: T | undefined;
+    if (
+      typeof EventSource !== "undefined" &&
+      Object.keys(headers).length === 0
+    ) {
+      await new Promise<void>((resolve, reject) => {
+        const source = new EventSource(options.streamUrl(id));
+        let settled = false;
+        let failures = 0;
+        const seenEventIds = new Set<string>();
+        const finish = (error?: Error) => {
+          if (settled) return;
+          settled = true;
+          source.close();
+          signal?.removeEventListener("abort", abort);
+          if (error) {
+            reportError(error);
+            reject(error);
+          } else resolve();
+        };
+        const abort = () => finish();
+        const track = (event: MessageEvent) => {
+          const messageEvent = event as MessageEvent & { lastEventId?: string };
+          try {
+            const snapshot = handleWorkflowProgressStreamData(
+              options,
+              id,
+              messageEvent.data,
+              seenEventIds,
+              messageEvent.lastEventId || undefined,
+              onSnapshot,
+              event.type,
+              previous,
+            );
+            if (snapshot) {
+              previous = snapshot;
+              failures = 0;
+            }
+          } catch (error) {
+            finish(
+              error instanceof Error
+                ? error
+                : new Error("Invalid workflow progress."),
+            );
+          }
+        };
+        source.addEventListener("snapshot", track as EventListener);
+        source.addEventListener("run.snapshot", track as EventListener);
+        source.addEventListener("run.completed", (event) => {
+          track(event as MessageEvent);
+          finish();
+        });
+        source.addEventListener("run.unavailable", (event) => {
+          track(event as MessageEvent);
+          finish(
+            new Error(
+              "Runtime control is unavailable. Reconnect the runtime and try again.",
+            ),
+          );
+        });
+        source.addEventListener("heartbeat", () => {
+          onHeartbeat?.();
+        });
+        source.onerror = () => {
+          if (signal?.aborted) {
+            finish();
+            return;
+          }
+          // Access errors close native EventSource permanently; there will be
+          // no second error event to exhaust the reconnect counter.
+          if (source.readyState === EventSource.CLOSED) {
+            finish(
+              new Error(
+                "Workflow progress is unavailable. Check the runtime connection and access settings.",
+              ),
+            );
+            return;
+          }
+          failures += 1;
+          if (failures > maxReconnectAttempts) {
+            finish(
+              new Error(
+                `${options.validationLabel(id)} reconnect limit reached (${maxReconnectAttempts}).`,
+              ),
+            );
+          }
+          // Otherwise the native EventSource keeps its own bounded retry loop.
+        };
+        signal?.addEventListener("abort", abort, { once: true });
+        if (signal?.aborted) abort();
+      });
+      return;
     }
-    if (signal?.aborted) return;
-    await delayCancellable(reconnectDelayMs, signal);
-    reconnectDelayMs = Math.min(reconnectDelayMs * 2, maxReconnectDelayMs);
-  }
-};
+
+    let lastEventId = "";
+    const seenEventIds = new Set<string>();
+    let reconnectDelayMs = 250;
+    let attempts = 0;
+    while (!signal?.aborted) {
+      let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+      try {
+        const response = await fetch(options.streamUrl(id), {
+          headers: lastEventId
+            ? { ...headers, "Last-Event-ID": lastEventId }
+            : headers,
+          signal,
+        });
+        if (!response.ok || !response.body) {
+          if ([400, 401, 403, 404].includes(response.status)) {
+            throw Object.assign(
+              new Error(
+                `Workflow progress is unavailable (HTTP ${response.status}). Check the runtime connection and access settings.`,
+              ),
+              { terminal: true },
+            );
+          }
+          throw new Error(
+            `workflow progress stream failed: ${response.status}`,
+          );
+        }
+        reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let completed = false;
+        while (!signal?.aborted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split(/\r?\n\r?\n/);
+          buffer = chunks.pop() || "";
+          for (const chunk of chunks) {
+            const lines = chunk.split(/\r?\n/);
+            const eventId = lines
+              .find((line) => line.startsWith("id:"))
+              ?.slice(3)
+              .trim();
+            if (eventId) lastEventId = eventId;
+            if (lines.every((line) => line.startsWith(":"))) {
+              onHeartbeat?.();
+              continue;
+            }
+            const eventName =
+              lines
+                .find((line) => line.startsWith("event:"))
+                ?.slice(6)
+                .trim() || "message";
+            const data = lines
+              .filter((line) => line.startsWith("data:"))
+              .map((line) => line.slice(5).trimStart())
+              .join("\n");
+            if (eventName === "heartbeat") {
+              onHeartbeat?.();
+              continue;
+            }
+            if (
+              ![
+                "snapshot",
+                "run.snapshot",
+                "run.completed",
+                "run.unavailable",
+              ].includes(eventName) ||
+              !data
+            )
+              continue;
+            const snapshot = handleWorkflowProgressStreamData(
+              options,
+              id,
+              data,
+              seenEventIds,
+              eventId,
+              onSnapshot,
+              eventName,
+              previous,
+            );
+            if (snapshot) {
+              previous = snapshot;
+              attempts = 0;
+              reconnectDelayMs = 250;
+            }
+            if (eventName === "run.unavailable")
+              throw Object.assign(
+                new Error(
+                  "Runtime control is unavailable. Reconnect the runtime and try again.",
+                ),
+                { terminal: true },
+              );
+            if (eventName === "run.completed") {
+              completed = true;
+              break;
+            }
+          }
+          if (completed) break;
+        }
+        if (completed) return;
+        throw new Error("Workflow progress stream ended before completion.");
+      } catch (error) {
+        if (signal?.aborted) return;
+        if (error instanceof Error && error.name === "AbortError") return;
+        attempts += 1;
+        reportError(error);
+        if (error && typeof error === "object" && "terminal" in error)
+          throw error;
+        if (attempts > maxReconnectAttempts) {
+          throw error;
+        }
+      } finally {
+        try {
+          await reader?.cancel();
+        } catch {
+          // Reader may already be closed; cleanup is best-effort.
+        }
+        try {
+          reader?.releaseLock();
+        } catch {
+          // Lock may already be released.
+        }
+      }
+      if (signal?.aborted) return;
+      await delayCancellable(reconnectDelayMs, signal);
+      reconnectDelayMs = Math.min(reconnectDelayMs * 2, maxReconnectDelayMs);
+    }
+  };

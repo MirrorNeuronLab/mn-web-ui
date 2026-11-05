@@ -1,20 +1,36 @@
-import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { toast } from 'sonner';
-import JobDetails from '../pages/JobDetails';
-import { fetchJobDetails, fetchJobEvents, fetchJobAgentGraph, fetchJobUi, fetchWorkflowProgress, streamWorkflowProgress, cancelRun, pauseRun, resumeRun } from '../api';
-import type { WorkflowProgress } from '../api';
-import { Toaster } from '../components/ui/sonner';
-import { TooltipProvider } from '../components/ui/tooltip';
-import { ConfirmActionDialogHost } from '../components/ui/confirm-action-dialog';
+import {
+  act,
+  render,
+  screen,
+  waitFor,
+  fireEvent,
+} from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { toast } from "sonner";
+import JobDetails from "../pages/JobDetails";
+import {
+  fetchJobDetails,
+  fetchJobEvents,
+  fetchJobAgentGraph,
+  fetchJobUi,
+  fetchWorkflowProgress,
+  streamWorkflowProgress,
+  cancelRun,
+  pauseRun,
+  resumeRun,
+} from "../api";
+import type { WorkflowProgress } from "../api";
+import { Toaster } from "../components/ui/sonner";
+import { TooltipProvider } from "../components/ui/tooltip";
+import { ConfirmActionDialogHost } from "../components/ui/confirm-action-dialog";
 
-vi.mock('../hooks/useRuntimeSignals', () => ({
+vi.mock("../hooks/useRuntimeSignals", () => ({
   useRuntimeSignals: () => ({ events: [], unavailable: null }),
 }));
 
-vi.mock('../api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../api')>();
+vi.mock("../api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api")>();
   return {
     ...actual,
     fetchJobDetails: vi.fn(),
@@ -30,13 +46,17 @@ vi.mock('../api', async (importOriginal) => {
 });
 
 // Mock ReactFlow because we can't test canvas elements easily in jsdom
-vi.mock('@xyflow/react', () => ({
-  ReactFlow: ({ children }: { children?: React.ReactNode }) => <div data-testid="react-flow-mock">Graph View{children}</div>,
+vi.mock("@xyflow/react", () => ({
+  ReactFlow: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="react-flow-mock">Graph View{children}</div>
+  ),
   MiniMap: () => null,
   Controls: () => null,
   Background: () => null,
-  Panel: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  Position: { Top: 'top', Bottom: 'bottom', Left: 'left', Right: 'right' },
+  Panel: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
   useNodesState: () => [[], vi.fn(), vi.fn()],
   useEdgesState: () => [[], vi.fn(), vi.fn()],
 }));
@@ -51,42 +71,67 @@ const renderWithRouter = (ui: React.ReactElement) => {
       </BrowserRouter>
       <ConfirmActionDialogHost />
       <Toaster />
-    </TooltipProvider>
+    </TooltipProvider>,
   );
 };
 
-describe('JobDetails Component', () => {
+describe("JobDetails Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     toast.dismiss();
     vi.mocked(fetchJobAgentGraph).mockResolvedValue({
-      job_id: 'test-job-1',
-      status: 'unknown',
+      job_id: "test-job-1",
+      status: "unknown",
       nodes: [],
       edges: [],
-      stats: { agent_count: 0, edge_count: 0, message_count: 0, event_count: 0 },
+      stats: {
+        agent_count: 0,
+        edge_count: 0,
+        message_count: 0,
+        event_count: 0,
+      },
     });
     vi.mocked(fetchJobUi).mockResolvedValue({
-      job_id: 'test-job-1',
-      ui: { schema_version: 'mn.web_ui.external.v1', renderer: 'external-url', job_id: 'test-job-1', title: 'Blueprint Web UI', metadata: {} },
-      web_ui: { adapter: 'external-url', kind: 'service', url: '', title: 'Blueprint Web UI', status: 'unknown', metadata: {} },
+      job_id: "test-job-1",
+      ui: {
+        schema_version: "mn.web_ui.external.v1",
+        renderer: "external-url",
+        job_id: "test-job-1",
+        title: "Blueprint Web UI",
+        metadata: {},
+      },
+      web_ui: {
+        adapter: "external-url",
+        kind: "service",
+        url: "",
+        title: "Blueprint Web UI",
+        status: "unknown",
+        metadata: {},
+      },
     });
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
-      job_id: 'test-job-1',
-      workflow_id: 'test-workflow',
-      name: 'Test Workflow',
-      description: 'Workflow progress test',
-      status: 'running',
-      workflow_kind: 'batch',
+      job_id: "test-job-1",
+      workflow_id: "test-workflow",
+      name: "Test Workflow",
+      description: "Workflow progress test",
+      status: "running",
+      workflow_kind: "batch",
       elapsed_seconds: 12,
-      agent_count: { done: 0, running: 1, idle: 0, ready: 1, failed: 0, total: 1 },
-      current_step_id: 'step-1',
+      agent_count: {
+        done: 0,
+        running: 1,
+        idle: 0,
+        ready: 1,
+        failed: 0,
+        total: 1,
+      },
+      current_step_id: "step-1",
       current_step: {
-        id: 'step-1',
-        label: 'Step One',
-        goal: 'Run the first worker',
-        status: 'running',
+        id: "step-1",
+        label: "Step One",
+        goal: "Run the first worker",
+        status: "running",
         current: true,
         done_count: 0,
         running_count: 1,
@@ -98,11 +143,11 @@ describe('JobDetails Component', () => {
         elapsed_seconds: 12,
         agents: [
           {
-            id: 'agent-1',
-            role: 'executor',
-            working_on: 'Run the first worker',
-            model: 'runtime',
-            status: 'running',
+            id: "agent-1",
+            role: "executor",
+            working_on: "Run the first worker",
+            model: "runtime",
+            status: "running",
             progress: 0.5,
             live: false,
             elapsed_seconds: 12,
@@ -110,139 +155,183 @@ describe('JobDetails Component', () => {
         ],
       },
       steps: [],
-      messages: ['Running: streaming live job events...'],
+      messages: ["Running: streaming live job events..."],
       recent_events: [],
     });
-    vi.mocked(streamWorkflowProgress).mockImplementation(async (jobId, onSnapshot) => {
-      try {
-        onSnapshot(await fetchWorkflowProgress(jobId));
-      } catch {
-        // Tests that exercise the fallback intentionally reject the snapshot.
-      }
-    });
+    vi.mocked(streamWorkflowProgress).mockImplementation(
+      async (jobId, onSnapshot) => {
+        try {
+          onSnapshot(await fetchWorkflowProgress(jobId));
+        } catch {
+          // Tests that exercise the fallback intentionally reject the snapshot.
+        }
+      },
+    );
     // mock window.location to ensure useParams picks it up
-    window.history.pushState({}, 'Test page', '/runs/test-job-1');
+    window.history.pushState({}, "Test page", "/runs/test-job-1");
   });
 
-  it('renders loading state initially', () => {
+  it("renders loading state initially", () => {
     vi.mocked(fetchJobDetails).mockReturnValue(new Promise(() => {}));
     vi.mocked(fetchJobEvents).mockReturnValue(new Promise(() => {}));
     vi.mocked(fetchJobAgentGraph).mockReturnValue(new Promise(() => {}));
-    
+
     renderWithRouter(<JobDetails />);
-    
+
     expect(screen.getByText(/Loading/i)).toBeInTheDocument();
   });
 
-  it('shows an error with retry instead of infinite loading when details fail', async () => {
+  it("shows an error with retry instead of infinite loading when details fail", async () => {
     vi.mocked(fetchJobDetails).mockRejectedValue({ response: { status: 404 } });
 
     renderWithRouter(<JobDetails />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/Run not found/);
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Back to runs' })).toBeInTheDocument();
-    expect(screen.queryByText('Loading run…')).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Run not found/);
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Back to runs" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Loading run…")).not.toBeInTheDocument();
   });
 
-  it('renders job details and switches tabs', async () => {
+  it("renders job details and switches tabs", async () => {
     const mockDetails = {
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'graph-1',
-        status: 'running',
-        submitted_at: '2026-04-16T12:00:00Z',
+        job_id: "test-job-1",
+        graph_id: "graph-1",
+        status: "running",
+        submitted_at: "2026-04-16T12:00:00Z",
         active_executors: 1,
-        executor_count: 1
+        executor_count: 1,
       },
       agents: [
         {
-          agent_id: 'agent-1',
-          agent_type: 'executor',
-          type: 'worker',
-          status: 'running',
+          agent_id: "agent-1",
+          agent_type: "executor",
+          type: "worker",
+          status: "running",
           processed_messages: 5,
           mailbox_depth: 0,
-          assigned_node: 'node-1'
-        }
+          assigned_node: "node-1",
+        },
       ],
       sandboxes: [],
       recent_events: [],
     };
 
     const mockEvents = [
-      { timestamp: '2026-04-16T12:00:01Z', type: 'agent_started', payload: {} }
+      { timestamp: "2026-04-16T12:00:01Z", type: "agent_started", payload: {} },
     ];
 
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue(mockEvents);
     vi.mocked(fetchJobUi).mockResolvedValue({
-      job_id: 'test-job-1',
-      ui: { schema_version: 'mn.web_ui.external.v1', renderer: 'external-url', job_id: 'test-job-1', title: 'Blueprint Web UI', metadata: {} },
-      web_ui: { adapter: 'external-url', kind: 'service', url: 'http://localhost:61000', title: 'Blueprint Dashboard', status: 'running', metadata: {} },
+      job_id: "test-job-1",
+      ui: {
+        schema_version: "mn.web_ui.external.v1",
+        renderer: "external-url",
+        job_id: "test-job-1",
+        title: "Blueprint Web UI",
+        metadata: {},
+      },
+      web_ui: {
+        adapter: "external-url",
+        kind: "service",
+        url: "http://localhost:61000",
+        title: "Blueprint Dashboard",
+        status: "running",
+        metadata: {},
+      },
     });
     vi.mocked(fetchJobAgentGraph).mockResolvedValue({
-      job_id: 'test-job-1',
-      status: 'running',
-      nodes: [{ id: 'agent-1', agent_type: 'executor', type: 'worker', assigned_node: 'node-1', status: 'running', processed_messages: 5, mailbox_depth: 0 }],
+      job_id: "test-job-1",
+      status: "running",
+      nodes: [
+        {
+          id: "agent-1",
+          agent_type: "executor",
+          type: "worker",
+          assigned_node: "node-1",
+          status: "running",
+          processed_messages: 5,
+          mailbox_depth: 0,
+        },
+      ],
       edges: [],
-      stats: { agent_count: 1, edge_count: 0, message_count: 0, event_count: 1 },
+      stats: {
+        agent_count: 1,
+        edge_count: 0,
+        message_count: 0,
+        event_count: 1,
+      },
     });
 
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
-    expect(fetchJobDetails).toHaveBeenCalledWith('test-job-1');
-    expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute('href', '/jobs/test-job-1/ui');
-    expect(screen.queryByRole('link', { name: 'Web UI' })).not.toBeInTheDocument();
+    expect(fetchJobDetails).toHaveBeenCalledWith("test-job-1");
+    expect(
+      screen.getByRole("link", { name: "Blueprint Dashboard" }),
+    ).toHaveAttribute("href", "/jobs/test-job-1/ui");
+    expect(
+      screen.queryByRole("link", { name: "Web UI" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/Executors:/i)).not.toBeInTheDocument();
 
     // Default tab is Progress
-    expect(screen.queryByRole('button', { name: 'Graph View' })).not.toBeInTheDocument();
-    expect(screen.queryByText('test-workflow')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Progress').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('0/1').length).toBeGreaterThan(0);
-    expect(screen.getByText('Events')).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Graph View" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("test-workflow")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Progress").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("0/1").length).toBeGreaterThan(0);
+    expect(screen.getByText("Events")).toBeInTheDocument();
     expect(screen.getAllByText(/Step One/).length).toBeGreaterThan(0);
 
     // Switch to Agents tab; list view is the default, graph view is available there.
-    fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
-    expect(screen.getByText('agent-1')).toBeInTheDocument();
-    expect(screen.getByText('executor / worker')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Agents" }));
+    expect(screen.getByText("agent-1")).toBeInTheDocument();
+    expect(screen.getByText("executor / worker")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show agents as graph' }));
-    expect(screen.getByTestId('react-flow-mock')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show agents as graph" }),
+    );
+    expect(screen.getByTestId("react-flow-mock")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show agents as code' }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show agents as code" }),
+    );
     expect(screen.getByText(/"job_id": "test-job-1"/)).toBeInTheDocument();
     expect(screen.getByText(/"id": "agent-1"/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show agents as graph' }));
-    expect(screen.getByTestId('react-flow-mock')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show agents as graph" }),
+    );
+    expect(screen.getByTestId("react-flow-mock")).toBeInTheDocument();
 
     // Switch to Logs tab
-    fireEvent.click(screen.getByText('Communication Logs'));
-    expect(await screen.findByText('[agent_started]')).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Communication Logs"));
+    expect(await screen.findByText("[agent_started]")).toBeInTheDocument();
   });
 
-  it('renders observability summary with trace and artifact links', async () => {
+  it("renders observability summary with trace and artifact links", async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        run_id: 'trace-run',
-        trace_id: 'trc_test',
-        graph_id: 'graph-1',
-        status: 'failed',
+        job_id: "test-job-1",
+        run_id: "trace-run",
+        trace_id: "trc_test",
+        graph_id: "graph-1",
+        status: "failed",
       },
-      summary: { status: 'failed' },
+      summary: { status: "failed" },
       observability_summary: {
-        schema_version: 'mn.observability_summary.v1',
-        trace_id: 'trc_test',
-        status: 'failed',
+        schema_version: "mn.observability_summary.v1",
+        trace_id: "trc_test",
+        status: "failed",
         duration_ms: 125000,
         counts: { events: 4, logs: 2, errors: 1, warnings: 1, timeline: 5 },
         retry_count: 2,
@@ -250,10 +339,22 @@ describe('JobDetails Component', () => {
         token_totals: { total_tokens: 1200 },
       },
       artifacts: [
-        { artifact_id: 'timeline_jsonl', url: '/api/v1/runs/trace-run/artifacts/timeline.jsonl' },
-        { artifact_id: 'events_jsonl', url: '/api/v1/runs/trace-run/artifacts/events.jsonl' },
-        { artifact_id: 'logs_jsonl', url: '/api/v1/runs/trace-run/artifacts/logs.jsonl' },
-        { artifact_id: 'errors_jsonl', url: '/api/v1/runs/trace-run/artifacts/errors.jsonl' },
+        {
+          artifact_id: "timeline_jsonl",
+          url: "/api/v1/runs/trace-run/artifacts/timeline.jsonl",
+        },
+        {
+          artifact_id: "events_jsonl",
+          url: "/api/v1/runs/trace-run/artifacts/events.jsonl",
+        },
+        {
+          artifact_id: "logs_jsonl",
+          url: "/api/v1/runs/trace-run/artifacts/logs.jsonl",
+        },
+        {
+          artifact_id: "errors_jsonl",
+          url: "/api/v1/runs/trace-run/artifacts/errors.jsonl",
+        },
       ],
       agents: [],
       sandboxes: [],
@@ -264,52 +365,60 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('Observability Summary')).toBeInTheDocument();
+      expect(screen.getByText("Observability Summary")).toBeInTheDocument();
     });
-    expect(screen.getByText('trc_test')).toBeInTheDocument();
-    expect(screen.getByText('4 / 2 / 1')).toBeInTheDocument();
-    expect(screen.getByText('1 / 2')).toBeInTheDocument();
-    expect(screen.getByText('256 MB / 1,200')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'timeline.jsonl' })[0].getAttribute('href')).toContain('/api/v1/runs/trace-run/artifacts/timeline.jsonl');
-    expect(screen.getAllByRole('link', { name: 'errors.jsonl' })[0].getAttribute('href')).toContain('/api/v1/runs/trace-run/artifacts/errors.jsonl');
+    expect(screen.getByText("trc_test")).toBeInTheDocument();
+    expect(screen.getByText("4 / 2 / 1")).toBeInTheDocument();
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+    expect(screen.getByText("256 MB / 1,200")).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole("link", { name: "timeline.jsonl" })[0]
+        .getAttribute("href"),
+    ).toContain("/api/v1/runs/trace-run/artifacts/timeline.jsonl");
+    expect(
+      screen
+        .getAllByRole("link", { name: "errors.jsonl" })[0]
+        .getAttribute("href"),
+    ).toContain("/api/v1/runs/trace-run/artifacts/errors.jsonl");
   });
 
-  it('renders artifact filenames as canonical download links', async () => {
+  it("renders artifact filenames as canonical download links", async () => {
     const artifacts = [
       {
-        artifact_id: 'errors_jsonl',
-        relative_path: 'errors.jsonl',
-        url: '/api/v1/runs/artifact-run/artifacts/errors.jsonl',
+        artifact_id: "errors_jsonl",
+        relative_path: "errors.jsonl",
+        url: "/api/v1/runs/artifact-run/artifacts/errors.jsonl",
       },
       {
-        artifact_id: 'events_jsonl',
-        relative_path: 'events.jsonl',
-        url: '/api/v1/runs/artifact-run/artifacts/events.jsonl',
+        artifact_id: "events_jsonl",
+        relative_path: "events.jsonl",
+        url: "/api/v1/runs/artifact-run/artifacts/events.jsonl",
       },
       {
-        artifact_id: 'logs_jsonl',
-        relative_path: 'logs.jsonl',
-        url: '/api/v1/runs/artifact-run/artifacts/logs.jsonl',
+        artifact_id: "logs_jsonl",
+        relative_path: "logs.jsonl",
+        url: "/api/v1/runs/artifact-run/artifacts/logs.jsonl",
       },
     ];
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'graph-1',
-        status: 'failed',
+        job_id: "test-job-1",
+        graph_id: "graph-1",
+        status: "failed",
         artifacts,
       },
       failure: {
-        schema_version: 'mn.error.v1',
-        code: 'runtime.failure',
-        desc: 'Runtime failure',
-        severity: 'ERROR',
+        schema_version: "mn.error.v1",
+        code: "runtime.failure",
+        desc: "Runtime failure",
+        severity: "ERROR",
         details: {},
         links: [
-          { artifact_id: 'errors_jsonl' },
-          { artifact_id: 'events_jsonl' },
-          { artifact_id: 'logs_jsonl' },
+          { artifact_id: "errors_jsonl" },
+          { artifact_id: "events_jsonl" },
+          { artifact_id: "logs_jsonl" },
         ],
       },
       artifacts,
@@ -320,15 +429,22 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
-      job_id: 'test-job-1',
-      workflow_id: 'test-workflow',
-      name: 'Test Workflow',
-      description: '',
-      status: 'failed',
-      workflow_kind: 'batch',
+      job_id: "test-job-1",
+      workflow_id: "test-workflow",
+      name: "Test Workflow",
+      description: "",
+      status: "failed",
+      workflow_kind: "batch",
       elapsed_seconds: 12,
-      agent_count: { done: 0, running: 0, idle: 0, ready: 0, failed: 1, total: 1 },
-      current_step_id: 'step-1',
+      agent_count: {
+        done: 0,
+        running: 0,
+        idle: 0,
+        ready: 0,
+        failed: 1,
+        total: 1,
+      },
+      current_step_id: "step-1",
       current_step: null,
       steps: [],
       messages: [],
@@ -338,37 +454,43 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
 
-    expect(screen.getAllByRole('link', { name: 'errors.jsonl' })[0]).toHaveAttribute(
-      'href',
-      '/api/v1/runs/artifact-run/artifacts/errors.jsonl',
+    expect(
+      screen.getAllByRole("link", { name: "errors.jsonl" })[0],
+    ).toHaveAttribute(
+      "href",
+      "/api/v1/runs/artifact-run/artifacts/errors.jsonl",
     );
-    expect(screen.getAllByRole('link', { name: 'events.jsonl' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('link', { name: 'logs.jsonl' }).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole("link", { name: "events.jsonl" }).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole("link", { name: "logs.jsonl" }).length,
+    ).toBeGreaterThan(0);
   });
 
-  it('shows a workflow job failure only once in the details page', async () => {
+  it("shows a workflow job failure only once in the details page", async () => {
     const failure = {
-      schema_version: 'mn.error.v1',
-      code: 'runtime.failure',
-      desc: 'Fewer than 2 healthy connected runtime nodes observed',
-      severity: 'ERROR',
+      schema_version: "mn.error.v1",
+      code: "runtime.failure",
+      desc: "Fewer than 2 healthy connected runtime nodes observed",
+      severity: "ERROR",
       links: [],
       details: {
-        category: 'runtime',
+        category: "runtime",
         retryable: false,
-        message: 'fewer than 2 healthy connected runtime nodes observed',
+        message: "fewer than 2 healthy connected runtime nodes observed",
       },
     };
 
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'graph-1',
-        status: 'failed',
+        job_id: "test-job-1",
+        graph_id: "graph-1",
+        status: "failed",
       },
       agents: [],
       sandboxes: [],
@@ -377,20 +499,27 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
-      job_id: 'test-job-1',
-      workflow_id: 'test-workflow',
-      name: 'Test Workflow',
-      description: '',
-      status: 'failed',
-      workflow_kind: 'batch',
+      job_id: "test-job-1",
+      workflow_id: "test-workflow",
+      name: "Test Workflow",
+      description: "",
+      status: "failed",
+      workflow_kind: "batch",
       elapsed_seconds: 12,
-      agent_count: { done: 1, running: 0, idle: 0, ready: 1, failed: 0, total: 1 },
-      current_step_id: 'step-1',
+      agent_count: {
+        done: 1,
+        running: 0,
+        idle: 0,
+        ready: 1,
+        failed: 0,
+        total: 1,
+      },
+      current_step_id: "step-1",
       current_step: {
-        id: 'step-1',
-        label: 'Report Sink',
-        goal: 'result_sink',
-        status: 'done',
+        id: "step-1",
+        label: "Report Sink",
+        goal: "result_sink",
+        status: "done",
         current: true,
         done_count: 1,
         running_count: 0,
@@ -403,7 +532,7 @@ describe('JobDetails Component', () => {
         agents: [],
       },
       steps: [],
-      messages: ['Completed successfully.'],
+      messages: ["Completed successfully."],
       recent_events: [],
       failure,
     });
@@ -411,20 +540,22 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
 
     expect(screen.getAllByText(/Run failure/i)).toHaveLength(1);
-    expect(screen.getByText('Fewer than 2 healthy connected runtime nodes observed')).toBeInTheDocument();
+    expect(
+      screen.getByText("Fewer than 2 healthy connected runtime nodes observed"),
+    ).toBeInTheDocument();
   });
 
-  it('uses workflow progress status and hides unknown header metadata', async () => {
+  it("uses workflow progress status and hides unknown header metadata", async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'vwav-be7cc6d4',
-        graph_id: 'unknown',
-        status: 'unknown',
+        job_id: "vwav-be7cc6d4",
+        graph_id: "unknown",
+        status: "unknown",
       },
       agents: [],
       sandboxes: [],
@@ -433,14 +564,21 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
-      job_id: 'vwav-be7cc6d4',
-      workflow_id: 'unknown',
-      name: 'Video Watch Assistant',
-      description: '',
-      status: 'running',
-      workflow_kind: 'service',
+      job_id: "vwav-be7cc6d4",
+      workflow_id: "unknown",
+      name: "Video Watch Assistant",
+      description: "",
+      status: "running",
+      workflow_kind: "service",
       elapsed_seconds: 10,
-      agent_count: { done: 0, running: 1, idle: 0, ready: 1, failed: 0, total: 1 },
+      agent_count: {
+        done: 0,
+        running: 1,
+        idle: 0,
+        ready: 1,
+        failed: 0,
+        total: 1,
+      },
       current_step_id: null,
       current_step: null,
       steps: [],
@@ -451,23 +589,25 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'test-job-1' })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "test-job-1" }),
+      ).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText('running').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
+    expect(screen.getAllByText("running").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
     expect(screen.queryByText(/Workflow:/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Submitted:/i)).not.toBeInTheDocument();
   });
 
-  it('shows paused controls when compact details are paused but workflow progress is stale', async () => {
+  it("shows paused controls when compact details are paused but workflow progress is stale", async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'pitev-5d7781d6',
+        job_id: "pitev-5d7781d6",
         graph_id: null,
-        status: 'paused',
-        submitted_at: '2026-06-02T15:41:54Z',
+        status: "paused",
+        submitted_at: "2026-06-02T15:41:54Z",
       },
       agents: [],
       sandboxes: [],
@@ -476,14 +616,21 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
-      job_id: 'pitev-5d7781d6',
-      workflow_id: 'personal_income_tax_expert_v2',
-      name: 'Personal Income Tax Expert',
-      description: '',
-      status: 'running',
-      workflow_kind: 'batch',
+      job_id: "pitev-5d7781d6",
+      workflow_id: "personal_income_tax_expert_v2",
+      name: "Personal Income Tax Expert",
+      description: "",
+      status: "running",
+      workflow_kind: "batch",
       elapsed_seconds: 2400,
-      agent_count: { done: 1, running: 3, idle: 0, ready: 4, failed: 0, total: 8 },
+      agent_count: {
+        done: 1,
+        running: 3,
+        idle: 0,
+        ready: 4,
+        failed: 0,
+        total: 8,
+      },
       current_step_id: null,
       current_step: null,
       steps: [],
@@ -494,21 +641,25 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'test-job-1' })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "test-job-1" }),
+      ).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('paused').length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Pause" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("paused").length).toBeGreaterThan(0);
   });
 
-  it('prefers live workflow status over stale compact job status', async () => {
+  it("prefers live workflow status over stale compact job status", async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'service-job-1',
-        graph_id: 'video_watch_assistant_v1',
-        status: 'completed',
+        job_id: "service-job-1",
+        graph_id: "video_watch_assistant_v1",
+        status: "completed",
       },
       agents: [],
       sandboxes: [],
@@ -517,14 +668,21 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
-      job_id: 'service-job-1',
-      workflow_id: 'video_watch_assistant_v2',
-      name: 'Video Watch Assistant',
-      description: '',
-      status: 'running',
-      workflow_kind: 'service',
+      job_id: "service-job-1",
+      workflow_id: "video_watch_assistant_v2",
+      name: "Video Watch Assistant",
+      description: "",
+      status: "running",
+      workflow_kind: "service",
       elapsed_seconds: 10,
-      agent_count: { done: 0, running: 0, idle: 1, ready: 1, failed: 0, total: 1 },
+      agent_count: {
+        done: 0,
+        running: 0,
+        idle: 1,
+        ready: 1,
+        failed: 0,
+        total: 1,
+      },
       current_step_id: null,
       current_step: null,
       steps: [],
@@ -535,21 +693,25 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'test-job-1' })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "test-job-1" }),
+      ).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Resume" }),
+    ).not.toBeInTheDocument();
   });
 
-  it('infers completed batch status from complete progress counters', async () => {
+  it("infers completed batch status from complete progress counters", async () => {
     let progressSignal: AbortSignal | undefined;
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'batch-job-1',
-        graph_id: 'batch_workflow_v1',
-        status: 'running',
+        job_id: "batch-job-1",
+        graph_id: "batch_workflow_v1",
+        status: "running",
       },
       agents: [],
       sandboxes: [],
@@ -558,15 +720,22 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     const completeProgress: WorkflowProgress = {
       schema_version: 2,
-      job_id: 'batch-job-1',
-      workflow_id: 'batch_workflow_v2',
-      name: 'Batch Workflow',
-      description: '',
-      status: 'running',
-      workflow_kind: 'batch',
-      progress_source: 'complete',
+      job_id: "batch-job-1",
+      workflow_id: "batch_workflow_v2",
+      name: "Batch Workflow",
+      description: "",
+      status: "running",
+      workflow_kind: "batch",
+      progress_source: "complete",
       elapsed_seconds: 10,
-      agent_count: { done: 2, running: 0, idle: 0, ready: 2, failed: 0, total: 2 },
+      agent_count: {
+        done: 2,
+        running: 0,
+        idle: 0,
+        ready: 2,
+        failed: 0,
+        total: 2,
+      },
       current_step_id: null,
       current_step: null,
       steps: [],
@@ -574,46 +743,54 @@ describe('JobDetails Component', () => {
       recent_events: [],
     };
     vi.mocked(fetchWorkflowProgress).mockResolvedValue(completeProgress);
-    vi.mocked(streamWorkflowProgress).mockImplementation(async (_id, onSnapshot, _signal, onHeartbeat) => {
-      progressSignal = _signal;
-      onSnapshot({ ...completeProgress, status: 'completed' });
-      onHeartbeat?.();
-    });
+    vi.mocked(streamWorkflowProgress).mockImplementation(
+      async (_id, onSnapshot, _signal, onHeartbeat) => {
+        progressSignal = _signal;
+        onSnapshot({ ...completeProgress, status: "completed" });
+        onHeartbeat?.();
+      },
+    );
 
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'test-job-1' })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "test-job-1" }),
+      ).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText('completed').length).toBeGreaterThan(0);
+    expect(screen.getAllByText("completed").length).toBeGreaterThan(0);
     await waitFor(() => {
-      expect(screen.getAllByText('closed').length).toBeGreaterThan(0);
+      expect(screen.getAllByText("closed").length).toBeGreaterThan(0);
     });
     expect(progressSignal?.aborted).toBe(true);
-    expect(screen.queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Pause" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cancel" }),
+    ).not.toBeInTheDocument();
   });
 
-  it('renders job details when agent graph is unavailable', async () => {
+  it("renders job details when agent graph is unavailable", async () => {
     const mockDetails = {
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'graph-1',
-        status: 'running',
-        submitted_at: '2026-04-16T12:00:00Z',
+        job_id: "test-job-1",
+        graph_id: "graph-1",
+        status: "running",
+        submitted_at: "2026-04-16T12:00:00Z",
       },
       agents: [
         {
-          agent_id: 'agent-1',
-          agent_type: 'executor',
-          type: 'worker',
-          status: 'running',
+          agent_id: "agent-1",
+          agent_type: "executor",
+          type: "worker",
+          status: "running",
           processed_messages: 5,
           mailbox_depth: 0,
-          assigned_node: 'node-1'
-        }
+          assigned_node: "node-1",
+        },
       ],
       sandboxes: [],
       recent_events: [],
@@ -621,26 +798,26 @@ describe('JobDetails Component', () => {
 
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
-    vi.mocked(fetchJobAgentGraph).mockRejectedValue(new Error('Not Found'));
+    vi.mocked(fetchJobAgentGraph).mockRejectedValue(new Error("Not Found"));
 
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
-    expect(screen.getByText('agent-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Agents" }));
+    expect(screen.getByText("agent-1")).toBeInTheDocument();
   });
 
-  it('populates the agents list from graph nodes when job details have no agents', async () => {
+  it("populates the agents list from graph nodes when job details have no agents", async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'graph-1',
-        status: 'running',
-        submitted_at: '2026-04-16T12:00:00Z',
+        job_id: "test-job-1",
+        graph_id: "graph-1",
+        status: "running",
+        submitted_at: "2026-04-16T12:00:00Z",
       },
       agents: [],
       sandboxes: [],
@@ -648,47 +825,52 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchJobAgentGraph).mockResolvedValue({
-      job_id: 'test-job-1',
-      graph_id: 'graph-1',
-      status: 'running',
+      job_id: "test-job-1",
+      graph_id: "graph-1",
+      status: "running",
       nodes: [
         {
-          id: 'planner',
-          alias: 'video_monitor',
-          display_name: 'Video Monitor',
-          label: 'Raw Planner',
-          agent_type: 'executor',
-          type: 'worker',
-          assigned_node: 'node-a',
-          status: 'declared',
+          id: "planner",
+          alias: "video_monitor",
+          display_name: "Video Monitor",
+          label: "Raw Planner",
+          agent_type: "executor",
+          type: "worker",
+          assigned_node: "node-a",
+          status: "declared",
           processed_messages: 0,
           mailbox_depth: 0,
         },
       ],
       edges: [],
-      stats: { agent_count: 1, edge_count: 0, message_count: 0, event_count: 0 },
+      stats: {
+        agent_count: 1,
+        edge_count: 0,
+        message_count: 0,
+        event_count: 0,
+      },
     });
 
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
-    expect(await screen.findByText('video_monitor')).toBeInTheDocument();
-    expect(screen.queryByText('Raw Planner')).not.toBeInTheDocument();
-    expect(screen.getByText('executor / worker')).toBeInTheDocument();
-    expect(screen.getByText('node-a')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Agents" }));
+    expect(await screen.findByText("video_monitor")).toBeInTheDocument();
+    expect(screen.queryByText("Raw Planner")).not.toBeInTheDocument();
+    expect(screen.getByText("executor / worker")).toBeInTheDocument();
+    expect(screen.getByText("node-a")).toBeInTheDocument();
   });
 
-  it('uses workflow progress aliases when the graph only has runtime infrastructure nodes', async () => {
+  it("uses workflow progress aliases when the graph only has runtime infrastructure nodes", async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'video-job-1',
-        graph_id: 'video_watch_assistant_v1',
-        status: 'running',
+        job_id: "video-job-1",
+        graph_id: "video_watch_assistant_v1",
+        status: "running",
       },
       agents: [],
       sandboxes: [],
@@ -696,34 +878,64 @@ describe('JobDetails Component', () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchJobAgentGraph).mockResolvedValue({
-      job_id: 'video-job-1',
-      graph_id: 'runtime-wrapper',
-      status: 'running',
+      job_id: "video-job-1",
+      graph_id: "runtime-wrapper",
+      status: "running",
       nodes: [
-        { id: 'runtime', label: 'System Runtime', agent_type: 'system', type: 'runtime', assigned_node: 'system/runtime', status: 'observed', processed_messages: 0, mailbox_depth: 0 },
-        { id: 'workflow_manifest_executor', label: 'Workflow Manifest Executor', agent_type: 'executor', type: 'worker', assigned_node: 'node-a', status: 'paused', processed_messages: 0, mailbox_depth: 1 },
+        {
+          id: "runtime",
+          label: "System Runtime",
+          agent_type: "system",
+          type: "runtime",
+          assigned_node: "system/runtime",
+          status: "observed",
+          processed_messages: 0,
+          mailbox_depth: 0,
+        },
+        {
+          id: "workflow_manifest_executor",
+          label: "Workflow Manifest Executor",
+          agent_type: "executor",
+          type: "worker",
+          assigned_node: "node-a",
+          status: "paused",
+          processed_messages: 0,
+          mailbox_depth: 1,
+        },
       ],
       edges: [],
-      stats: { agent_count: 2, edge_count: 0, message_count: 0, event_count: 0 },
+      stats: {
+        agent_count: 2,
+        edge_count: 0,
+        message_count: 0,
+        event_count: 0,
+      },
     });
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
-      job_id: 'video-job-1',
-      workflow_id: 'video_watch_assistant',
-      name: 'Video Watch Assistant',
-      description: '',
-      status: 'running',
-      workflow_kind: 'service',
+      job_id: "video-job-1",
+      workflow_id: "video_watch_assistant",
+      name: "Video Watch Assistant",
+      description: "",
+      status: "running",
+      workflow_kind: "service",
       elapsed_seconds: 12,
-      agent_count: { done: 0, running: 1, idle: 0, ready: 1, failed: 0, total: 1 },
-      current_step_id: 'start_video_monitor',
+      agent_count: {
+        done: 0,
+        running: 1,
+        idle: 0,
+        ready: 1,
+        failed: 0,
+        total: 1,
+      },
+      current_step_id: "start_video_monitor",
       current_step: null,
       steps: [
         {
-          id: 'start_video_monitor',
-          label: 'Start Video Monitor',
-          goal: 'Validate the mapped stream source and start the monitoring session.',
-          status: 'running',
+          id: "start_video_monitor",
+          label: "Start Video Monitor",
+          goal: "Validate the mapped stream source and start the monitoring session.",
+          status: "running",
           current: true,
           done_count: 0,
           running_count: 1,
@@ -735,14 +947,14 @@ describe('JobDetails Component', () => {
           elapsed_seconds: 12,
           agents: [
             {
-              id: 'video_monitor',
-              alias: 'video_monitor',
-              display_name: 'Video Monitor',
-              role: 'Coordinate video monitoring',
-              working_on: 'Coordinate video monitoring',
-              model: 'runtime',
-              assigned_node: 'node-a',
-              status: 'running',
+              id: "video_monitor",
+              alias: "video_monitor",
+              display_name: "Video Monitor",
+              role: "Coordinate video monitoring",
+              working_on: "Coordinate video monitoring",
+              model: "runtime",
+              assigned_node: "node-a",
+              status: "running",
               progress: 0.5,
               live: true,
               elapsed_seconds: 12,
@@ -757,65 +969,76 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'test-job-1' })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "test-job-1" }),
+      ).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
+    fireEvent.click(screen.getByRole("tab", { name: "Agents" }));
 
-    expect(await screen.findByText('video_monitor')).toBeInTheDocument();
-    expect(screen.queryByText('Workflow Manifest Executor')).not.toBeInTheDocument();
-    expect(screen.queryByText('Web Ui Dashboard')).not.toBeInTheDocument();
-    expect(screen.getByText('node-a')).toBeInTheDocument();
+    expect(await screen.findByText("video_monitor")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Workflow Manifest Executor"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Web Ui Dashboard")).not.toBeInTheDocument();
+    expect(screen.getByText("node-a")).toBeInTheDocument();
   });
 
-  it('waits for the public v2 workflow instead of inventing runtime-agent steps', async () => {
+  it("waits for the public v2 workflow instead of inventing runtime-agent steps", async () => {
     const mockDetails = {
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'graph-1',
-        status: 'running',
-        submitted_at: '2026-04-16T12:00:00Z',
+        job_id: "test-job-1",
+        graph_id: "graph-1",
+        status: "running",
+        submitted_at: "2026-04-16T12:00:00Z",
       },
       agents: [
         {
-          agent_id: 'agent-1',
-          agent_type: 'executor',
-          type: 'worker',
-          status: 'observed',
+          agent_id: "agent-1",
+          agent_type: "executor",
+          type: "worker",
+          status: "observed",
           processed_messages: 5,
           mailbox_depth: 0,
-          assigned_node: 'node-1'
-        }
+          assigned_node: "node-1",
+        },
       ],
       sandboxes: [],
       recent_events: [
-        { timestamp: '2026-04-16T12:00:01Z', type: 'executor_lease_acquired', agent_id: 'agent-1', payload: { type: 'video_frame_tick' } }
+        {
+          timestamp: "2026-04-16T12:00:01Z",
+          type: "executor_lease_acquired",
+          agent_id: "agent-1",
+          payload: { type: "video_frame_tick" },
+        },
       ],
     };
 
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
-    vi.mocked(fetchWorkflowProgress).mockRejectedValue(new Error('Not Found'));
+    vi.mocked(fetchWorkflowProgress).mockRejectedValue(new Error("Not Found"));
 
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
-    expect(screen.getByText(/Waiting for public v2 workflow progress/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Progress" }));
+    expect(
+      screen.getByText(/Waiting for public v2 workflow progress/i),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Runtime Agents/)).not.toBeInTheDocument();
   });
 
-  it('renders service workflow agents as idle instead of done while the job is running', async () => {
+  it("renders service workflow agents as idle instead of done while the job is running", async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'video_watch_assistant_v1',
-        status: 'running',
-        submitted_at: '2026-04-16T12:00:00Z',
+        job_id: "test-job-1",
+        graph_id: "video_watch_assistant_v1",
+        status: "running",
+        submitted_at: "2026-04-16T12:00:00Z",
       },
       agents: [],
       sandboxes: [],
@@ -824,20 +1047,27 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
-      job_id: 'test-job-1',
-      workflow_id: 'video_watch_assistant_v2',
-      name: 'Video Watch Assistant',
-      description: '',
-      status: 'running',
-      workflow_kind: 'service',
+      job_id: "test-job-1",
+      workflow_id: "video_watch_assistant_v2",
+      name: "Video Watch Assistant",
+      description: "",
+      status: "running",
+      workflow_kind: "service",
       elapsed_seconds: 342,
-      agent_count: { done: 1, running: 0, idle: 1, ready: 2, failed: 0, total: 2 },
-      current_step_id: 'visual_detector',
+      agent_count: {
+        done: 1,
+        running: 0,
+        idle: 1,
+        ready: 2,
+        failed: 0,
+        total: 2,
+      },
+      current_step_id: "visual_detector",
       current_step: {
-        id: 'visual_detector',
-        label: 'Visual Detector',
-        goal: 'Analyze sampled frames',
-        status: 'idle',
+        id: "visual_detector",
+        label: "Visual Detector",
+        goal: "Analyze sampled frames",
+        status: "idle",
         current: true,
         done_count: 0,
         running_count: 0,
@@ -849,11 +1079,11 @@ describe('JobDetails Component', () => {
         elapsed_seconds: 0,
         agents: [
           {
-            id: 'visual_detector',
-            role: 'executor',
-            working_on: 'Review visual detection',
-            model: 'runtime',
-            status: 'idle',
+            id: "visual_detector",
+            role: "executor",
+            working_on: "Review visual detection",
+            model: "runtime",
+            status: "idle",
             progress: 0.2,
             live: true,
             elapsed_seconds: 0,
@@ -862,10 +1092,10 @@ describe('JobDetails Component', () => {
       },
       steps: [
         {
-          id: 'ingress',
-          label: 'Ingress',
-          goal: 'router',
-          status: 'done',
+          id: "ingress",
+          label: "Ingress",
+          goal: "router",
+          status: "done",
           current: false,
           done_count: 1,
           running_count: 0,
@@ -878,10 +1108,10 @@ describe('JobDetails Component', () => {
           agents: [],
         },
         {
-          id: 'visual_detector',
-          label: 'Visual Detector',
-          goal: 'executor',
-          status: 'idle',
+          id: "visual_detector",
+          label: "Visual Detector",
+          goal: "executor",
+          status: "idle",
           current: true,
           done_count: 0,
           running_count: 0,
@@ -894,30 +1124,32 @@ describe('JobDetails Component', () => {
           agents: [],
         },
       ],
-      messages: ['Observing: latest event video_watch_frame_observed'],
+      messages: ["Observing: latest event video_watch_frame_observed"],
       recent_events: [],
     });
 
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    fireEvent.click(screen.getByRole("tab", { name: "Progress" }));
 
     expect(screen.getByText(/0\/2/)).toBeInTheDocument();
-    expect(screen.getAllByText('idle').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Review visual detection').length).toBeGreaterThan(0);
+    expect(screen.getAllByText("idle").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Review visual detection").length,
+    ).toBeGreaterThan(0);
   });
 
-  it('renders graph workflow layers and multiple active steps in the Progress tab', async () => {
+  it("renders graph workflow layers and multiple active steps in the Progress tab", async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'tax_graph',
-        status: 'running',
-        submitted_at: '2026-04-16T12:00:00Z',
+        job_id: "test-job-1",
+        graph_id: "tax_graph",
+        status: "running",
+        submitted_at: "2026-04-16T12:00:00Z",
       },
       agents: [],
       sandboxes: [],
@@ -926,31 +1158,38 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
-      job_id: 'test-job-1',
-      workflow_id: 'tax_graph',
-      name: 'Tax Graph',
-      description: '',
-      status: 'running',
-      workflow_kind: 'batch',
+      job_id: "test-job-1",
+      workflow_id: "tax_graph",
+      name: "Tax Graph",
+      description: "",
+      status: "running",
+      workflow_kind: "batch",
       elapsed_seconds: 20,
-      agent_count: { done: 1, running: 2, idle: 0, ready: 3, failed: 0, total: 4 },
-      current_step_id: 'income',
-      current_step_ids: ['income', 'property'],
+      agent_count: {
+        done: 1,
+        running: 2,
+        idle: 0,
+        ready: 3,
+        failed: 0,
+        total: 4,
+      },
+      current_step_id: "income",
+      current_step_ids: ["income", "property"],
       edges: [
-        { from: 'intake', to: 'income', event: 'intake_ready' },
-        { from: 'intake', to: 'property', event: 'intake_ready' },
+        { from: "intake", to: "income", event: "intake_ready" },
+        { from: "intake", to: "property", event: "intake_ready" },
       ],
-      layers: [['intake'], ['income', 'property']],
+      layers: [["intake"], ["income", "property"]],
       current_step: null,
       steps: [
         {
-          id: 'intake',
-          label: 'Intake',
-          goal: '',
-          status: 'done',
+          id: "intake",
+          label: "Intake",
+          goal: "",
+          status: "done",
           current: false,
           parents: [],
-          children: ['income', 'property'],
+          children: ["income", "property"],
           layer: 0,
           done_count: 1,
           running_count: 0,
@@ -963,12 +1202,12 @@ describe('JobDetails Component', () => {
           agents: [],
         },
         {
-          id: 'income',
-          label: 'Income',
-          goal: '',
-          status: 'running',
+          id: "income",
+          label: "Income",
+          goal: "",
+          status: "running",
           current: true,
-          parents: ['intake'],
+          parents: ["intake"],
           children: [],
           layer: 1,
           done_count: 0,
@@ -979,15 +1218,26 @@ describe('JobDetails Component', () => {
           total_count: 1,
           live: false,
           elapsed_seconds: 4,
-          agents: [{ id: 'income_agent', role: 'Income', working_on: 'Prepare income', model: 'runtime', status: 'running', progress: 0.4, live: false, elapsed_seconds: 4 }],
+          agents: [
+            {
+              id: "income_agent",
+              role: "Income",
+              working_on: "Prepare income",
+              model: "runtime",
+              status: "running",
+              progress: 0.4,
+              live: false,
+              elapsed_seconds: 4,
+            },
+          ],
         },
         {
-          id: 'property',
-          label: 'Property',
-          goal: '',
-          status: 'running',
+          id: "property",
+          label: "Property",
+          goal: "",
+          status: "running",
           current: true,
-          parents: ['intake'],
+          parents: ["intake"],
           children: [],
           layer: 1,
           done_count: 0,
@@ -998,39 +1248,52 @@ describe('JobDetails Component', () => {
           total_count: 1,
           live: false,
           elapsed_seconds: 4,
-          agents: [{ id: 'property_agent', role: 'Property', working_on: 'Prepare property', model: 'runtime', status: 'running', progress: 0.3, live: false, elapsed_seconds: 4 }],
+          agents: [
+            {
+              id: "property_agent",
+              role: "Property",
+              working_on: "Prepare property",
+              model: "runtime",
+              status: "running",
+              progress: 0.3,
+              live: false,
+              elapsed_seconds: 4,
+            },
+          ],
         },
       ],
-      messages: ['Running: graph branches active'],
+      messages: ["Running: graph branches active"],
       recent_events: [],
     });
 
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('tab', { name: 'Progress' }));
+    fireEvent.click(screen.getByRole("tab", { name: "Progress" }));
 
     expect(screen.getByText(/2 active steps/)).toBeInTheDocument();
     expect(screen.getByText(/2\. Income/)).toBeInTheDocument();
     expect(screen.getByText(/3\. Property/)).toBeInTheDocument();
-    expect(screen.getByText('income_agent')).toBeInTheDocument();
-    expect(screen.getByText('property_agent')).toBeInTheDocument();
+    expect(screen.getByText("income_agent")).toBeInTheDocument();
+    expect(screen.getByText("property_agent")).toBeInTheDocument();
   });
 
-  it('lets users select a completed step and preserves that selection across stream updates', async () => {
+  it("lets users select a completed step and preserves that selection across stream updates", async () => {
     let emitSnapshot: ((snapshot: WorkflowProgress) => void) | null = null;
-    vi.mocked(streamWorkflowProgress).mockImplementation(async (_id, onSnapshot) => {
-      emitSnapshot = onSnapshot;
-    });
+    vi.mocked(streamWorkflowProgress).mockImplementation(
+      async (_id, onSnapshot) => {
+        emitSnapshot = onSnapshot;
+      },
+    );
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'tax_graph',
-        status: 'running',
-        submitted_at: '2026-04-16T12:00:00Z',
+        job_id: "test-job-1",
+        graph_id: "tax_graph",
+        status: "running",
+        submitted_at: "2026-04-16T12:00:00Z",
       },
       agents: [],
       sandboxes: [],
@@ -1039,23 +1302,30 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     const progress: WorkflowProgress = {
       schema_version: 2,
-      job_id: 'test-job-1',
-      workflow_id: 'tax_graph',
-      name: 'Tax Graph',
-      description: '',
-      status: 'running',
-      workflow_kind: 'batch',
+      job_id: "test-job-1",
+      workflow_id: "tax_graph",
+      name: "Tax Graph",
+      description: "",
+      status: "running",
+      workflow_kind: "batch",
       elapsed_seconds: 20,
-      agent_count: { done: 1, running: 2, idle: 0, ready: 3, failed: 0, total: 3 },
-      current_step_id: 'income',
-      current_step_ids: ['income', 'property'],
+      agent_count: {
+        done: 1,
+        running: 2,
+        idle: 0,
+        ready: 3,
+        failed: 0,
+        total: 3,
+      },
+      current_step_id: "income",
+      current_step_ids: ["income", "property"],
       current_step: null,
       steps: [
         {
-          id: 'intake',
-          label: 'Intake',
-          goal: 'Load return package',
-          status: 'done',
+          id: "intake",
+          label: "Intake",
+          goal: "Load return package",
+          status: "done",
           current: false,
           done_count: 1,
           running_count: 0,
@@ -1065,15 +1335,35 @@ describe('JobDetails Component', () => {
           total_count: 1,
           live: false,
           elapsed_seconds: 2,
-          activity_summary: 'Agent completed: intake_agent',
-          recent_events: [{ timestamp: '2026-04-16T12:00:02Z', type: 'workflow_step_attempt_completed', step_id: 'intake', agent_id: 'intake_agent', message: 'Agent completed: intake_agent' }],
-          agents: [{ id: 'intake_agent', role: 'Intake', working_on: 'Load return package', model: 'runtime', status: 'done', progress: 1, live: false, elapsed_seconds: 2, activity_summary: 'Agent completed: intake_agent' }],
+          activity_summary: "Agent completed: intake_agent",
+          recent_events: [
+            {
+              timestamp: "2026-04-16T12:00:02Z",
+              type: "workflow_step_attempt_completed",
+              step_id: "intake",
+              agent_id: "intake_agent",
+              message: "Agent completed: intake_agent",
+            },
+          ],
+          agents: [
+            {
+              id: "intake_agent",
+              role: "Intake",
+              working_on: "Load return package",
+              model: "runtime",
+              status: "done",
+              progress: 1,
+              live: false,
+              elapsed_seconds: 2,
+              activity_summary: "Agent completed: intake_agent",
+            },
+          ],
         },
         {
-          id: 'income',
-          label: 'Income',
-          goal: 'Prepare income',
-          status: 'running',
+          id: "income",
+          label: "Income",
+          goal: "Prepare income",
+          status: "running",
           current: true,
           done_count: 0,
           running_count: 1,
@@ -1083,13 +1373,24 @@ describe('JobDetails Component', () => {
           total_count: 1,
           live: false,
           elapsed_seconds: 4,
-          agents: [{ id: 'income_agent', role: 'Income', working_on: 'Prepare income', model: 'runtime', status: 'running', progress: 0.4, live: false, elapsed_seconds: 4 }],
+          agents: [
+            {
+              id: "income_agent",
+              role: "Income",
+              working_on: "Prepare income",
+              model: "runtime",
+              status: "running",
+              progress: 0.4,
+              live: false,
+              elapsed_seconds: 4,
+            },
+          ],
         },
         {
-          id: 'property',
-          label: 'Property',
-          goal: 'Prepare property',
-          status: 'running',
+          id: "property",
+          label: "Property",
+          goal: "Prepare property",
+          status: "running",
           current: true,
           done_count: 0,
           running_count: 1,
@@ -1099,10 +1400,21 @@ describe('JobDetails Component', () => {
           total_count: 1,
           live: false,
           elapsed_seconds: 4,
-          agents: [{ id: 'property_agent', role: 'Property', working_on: 'Prepare property', model: 'runtime', status: 'running', progress: 0.3, live: false, elapsed_seconds: 4 }],
+          agents: [
+            {
+              id: "property_agent",
+              role: "Property",
+              working_on: "Prepare property",
+              model: "runtime",
+              status: "running",
+              progress: 0.3,
+              live: false,
+              elapsed_seconds: 4,
+            },
+          ],
         },
       ],
-      messages: ['Running: graph branches active'],
+      messages: ["Running: graph branches active"],
       recent_events: [],
     };
     vi.mocked(fetchWorkflowProgress).mockResolvedValue(progress);
@@ -1110,42 +1422,44 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
     await waitFor(() => expect(emitSnapshot).not.toBeNull());
     act(() => emitSnapshot?.(progress));
     expect(screen.getByText(/2 active steps/)).toBeInTheDocument();
-    expect(screen.getByText('income_agent')).toBeInTheDocument();
+    expect(screen.getByText("income_agent")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /1\. Intake/ }));
+    fireEvent.click(screen.getByRole("button", { name: /1\. Intake/ }));
 
     expect(screen.getByText(/Intake · 1 agents/)).toBeInTheDocument();
-    expect(screen.getByText('intake_agent')).toBeInTheDocument();
-    expect(screen.queryByText('income_agent')).not.toBeInTheDocument();
+    expect(screen.getByText("intake_agent")).toBeInTheDocument();
+    expect(screen.queryByText("income_agent")).not.toBeInTheDocument();
 
     act(() => {
       emitSnapshot?.({
         ...progress,
-        messages: ['Running: stream update arrived'],
-        steps: progress.steps.map((step) => (
-          step.id === 'income' ? { ...step, activity_summary: 'Still preparing income' } : step
-        )),
+        messages: ["Running: stream update arrived"],
+        steps: progress.steps.map((step) =>
+          step.id === "income"
+            ? { ...step, activity_summary: "Still preparing income" }
+            : step,
+        ),
       });
     });
 
     expect(screen.getByText(/Intake · 1 agents/)).toBeInTheDocument();
-    expect(screen.getByText('intake_agent')).toBeInTheDocument();
-    expect(screen.queryByText('income_agent')).not.toBeInTheDocument();
+    expect(screen.getByText("intake_agent")).toBeInTheDocument();
+    expect(screen.queryByText("income_agent")).not.toBeInTheDocument();
   });
 
-  it('renders selected step reasons, timing, attempts, and empty-agent steps', async () => {
+  it("renders selected step reasons, timing, attempts, and empty-agent steps", async () => {
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'retry_graph',
-        status: 'running',
-        submitted_at: '2026-04-16T12:00:00Z',
+        job_id: "test-job-1",
+        graph_id: "retry_graph",
+        status: "running",
+        submitted_at: "2026-04-16T12:00:00Z",
       },
       agents: [],
       sandboxes: [],
@@ -1154,23 +1468,30 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockResolvedValue({
       schema_version: 2,
-      job_id: 'test-job-1',
-      workflow_id: 'retry_graph',
-      name: 'Retry Graph',
-      description: '',
-      status: 'running',
-      workflow_kind: 'batch',
+      job_id: "test-job-1",
+      workflow_id: "retry_graph",
+      name: "Retry Graph",
+      description: "",
+      status: "running",
+      workflow_kind: "batch",
       elapsed_seconds: 30,
-      agent_count: { done: 0, running: 0, idle: 0, ready: 1, failed: 0, total: 1 },
-      current_step_id: 'reconcile',
-      current_step_ids: ['reconcile'],
+      agent_count: {
+        done: 0,
+        running: 0,
+        idle: 0,
+        ready: 1,
+        failed: 0,
+        total: 1,
+      },
+      current_step_id: "reconcile",
+      current_step_ids: ["reconcile"],
       current_step: null,
       steps: [
         {
-          id: 'reconcile',
-          label: 'Reconcile',
-          goal: 'Reconcile accounts',
-          status: 'retry_wait',
+          id: "reconcile",
+          label: "Reconcile",
+          goal: "Reconcile accounts",
+          status: "retry_wait",
           current: true,
           done_count: 0,
           running_count: 0,
@@ -1180,37 +1501,47 @@ describe('JobDetails Component', () => {
           total_count: 1,
           live: false,
           elapsed_seconds: 30,
-          retry_at: '2026-04-16T12:01:00Z',
-          deadline_at: '2026-04-16T12:05:00Z',
-          heartbeat_deadline_at: '2026-04-16T12:02:00Z',
+          retry_at: "2026-04-16T12:01:00Z",
+          deadline_at: "2026-04-16T12:05:00Z",
+          heartbeat_deadline_at: "2026-04-16T12:02:00Z",
           attempt: 2,
-          attempt_id: 'attempt-2',
-          status_reason: 'Waiting for retry window',
-          activity_summary: 'Retry scheduled: Reconcile',
-          recent_events: [{ timestamp: '2026-04-16T12:00:30Z', type: 'workflow_step_attempt_retry_scheduled', step_id: 'reconcile', agent_id: 'worker_retry', message: 'Retry scheduled: Reconcile' }],
-          agents: [{
-            id: 'worker_retry',
-            role: 'Reconcile',
-            working_on: 'Reconcile accounts',
-            model: 'runtime',
-            assigned_node: 'node-a',
-            status: 'retry_wait',
-            progress: 0.25,
-            live: false,
-            elapsed_seconds: 30,
-            retry_at: '2026-04-16T12:01:00Z',
-            deadline_at: '2026-04-16T12:05:00Z',
-            attempt: 2,
-            attempt_id: 'attempt-2',
-            status_reason: 'Tool rate limit',
-            activity_summary: 'Retry scheduled: Reconcile',
-          }],
+          attempt_id: "attempt-2",
+          status_reason: "Waiting for retry window",
+          activity_summary: "Retry scheduled: Reconcile",
+          recent_events: [
+            {
+              timestamp: "2026-04-16T12:00:30Z",
+              type: "workflow_step_attempt_retry_scheduled",
+              step_id: "reconcile",
+              agent_id: "worker_retry",
+              message: "Retry scheduled: Reconcile",
+            },
+          ],
+          agents: [
+            {
+              id: "worker_retry",
+              role: "Reconcile",
+              working_on: "Reconcile accounts",
+              model: "runtime",
+              assigned_node: "node-a",
+              status: "retry_wait",
+              progress: 0.25,
+              live: false,
+              elapsed_seconds: 30,
+              retry_at: "2026-04-16T12:01:00Z",
+              deadline_at: "2026-04-16T12:05:00Z",
+              attempt: 2,
+              attempt_id: "attempt-2",
+              status_reason: "Tool rate limit",
+              activity_summary: "Retry scheduled: Reconcile",
+            },
+          ],
         },
         {
-          id: 'archive',
-          label: 'Archive',
-          goal: 'Persist final report',
-          status: 'pending',
+          id: "archive",
+          label: "Archive",
+          goal: "Persist final report",
+          status: "pending",
           current: false,
           done_count: 0,
           running_count: 0,
@@ -1220,8 +1551,8 @@ describe('JobDetails Component', () => {
           total_count: 0,
           live: false,
           elapsed_seconds: 0,
-          requires: ['reconcile'],
-          provides: ['report'],
+          requires: ["reconcile"],
+          provides: ["report"],
           agents: [],
         },
       ],
@@ -1232,36 +1563,38 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /1\. Reconcile/ }));
+    fireEvent.click(screen.getByRole("button", { name: /1\. Reconcile/ }));
 
-    expect(screen.getByText('Waiting for retry window')).toBeInTheDocument();
-    expect(screen.getByText('Tool rate limit')).toBeInTheDocument();
-    expect(screen.getAllByText('Attempt 2').length).toBeGreaterThan(0);
+    expect(screen.getByText("Waiting for retry window")).toBeInTheDocument();
+    expect(screen.getByText("Tool rate limit")).toBeInTheDocument();
+    expect(screen.getAllByText("Attempt 2").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Retry/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Deadline/).length).toBeGreaterThan(0);
-    expect(screen.getByText('node-a')).toBeInTheDocument();
+    expect(screen.getByText("node-a")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /2\. Archive/ }));
+    fireEvent.click(screen.getByRole("button", { name: /2\. Archive/ }));
 
     expect(screen.getByText(/Archive · 0 agents/)).toBeInTheDocument();
-    expect(screen.getByText('No agents reported for this step yet.')).toBeInTheDocument();
-    expect(screen.getByText('Requires')).toBeInTheDocument();
-    expect(screen.getAllByText('reconcile').length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("No agents reported for this step yet."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Requires")).toBeInTheDocument();
+    expect(screen.getAllByText("reconcile").length).toBeGreaterThan(0);
   });
 
-  it('shows blueprint web ui from the job ui endpoint when job details are compact', async () => {
+  it("shows blueprint web ui from the job ui endpoint when job details are compact", async () => {
     const mockDetails = {
-      job_id: 'test-job-1',
-      runtime_run_id: 'blueprint-run-1',
+      job_id: "test-job-1",
+      runtime_run_id: "blueprint-run-1",
       job: {
-        job_id: 'test-job-1',
-        run_id: 'test-job-1',
-        graph_id: 'graph-1',
-        status: 'running',
-        submitted_at: '2026-04-16T12:00:00Z',
+        job_id: "test-job-1",
+        run_id: "test-job-1",
+        graph_id: "graph-1",
+        status: "running",
+        submitted_at: "2026-04-16T12:00:00Z",
       },
       agents: [],
       sandboxes: [],
@@ -1271,14 +1604,20 @@ describe('JobDetails Component', () => {
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchJobUi).mockResolvedValue({
-      job_id: 'test-job-1',
-      ui: { schema_version: 'mn.web_ui.external.v1', renderer: 'external-url', job_id: 'test-job-1', title: 'Blueprint Web UI', metadata: {} },
+      job_id: "test-job-1",
+      ui: {
+        schema_version: "mn.web_ui.external.v1",
+        renderer: "external-url",
+        job_id: "test-job-1",
+        title: "Blueprint Web UI",
+        metadata: {},
+      },
       web_ui: {
-        adapter: 'external-url',
-        kind: 'service',
-        url: 'http://localhost:61000',
-        title: 'Blueprint Dashboard',
-        status: 'running',
+        adapter: "external-url",
+        kind: "service",
+        url: "http://localhost:61000",
+        title: "Blueprint Dashboard",
+        status: "running",
         metadata: {},
       },
     });
@@ -1286,21 +1625,25 @@ describe('JobDetails Component', () => {
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByRole('link', { name: 'Blueprint Dashboard' })).toHaveAttribute('href', '/jobs/test-job-1/ui');
+      expect(
+        screen.getByRole("link", { name: "Blueprint Dashboard" }),
+      ).toHaveAttribute("href", "/jobs/test-job-1/ui");
     });
-    expect(fetchJobUi).toHaveBeenCalledWith('test-job-1');
+    expect(fetchJobUi).toHaveBeenCalledWith("test-job-1");
   });
 
-  it('treats a missing optional job web ui as a normal progress-only run', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  it("treats a missing optional job web ui as a normal progress-only run", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     vi.mocked(fetchJobDetails).mockResolvedValue({
-      job_id: 'test-job-1',
-      runtime_run_id: 'progress-only-runtime',
+      job_id: "test-job-1",
+      runtime_run_id: "progress-only-runtime",
       job: {
-        job_id: 'test-job-1',
-        run_id: 'test-job-1',
-        graph_id: 'graph-1',
-        status: 'running',
+        job_id: "test-job-1",
+        run_id: "test-job-1",
+        graph_id: "graph-1",
+        status: "running",
       },
       agents: [],
       sandboxes: [],
@@ -1312,22 +1655,25 @@ describe('JobDetails Component', () => {
       renderWithRouter(<JobDetails />);
 
       await waitFor(() => {
-        expect(fetchJobUi).toHaveBeenCalledWith('test-job-1');
+        expect(fetchJobUi).toHaveBeenCalledWith("test-job-1");
       });
-      expect(consoleError).not.toHaveBeenCalledWith('Failed to load job web UI', expect.anything());
+      expect(consoleError).not.toHaveBeenCalledWith(
+        "Failed to load job web UI",
+        expect.anything(),
+      );
     } finally {
       consoleError.mockRestore();
     }
   });
 
-  it('pauses a running execution through canonical run control', async () => {
+  it("pauses a running execution through canonical run control", async () => {
     const mockDetails = {
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'graph-1',
-        status: 'running',
-        submitted_at: '2026-04-16T12:00:00Z',
+        job_id: "test-job-1",
+        graph_id: "graph-1",
+        status: "running",
+        submitted_at: "2026-04-16T12:00:00Z",
       },
       agents: [],
       sandboxes: [],
@@ -1336,36 +1682,41 @@ describe('JobDetails Component', () => {
 
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
-    vi.mocked(pauseRun).mockResolvedValue({ status: 'paused', run_id: 'test-job-1' });
+    vi.mocked(pauseRun).mockResolvedValue({
+      status: "paused",
+      run_id: "test-job-1",
+    });
 
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
 
-    const pauseButton = screen.getByText('Pause');
+    const pauseButton = screen.getByText("Pause");
     fireEvent.click(pauseButton);
-    expect(await screen.findByText('Pause this run?')).toBeInTheDocument();
+    expect(await screen.findByText("Pause this run?")).toBeInTheDocument();
     expect(pauseRun).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Pause run' }));
+    fireEvent.click(screen.getByRole("button", { name: "Pause run" }));
 
-    await waitFor(() => expect(pauseRun).toHaveBeenCalledWith('test-job-1'));
+    await waitFor(() => expect(pauseRun).toHaveBeenCalledWith("test-job-1"));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Resume" }),
+      ).toBeInTheDocument();
     });
-    expect(screen.getAllByText('paused').length).toBeGreaterThan(0);
+    expect(screen.getAllByText("paused").length).toBeGreaterThan(0);
   });
 
-  it('resumes a paused execution through canonical run control', async () => {
+  it("resumes a paused execution through canonical run control", async () => {
     const mockDetails = {
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'graph-1',
-        status: 'paused',
-        submitted_at: '2026-04-16T12:00:00Z',
+        job_id: "test-job-1",
+        graph_id: "graph-1",
+        status: "paused",
+        submitted_at: "2026-04-16T12:00:00Z",
       },
       agents: [],
       sandboxes: [],
@@ -1374,36 +1725,39 @@ describe('JobDetails Component', () => {
 
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
-    vi.mocked(fetchWorkflowProgress).mockRejectedValue(new Error('Not Found'));
-    vi.mocked(resumeRun).mockResolvedValue({ status: 'running', run_id: 'test-job-1' });
+    vi.mocked(fetchWorkflowProgress).mockRejectedValue(new Error("Not Found"));
+    vi.mocked(resumeRun).mockResolvedValue({
+      status: "running",
+      run_id: "test-job-1",
+    });
 
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
 
-    const resumeButton = screen.getByText('Resume');
+    const resumeButton = screen.getByText("Resume");
     fireEvent.click(resumeButton);
-    expect(await screen.findByText('Resume this run?')).toBeInTheDocument();
+    expect(await screen.findByText("Resume this run?")).toBeInTheDocument();
     expect(resumeRun).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Resume run' }));
+    fireEvent.click(screen.getByRole("button", { name: "Resume run" }));
 
-    await waitFor(() => expect(resumeRun).toHaveBeenCalledWith('test-job-1'));
+    await waitFor(() => expect(resumeRun).toHaveBeenCalledWith("test-job-1"));
     await waitFor(() => {
       expect(fetchJobDetails).toHaveBeenCalled(); // Ensure it was called
     });
   });
 
-  it('cancels an execution through canonical run control', async () => {
+  it("cancels an execution through canonical run control", async () => {
     const mockDetails = {
-      job_id: 'test-job-1',
+      job_id: "test-job-1",
       job: {
-        job_id: 'test-job-1',
-        graph_id: 'graph-1',
-        status: 'running',
-        submitted_at: '2026-04-16T12:00:00Z',
+        job_id: "test-job-1",
+        graph_id: "graph-1",
+        status: "running",
+        submitted_at: "2026-04-16T12:00:00Z",
       },
       agents: [],
       sandboxes: [],
@@ -1412,22 +1766,25 @@ describe('JobDetails Component', () => {
 
     vi.mocked(fetchJobDetails).mockResolvedValue(mockDetails);
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
-    vi.mocked(cancelRun).mockResolvedValue({ status: 'cancelled', run_id: 'test-job-1' });
+    vi.mocked(cancelRun).mockResolvedValue({
+      status: "cancelled",
+      run_id: "test-job-1",
+    });
 
     renderWithRouter(<JobDetails />);
 
     await waitFor(() => {
-      expect(screen.getByText('test-job-1')).toBeInTheDocument();
+      expect(screen.getByText("test-job-1")).toBeInTheDocument();
     });
 
-    const cancelButton = screen.getByText('Cancel');
+    const cancelButton = screen.getByText("Cancel");
     fireEvent.click(cancelButton);
 
-    expect(await screen.findByText('Cancel this run?')).toBeInTheDocument();
+    expect(await screen.findByText("Cancel this run?")).toBeInTheDocument();
     expect(cancelRun).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel run" }));
 
-    await waitFor(() => expect(cancelRun).toHaveBeenCalledWith('test-job-1'));
+    await waitFor(() => expect(cancelRun).toHaveBeenCalledWith("test-job-1"));
   });
 });

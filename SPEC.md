@@ -140,7 +140,6 @@ including level, blueprint owner, UTC timestamp and actor attribution.
 The SDK selects meaningful activity for the CLI, API, desktop and web monitors;
 raw events remain available for diagnostics.
 
-
 ## Immediate runtime notifications
 
 The run monitor subscribes to independent errors and responses SSE channels in

@@ -1,14 +1,21 @@
-import { useCallback, useMemo, useState } from 'react';
-import { fetchSystemSummary } from '../api';
-import type { SystemSummary } from '../api';
-import { Activity, BriefcaseBusiness, CircuitBoard, Cpu, MemoryStick, Server } from 'lucide-react';
-import { Tooltip } from '../components/ui/tooltip';
-import { Card, CardContent } from '../components/ui/card';
-import { Skeleton } from '../components/ui/skeleton';
-import { usePollingEffect } from '../hooks/usePollingEffect';
-import { apiErrorMessage } from '../utils/apiErrors';
-import { cn } from '../lib/utils';
-import { isActiveRunStatus } from '../utils/jobStatus';
+import { useCallback, useMemo, useState } from "react";
+import { fetchSystemSummary } from "../api";
+import type { SystemSummary } from "../api";
+import {
+  Activity,
+  BriefcaseBusiness,
+  CircuitBoard,
+  Cpu,
+  MemoryStick,
+  Server,
+} from "lucide-react";
+import { Tooltip } from "../components/ui/tooltip";
+import { Card, CardContent } from "../components/ui/card";
+import { Skeleton } from "../components/ui/skeleton";
+import { usePollingEffect } from "../hooks/usePollingEffect";
+import { apiErrorMessage } from "../utils/apiErrors";
+import { cn } from "../lib/utils";
+import { isActiveRunStatus } from "../utils/jobStatus";
 import {
   formatMemoryPair,
   formatPercent,
@@ -17,24 +24,26 @@ import {
   nodeResourceMetrics,
   summarizeRuntimeResources,
   type IdentityBadge,
-} from '../utils/runtimeResources';
+} from "../utils/runtimeResources";
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<SystemSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const loadDashboard = useCallback(async (signal?: AbortSignal) => {
     try {
       const nextSummary = await fetchSystemSummary();
       if (signal?.aborted) return;
       setSummary(nextSummary);
-      setError('');
+      setError("");
     } catch (err) {
       if (signal?.aborted) return;
       // Never masquerade a contract failure as measured zeros: keep the last
       // good snapshot (if any) and show a visible diagnostic instead.
-      setError(apiErrorMessage(err, 'Failed to load runtime summary. Try again.'));
+      setError(
+        apiErrorMessage(err, "Failed to load runtime summary. Try again."),
+      );
     }
     setLoading(false);
   }, []);
@@ -43,10 +52,15 @@ export default function Dashboard() {
 
   const metricJobs = summary?.jobs ?? [];
 
-  const resources = useMemo(() => summarizeRuntimeResources(summary), [summary]);
+  const resources = useMemo(
+    () => summarizeRuntimeResources(summary),
+    [summary],
+  );
 
   const totalRuns = metricJobs.length;
-  const activeRuns = metricJobs.filter((run) => isActiveRunStatus(run.status)).length;
+  const activeRuns = metricJobs.filter((run) =>
+    isActiveRunStatus(run.status),
+  ).length;
   const clusterNodes = summary?.nodes.length || 0;
 
   if (loading) {
@@ -73,7 +87,10 @@ export default function Dashboard() {
   return (
     <div className="space-y-4">
       {error ? (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800"
+        >
           <span>{error}</span>
           <button
             type="button"
@@ -90,7 +107,7 @@ export default function Dashboard() {
           label="Total Runs"
           value={totalRuns.toLocaleString()}
           headline="All submitted workflow runs"
-          detail={`${clusterNodes} cluster node${clusterNodes === 1 ? '' : 's'} connected`}
+          detail={`${clusterNodes} cluster node${clusterNodes === 1 ? "" : "s"} connected`}
         />
         <MetricCard
           icon={Activity}
@@ -102,30 +119,49 @@ export default function Dashboard() {
         <MetricCard
           icon={Cpu}
           label="CPU"
-          value={resources.cpuCores ? `${resources.cpuCores.toLocaleString()} cores` : 'Not reported'}
-          headline={resources.cpuLoadRatio === null ? 'No CPU load reported' : `${formatPercent(resources.cpuLoadRatio)} load`}
-          detail={`${resources.nodeCount} runtime node${resources.nodeCount === 1 ? '' : 's'} reporting`}
+          value={
+            resources.cpuCores
+              ? `${resources.cpuCores.toLocaleString()} cores`
+              : "Not reported"
+          }
+          headline={
+            resources.cpuLoadRatio === null
+              ? "No CPU load reported"
+              : `${formatPercent(resources.cpuLoadRatio)} load`
+          }
+          detail={`${resources.nodeCount} runtime node${resources.nodeCount === 1 ? "" : "s"} reporting`}
         />
         <MetricCard
           icon={MemoryStick}
           label="Memory"
-          value={formatMemoryPair(resources.gpuMemoryTotalMb, resources.memoryTotalBytes)}
+          value={formatMemoryPair(
+            resources.gpuMemoryTotalMb,
+            resources.memoryTotalBytes,
+          )}
           headline="GPU mem / total mem"
-          detail={resources.memoryUsedRatio === null ? 'No memory usage reported' : `${formatPercent(resources.memoryUsedRatio)} used`}
+          detail={
+            resources.memoryUsedRatio === null
+              ? "No memory usage reported"
+              : `${formatPercent(resources.memoryUsedRatio)} used`
+          }
         />
         <MetricCard
           icon={CircuitBoard}
           label="GPU"
-          value={`${resources.gpuCount.toLocaleString()} GPU${resources.gpuCount === 1 ? '' : 's'}`}
-          headline={resources.gpuCount ? 'Runtime GPU devices' : 'No GPUs reported'}
-          detail={`${resources.nodeCount} runtime node${resources.nodeCount === 1 ? '' : 's'} reporting`}
+          value={`${resources.gpuCount.toLocaleString()} GPU${resources.gpuCount === 1 ? "" : "s"}`}
+          headline={
+            resources.gpuCount ? "Runtime GPU devices" : "No GPUs reported"
+          }
+          detail={`${resources.nodeCount} runtime node${resources.nodeCount === 1 ? "" : "s"} reporting`}
         />
       </div>
 
       <Card>
         <CardContent className="divide-y divide-neutral-100 p-0">
           {(summary?.nodes || []).length === 0 ? (
-            <div className="px-5 py-8 text-xs text-neutral-500">No cluster nodes reported yet.</div>
+            <div className="px-5 py-8 text-xs text-neutral-500">
+              No cluster nodes reported yet.
+            </div>
           ) : (
             summary?.nodes.map((node, index) => (
               <div key={`${node.name}-${index}`} className="px-5 py-4">
@@ -142,12 +178,16 @@ export default function Dashboard() {
                     </Tooltip>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium text-neutral-950">{node.name}</span>
+                        <span className="text-sm font-medium text-neutral-950">
+                          {node.name}
+                        </span>
                         {nodeIdentityBadges(node).map((badge) => (
                           <NodeIdentityBadge key={badge.id} badge={badge} />
                         ))}
                       </div>
-                      <div className="text-xs text-neutral-500">{node.self ? 'Local node' : 'Peer node'}</div>
+                      <div className="text-xs text-neutral-500">
+                        {node.self ? "Local node" : "Peer node"}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -189,14 +229,26 @@ function MetricCard({
         <span>{label}</span>
         <Icon className="h-4 w-4 text-neutral-500" />
       </div>
-      <div className="mt-4 text-3xl font-semibold tracking-tight text-neutral-950">{value}</div>
-      <div className="mt-5 text-xs font-medium text-neutral-950">{headline}</div>
+      <div className="mt-4 text-3xl font-semibold tracking-tight text-neutral-950">
+        {value}
+      </div>
+      <div className="mt-5 text-xs font-medium text-neutral-950">
+        {headline}
+      </div>
       <div className="mt-1 text-xs text-neutral-500">{detail}</div>
     </Card>
   );
 }
 
-function NodeResourceMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+function NodeResourceMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
   return (
     <div className="rounded-md border border-neutral-200 p-3">
       <div className="text-xs text-neutral-500">{label}</div>
@@ -213,13 +265,15 @@ function NodeIdentityBadge({ badge }: { badge: IdentityBadge }) {
     <Tooltip content={badge.title}>
       <span
         className={cn(
-          'inline-flex h-5 items-center justify-center rounded border border-neutral-200 bg-neutral-50 text-[11px] font-medium text-neutral-600',
-          'gap-1 px-1.5',
+          "inline-flex h-5 items-center justify-center rounded border border-neutral-200 bg-neutral-50 text-[11px] font-medium text-neutral-600",
+          "gap-1 px-1.5",
         )}
         aria-label={badge.title}
         title={badge.title}
       >
-        {isGpuBadge ? badge.label : (
+        {isGpuBadge ? (
+          badge.label
+        ) : (
           <>
             <Icon className="h-3 w-3" />
             {badge.label}

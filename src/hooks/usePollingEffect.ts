@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from "react";
 
 type PollingOptions = {
   intervalMs: number;
@@ -12,9 +12,8 @@ type PollingOptions = {
   maxDelayMs?: number;
 };
 
-const scheduleOn = (fn: () => void, delayMs: number): number => (
-  globalThis.setTimeout(fn, delayMs) as unknown as number
-);
+const scheduleOn = (fn: () => void, delayMs: number): number =>
+  globalThis.setTimeout(fn, delayMs) as unknown as number;
 
 const clearScheduled = (timer: number | undefined) => {
   if (timer !== undefined) globalThis.clearTimeout(timer);
@@ -87,5 +86,12 @@ export function usePollingEffect(
       clearScheduled(initialTimer);
       clearScheduled(refreshTimer);
     };
-  }, [callback, enabled, initialDelayMs, intervalMs, maxConsecutiveFailures, maxDelayMs]);
+  }, [
+    callback,
+    enabled,
+    initialDelayMs,
+    intervalMs,
+    maxConsecutiveFailures,
+    maxDelayMs,
+  ]);
 }

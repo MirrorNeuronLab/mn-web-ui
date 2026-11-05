@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Background,
   Controls,
   Handle,
   Position,
   ReactFlow,
-} from '@xyflow/react';
-import type { Edge, Node, NodeProps, ReactFlowInstance } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
-import dagre from 'dagre';
-import type { WorkflowProgress, WorkflowProgressStep } from '../api';
-import { buildWorkflowTopology } from '../utils/workflowTopology';
+} from "@xyflow/react";
+import type { Edge, Node, NodeProps, ReactFlowInstance } from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import dagre from "dagre";
+import type { WorkflowProgress, WorkflowProgressStep } from "../api";
+import { buildWorkflowTopology } from "../utils/workflowTopology";
 
 type WorkflowStepNodeData = {
   index: number;
@@ -34,65 +34,120 @@ type WorkflowTopologyGraphProps = {
 const NODE_WIDTH = 224;
 const NODE_HEIGHT = 112;
 
-const nodeStatusClass = (status: string | undefined, current: boolean, selected: boolean) => {
-  if (selected) return 'border-neutral-950 bg-neutral-950 text-white shadow-lg shadow-neutral-950/15';
-  if (['failed', 'cancelled', 'canceled', 'error'].includes(String(status || '').toLowerCase())) return 'border-red-300 bg-red-50 text-red-950';
-  if (current || ['running', 'active'].includes(String(status || '').toLowerCase())) return 'border-sky-400 bg-sky-50 text-sky-950 shadow-sm';
-  if (['completed', 'done', 'succeeded', 'success', 'finished'].includes(String(status || '').toLowerCase())) return 'border-emerald-300 bg-emerald-50 text-emerald-950';
-  return 'border-neutral-200 bg-white text-neutral-950 shadow-sm';
+const nodeStatusClass = (
+  status: string | undefined,
+  current: boolean,
+  selected: boolean,
+) => {
+  if (selected)
+    return "border-neutral-950 bg-neutral-950 text-white shadow-lg shadow-neutral-950/15";
+  if (
+    ["failed", "cancelled", "canceled", "error"].includes(
+      String(status || "").toLowerCase(),
+    )
+  )
+    return "border-red-300 bg-red-50 text-red-950";
+  if (
+    current ||
+    ["running", "active"].includes(String(status || "").toLowerCase())
+  )
+    return "border-sky-400 bg-sky-50 text-sky-950 shadow-sm";
+  if (
+    ["completed", "done", "succeeded", "success", "finished"].includes(
+      String(status || "").toLowerCase(),
+    )
+  )
+    return "border-emerald-300 bg-emerald-50 text-emerald-950";
+  return "border-neutral-200 bg-white text-neutral-950 shadow-sm";
 };
 
 const statusDotClass = (status: string | undefined) => {
-  const normalized = String(status || '').toLowerCase();
-  if (['failed', 'cancelled', 'canceled', 'error'].includes(normalized)) return 'bg-red-500';
-  if (['running', 'active'].includes(normalized)) return 'bg-sky-500';
-  if (['completed', 'done', 'succeeded', 'success', 'finished'].includes(normalized)) return 'bg-emerald-500';
-  if (['retry_wait', 'blocked', 'paused', 'queued'].includes(normalized)) return 'bg-amber-500';
-  return 'bg-neutral-400';
+  const normalized = String(status || "").toLowerCase();
+  if (["failed", "cancelled", "canceled", "error"].includes(normalized))
+    return "bg-red-500";
+  if (["running", "active"].includes(normalized)) return "bg-sky-500";
+  if (
+    ["completed", "done", "succeeded", "success", "finished"].includes(
+      normalized,
+    )
+  )
+    return "bg-emerald-500";
+  if (["retry_wait", "blocked", "paused", "queued"].includes(normalized))
+    return "bg-amber-500";
+  return "bg-neutral-400";
 };
 
 const WorkflowStepNode = ({ data }: NodeProps<Node<WorkflowStepNodeData>>) => {
   const { index, step, selected, workflowKind, onSelect } = data;
-  const count = workflowKind === 'service' ? (step.ready_count || step.done_count || 0) : (step.done_count || 0);
+  const count =
+    workflowKind === "service"
+      ? step.ready_count || step.done_count || 0
+      : step.done_count || 0;
   const agentCount = step.agents.length || step.total_count || 0;
-  const selectedText = selected ? 'text-neutral-300' : 'text-neutral-500';
+  const selectedText = selected ? "text-neutral-300" : "text-neutral-500";
 
   return (
     <div
       role="button"
       tabIndex={0}
       aria-pressed={selected}
-      aria-label={`Workflow step ${index + 1}: ${step.label}, status ${step.status || 'pending'}`}
+      aria-label={`Workflow step ${index + 1}: ${step.label}, status ${step.status || "pending"}`}
       data-testid={`workflow-step-node-${step.id}`}
       onClick={() => onSelect(step.id)}
       onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
+        if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onSelect(step.id);
         }
       }}
       className={`nodrag nopan min-h-[112px] w-[224px] cursor-pointer rounded-lg border p-3 text-left outline-none transition hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 ${nodeStatusClass(step.status, step.current, selected)}`}
     >
-      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-0 !bg-neutral-400" />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-2 !w-2 !border-0 !bg-neutral-400"
+      />
       <div className="flex items-start gap-2">
-        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${statusDotClass(step.status)}`} />
+        <span
+          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${statusDotClass(step.status)}`}
+        />
         <div className="min-w-0 flex-1">
-          <div className="line-clamp-2 text-xs font-semibold leading-4">{index + 1}. {step.label}</div>
-          <div className={`mt-1 truncate font-mono text-[10px] ${selectedText}`} title={step.id}>{step.id}</div>
+          <div className="line-clamp-2 text-xs font-semibold leading-4">
+            {index + 1}. {step.label}
+          </div>
+          <div
+            className={`mt-1 truncate font-mono text-[10px] ${selectedText}`}
+            title={step.id}
+          >
+            {step.id}
+          </div>
         </div>
       </div>
-      <div className={`mt-3 flex items-center justify-between border-t pt-2 text-[11px] ${selected ? 'border-white/20 text-neutral-200' : 'border-current/10 text-neutral-600'}`}>
-        <span className="capitalize">{step.status || 'pending'}</span>
-        <span className="font-mono">{count}/{step.total_count || agentCount} · {agentCount} {agentCount === 1 ? 'agent' : 'agents'}</span>
+      <div
+        className={`mt-3 flex items-center justify-between border-t pt-2 text-[11px] ${selected ? "border-white/20 text-neutral-200" : "border-current/10 text-neutral-600"}`}
+      >
+        <span className="capitalize">{step.status || "pending"}</span>
+        <span className="font-mono">
+          {count}/{step.total_count || agentCount} · {agentCount}{" "}
+          {agentCount === 1 ? "agent" : "agents"}
+        </span>
       </div>
-      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-0 !bg-neutral-400" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-2 !w-2 !border-0 !bg-neutral-400"
+      />
     </div>
   );
 };
 
 const nodeTypes = { workflowStep: WorkflowStepNode };
 
-const layoutTopology = (nodes: Node<WorkflowStepNodeData>[], edges: Edge[], layers: string[][]): WorkflowTopologyNode[] => {
+const layoutTopology = (
+  nodes: Node<WorkflowStepNodeData>[],
+  edges: Edge[],
+  layers: string[][],
+): WorkflowTopologyNode[] => {
   if (layers.length > 0) {
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
     const maxLayerSize = Math.max(...layers.map((layer) => layer.length), 1);
@@ -104,15 +159,17 @@ const layoutTopology = (nodes: Node<WorkflowStepNodeData>[], edges: Edge[], laye
       return layer.flatMap((nodeId, rowIndex) => {
         const node = nodeById.get(nodeId);
         if (!node) return [];
-        return [{
-          ...node,
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-          position: {
-            x: 32 + layerIndex * (NODE_WIDTH + 104),
-            y: 32 + topOffset + rowIndex * verticalStride,
+        return [
+          {
+            ...node,
+            sourcePosition: Position.Right,
+            targetPosition: Position.Left,
+            position: {
+              x: 32 + layerIndex * (NODE_WIDTH + 104),
+              y: 32 + topOffset + rowIndex * verticalStride,
+            },
           },
-        }];
+        ];
       });
     });
   }
@@ -120,14 +177,16 @@ const layoutTopology = (nodes: Node<WorkflowStepNodeData>[], edges: Edge[], laye
   const graph = new dagre.graphlib.Graph();
   graph.setDefaultEdgeLabel(() => ({}));
   graph.setGraph({
-    rankdir: 'LR',
+    rankdir: "LR",
     nodesep: 44,
     ranksep: 104,
     marginx: 32,
     marginy: 32,
   });
 
-  nodes.forEach((node) => graph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT }));
+  nodes.forEach((node) =>
+    graph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT }),
+  );
   edges.forEach((edge) => graph.setEdge(edge.source, edge.target));
   dagre.layout(graph);
 
@@ -146,32 +205,49 @@ const layoutTopology = (nodes: Node<WorkflowStepNodeData>[], edges: Edge[], laye
 };
 
 const edgeTone = (status: string | undefined) => {
-  const normalized = String(status || '').toLowerCase();
-  if (['failed', 'cancelled', 'canceled', 'error'].includes(normalized)) return '#ef4444';
-  if (['completed', 'done', 'succeeded', 'success', 'finished'].includes(normalized)) return '#10b981';
-  if (['running', 'active'].includes(normalized)) return '#0ea5e9';
-  return '#a3a3a3';
+  const normalized = String(status || "").toLowerCase();
+  if (["failed", "cancelled", "canceled", "error"].includes(normalized))
+    return "#ef4444";
+  if (
+    ["completed", "done", "succeeded", "success", "finished"].includes(
+      normalized,
+    )
+  )
+    return "#10b981";
+  if (["running", "active"].includes(normalized)) return "#0ea5e9";
+  return "#a3a3a3";
 };
 
-export function WorkflowTopologyGraph({ progress, selectedStepId, onSelectStep }: WorkflowTopologyGraphProps) {
-  const flowRef = useRef<ReactFlowInstance<WorkflowTopologyNode, Edge> | null>(null);
+export function WorkflowTopologyGraph({
+  progress,
+  selectedStepId,
+  onSelectStep,
+}: WorkflowTopologyGraphProps) {
+  const flowRef = useRef<ReactFlowInstance<WorkflowTopologyNode, Edge> | null>(
+    null,
+  );
   const topology = useMemo(() => buildWorkflowTopology(progress), [progress]);
-  const workflowKind = progress.workflow_kind || 'batch';
-  const selectStep = useCallback((stepId: string) => onSelectStep(stepId), [onSelectStep]);
+  const workflowKind = progress.workflow_kind || "batch";
+  const selectStep = useCallback(
+    (stepId: string) => onSelectStep(stepId),
+    [onSelectStep],
+  );
 
   const { nodes, edges, structureKey } = useMemo(() => {
-    const rawNodes: Node<WorkflowStepNodeData>[] = topology.steps.map((step, index) => ({
-      id: step.id,
-      type: 'workflowStep',
-      position: { x: 0, y: 0 },
-      data: {
-        index,
-        step,
-        selected: step.id === selectedStepId,
-        workflowKind,
-        onSelect: selectStep,
-      },
-    }));
+    const rawNodes: Node<WorkflowStepNodeData>[] = topology.steps.map(
+      (step, index) => ({
+        id: step.id,
+        type: "workflowStep",
+        position: { x: 0, y: 0 },
+        data: {
+          index,
+          step,
+          selected: step.id === selectedStepId,
+          workflowKind,
+          onSelect: selectStep,
+        },
+      }),
+    );
     const stepById = new Map(topology.steps.map((step) => [step.id, step]));
     const rawEdges: Edge[] = topology.edges.map((edge) => {
       const source = stepById.get(edge.source);
@@ -179,12 +255,20 @@ export function WorkflowTopologyGraph({ progress, selectedStepId, onSelectStep }
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        type: 'smoothstep',
+        type: "smoothstep",
         label: edge.event,
-        animated: Boolean(source?.current && ['running', 'active'].includes(String(source.status || '').toLowerCase())),
-        style: { stroke: edgeTone(source?.status), strokeWidth: source?.current ? 2 : 1.5 },
-        labelStyle: { fill: '#525252', fontSize: 10, fontWeight: 600 },
-        labelBgStyle: { fill: '#ffffff', fillOpacity: 0.92 },
+        animated: Boolean(
+          source?.current &&
+            ["running", "active"].includes(
+              String(source.status || "").toLowerCase(),
+            ),
+        ),
+        style: {
+          stroke: edgeTone(source?.status),
+          strokeWidth: source?.current ? 2 : 1.5,
+        },
+        labelStyle: { fill: "#525252", fontSize: 10, fontWeight: 600 },
+        labelBgStyle: { fill: "#ffffff", fillOpacity: 0.92 },
         labelBgPadding: [3, 2],
         labelBgBorderRadius: 3,
       };
@@ -193,12 +277,14 @@ export function WorkflowTopologyGraph({ progress, selectedStepId, onSelectStep }
     return {
       nodes: layoutTopology(rawNodes, rawEdges, topology.layers),
       edges: rawEdges,
-      structureKey: `${rawNodes.map((node) => node.id).join('|')}#${rawEdges.map((edge) => edge.id).join('|')}`,
+      structureKey: `${rawNodes.map((node) => node.id).join("|")}#${rawEdges.map((edge) => edge.id).join("|")}`,
     };
   }, [selectedStepId, selectStep, topology, workflowKind]);
 
   const fitView = useCallback(() => {
-    window.requestAnimationFrame(() => flowRef.current?.fitView({ padding: 0.18, duration: 220 }));
+    window.requestAnimationFrame(() =>
+      flowRef.current?.fitView({ padding: 0.18, duration: 220 }),
+    );
   }, []);
 
   useEffect(() => {
@@ -214,7 +300,10 @@ export function WorkflowTopologyGraph({ progress, selectedStepId, onSelectStep }
   }
 
   return (
-    <section aria-label="Workflow topology" className="mb-4 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50">
+    <section
+      aria-label="Workflow topology"
+      className="mb-4 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50"
+    >
       <nav aria-label="Workflow step navigator" className="sr-only">
         {topology.steps.map((step, index) => (
           <button
@@ -229,10 +318,16 @@ export function WorkflowTopologyGraph({ progress, selectedStepId, onSelectStep }
       </nav>
       <div className="flex items-center justify-between border-b border-neutral-200 bg-white px-3 py-2">
         <div>
-          <div className="text-xs font-semibold text-neutral-950">Workflow topology</div>
-          <div className="text-[11px] text-neutral-500">Select a step to inspect its public agents and activity.</div>
+          <div className="text-xs font-semibold text-neutral-950">
+            Workflow topology
+          </div>
+          <div className="text-[11px] text-neutral-500">
+            Select a step to inspect its public agents and activity.
+          </div>
         </div>
-        <span className="text-[11px] text-neutral-500">{nodes.length} steps · {edges.length} links</span>
+        <span className="text-[11px] text-neutral-500">
+          {nodes.length} steps · {edges.length} links
+        </span>
       </div>
       <div className="h-72 min-h-[18rem] bg-white">
         <ReactFlow

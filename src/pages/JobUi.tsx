@@ -1,51 +1,58 @@
-import { useCallback, useRef, useState } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
-import { AlertCircle, Loader2 } from 'lucide-react';
-import { fetchJobUi } from '../api';
-import { apiErrorMessage } from '../utils/apiErrors';
-import { isRecord } from '../utils/records';
-import { usePollingEffect } from '../hooks/usePollingEffect';
+import { useCallback, useRef, useState } from "react";
+import { useLocation, useParams } from "react-router-dom";
+import { AlertCircle, Loader2 } from "lucide-react";
+import { fetchJobUi } from "../api";
+import { apiErrorMessage } from "../utils/apiErrors";
+import { isRecord } from "../utils/records";
+import { usePollingEffect } from "../hooks/usePollingEffect";
 
-function localProxyUrl(jobId: string, serviceUrl: string, query: string): string {
+function localProxyUrl(
+  jobId: string,
+  serviceUrl: string,
+  query: string,
+): string {
   let remote: URL;
   try {
     remote = new URL(serviceUrl);
   } catch {
-    return '';
+    return "";
   }
-  if (!['http:', 'https:'].includes(remote.protocol) || !remote.hostname) return '';
+  if (!["http:", "https:"].includes(remote.protocol) || !remote.hostname)
+    return "";
 
-  const port = Number(remote.port || (remote.protocol === 'https:' ? 443 : 80));
-  if (!Number.isInteger(port) || port < 1 || port > 65535) return '';
+  const port = Number(remote.port || (remote.protocol === "https:" ? 443 : 80));
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return "";
 
-  const remotePath = remote.pathname.replace(/^\/+/, '');
+  const remotePath = remote.pathname.replace(/^\/+/, "");
   const proxyRoot = `/job-ui-proxy/${encodeURIComponent(jobId)}/${port}`;
   // A root service must retain its trailing slash. Relative bundle URLs in
   // the framed page otherwise resolve outside the port-scoped proxy route.
   const proxyPath = remotePath ? `${proxyRoot}/${remotePath}` : `${proxyRoot}/`;
   const parameters = new URLSearchParams(remote.search);
-  new URLSearchParams(query).forEach((value, key) => parameters.set(key, value));
+  new URLSearchParams(query).forEach((value, key) =>
+    parameters.set(key, value),
+  );
   const suffix = parameters.toString();
   return suffix ? `${proxyPath}?${suffix}` : proxyPath;
 }
 
 function unavailableMessage(status: string | undefined): string {
   switch (status?.trim().toLowerCase()) {
-    case 'paused':
-      return 'This job is paused. Resume it to reopen its web UI.';
-    case 'cancelled':
-    case 'canceled':
-      return 'This job was cancelled, so its web UI is no longer available.';
-    case 'stopped':
-      return 'This service has stopped, so its web UI is no longer available.';
-    case 'failed':
-      return 'This service failed, so its web UI is no longer available.';
-    case 'completed':
-    case 'deleted':
-    case 'archived':
-      return 'This job has finished, so its web UI is no longer available.';
+    case "paused":
+      return "This job is paused. Resume it to reopen its web UI.";
+    case "cancelled":
+    case "canceled":
+      return "This job was cancelled, so its web UI is no longer available.";
+    case "stopped":
+      return "This service has stopped, so its web UI is no longer available.";
+    case "failed":
+      return "This service failed, so its web UI is no longer available.";
+    case "completed":
+    case "deleted":
+    case "archived":
+      return "This job has finished, so its web UI is no longer available.";
     default:
-      return '';
+      return "";
   }
 }
 
@@ -53,64 +60,79 @@ function unavailableMessage(status: string | undefined): string {
 export default function JobUi() {
   const { jobId } = useParams();
   const location = useLocation();
-  return <JobUiView key={`${jobId}:${location.search}`} jobId={jobId} query={location.search || ''} />;
+  return (
+    <JobUiView
+      key={`${jobId}:${location.search}`}
+      jobId={jobId}
+      query={location.search || ""}
+    />
+  );
 }
 
 function JobUiView({ jobId, query }: { jobId?: string; query: string }) {
-  const [targetUrl, setTargetUrl] = useState('');
-  const [title, setTitle] = useState('Blueprint Web UI');
-  const [error, setError] = useState('');
-  const targetUrlRef = useRef('');
+  const [targetUrl, setTargetUrl] = useState("");
+  const [title, setTitle] = useState("Blueprint Web UI");
+  const [error, setError] = useState("");
+  const targetUrlRef = useRef("");
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    if (!jobId) return;
-    const updateTargetUrl = (nextUrl: string) => {
-      targetUrlRef.current = nextUrl;
-      setTargetUrl(nextUrl);
-    };
-    await fetchJobUi(jobId)
-      .then((response) => {
-        if (signal?.aborted) return;
-        setTitle(response.web_ui?.title?.trim() || 'Blueprint Web UI');
-        const unavailable = unavailableMessage(response.web_ui?.status);
-        if (unavailable) {
-          updateTargetUrl('');
-          setError(unavailable);
-          return;
-        }
-        const url = response.web_ui?.url?.trim();
-        if (!url) {
-          updateTargetUrl('');
-          setError('No web UI is registered for this job yet.');
-          return;
-        }
-        const readiness = response.web_ui?.metadata.readiness;
-        if (isRecord(readiness) && readiness.ready === false) {
-          updateTargetUrl('');
-          setError('The web UI is getting ready. This page will open when it is available.');
-          return;
-        }
-        const nextUrl = localProxyUrl(jobId, url, query);
-        if (!nextUrl) {
-          updateTargetUrl('');
-          setError('The registered web UI URL is invalid.');
-          return;
-        }
-        setError('');
-        updateTargetUrl(nextUrl);
-      })
-      .catch((err: unknown) => {
-        if (!signal?.aborted && !targetUrlRef.current) {
-          setError(apiErrorMessage(err, 'Failed to load job web UI.'));
-        }
-      });
-  }, [jobId, query]);
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!jobId) return;
+      const updateTargetUrl = (nextUrl: string) => {
+        targetUrlRef.current = nextUrl;
+        setTargetUrl(nextUrl);
+      };
+      await fetchJobUi(jobId)
+        .then((response) => {
+          if (signal?.aborted) return;
+          setTitle(response.web_ui?.title?.trim() || "Blueprint Web UI");
+          const unavailable = unavailableMessage(response.web_ui?.status);
+          if (unavailable) {
+            updateTargetUrl("");
+            setError(unavailable);
+            return;
+          }
+          const url = response.web_ui?.url?.trim();
+          if (!url) {
+            updateTargetUrl("");
+            setError("No web UI is registered for this job yet.");
+            return;
+          }
+          const readiness = response.web_ui?.metadata.readiness;
+          if (isRecord(readiness) && readiness.ready === false) {
+            updateTargetUrl("");
+            setError(
+              "The web UI is getting ready. This page will open when it is available.",
+            );
+            return;
+          }
+          const nextUrl = localProxyUrl(jobId, url, query);
+          if (!nextUrl) {
+            updateTargetUrl("");
+            setError("The registered web UI URL is invalid.");
+            return;
+          }
+          setError("");
+          updateTargetUrl(nextUrl);
+        })
+        .catch((err: unknown) => {
+          if (!signal?.aborted && !targetUrlRef.current) {
+            setError(apiErrorMessage(err, "Failed to load job web UI."));
+          }
+        });
+    },
+    [jobId, query],
+  );
   usePollingEffect(load, { intervalMs: 2000 });
 
   if (targetUrl) {
     return (
       <div className="h-screen w-screen overflow-hidden bg-white">
-        <iframe className="block h-full w-full border-0" src={targetUrl} title={title} />
+        <iframe
+          className="block h-full w-full border-0"
+          src={targetUrl}
+          title={title}
+        />
       </div>
     );
   }
@@ -123,7 +145,9 @@ function JobUiView({ jobId, query }: { jobId?: string; query: string }) {
         ) : (
           <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin text-neutral-500" />
         )}
-        {error ? <div className="text-sm font-medium text-neutral-950">{error}</div> : null}
+        {error ? (
+          <div className="text-sm font-medium text-neutral-950">{error}</div>
+        ) : null}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import '@testing-library/jest-dom';
+import "@testing-library/jest-dom";
 
 class ResizeObserverMock {
   observe() {}
@@ -6,7 +6,7 @@ class ResizeObserverMock {
   disconnect() {}
 }
 
-Object.defineProperty(globalThis, 'ResizeObserver', {
+Object.defineProperty(globalThis, "ResizeObserver", {
   writable: true,
   value: ResizeObserverMock,
 });

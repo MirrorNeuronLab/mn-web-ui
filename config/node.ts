@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   BROWSER_CONFIG_ENV_NAMES,
   CONFIG_ENV_NAMES,
@@ -8,7 +8,7 @@ import {
   createAppConfig,
   envFileSuffixFor,
   normalizeConfigEnvironment,
-} from './definitions';
+} from "./definitions";
 
 export type LoadedNodeConfig = {
   app: AppConfig;
@@ -23,14 +23,19 @@ type LoadNodeConfigOptions = {
   requiredKeys?: readonly (keyof AppConfig)[];
 };
 
-export function loadNodeConfig(options: LoadNodeConfigOptions = {}): LoadedNodeConfig {
+export function loadNodeConfig(
+  options: LoadNodeConfigOptions = {},
+): LoadedNodeConfig {
   const cwd = options.cwd ?? process.cwd();
   const realEnv = options.env ?? process.env;
   const environment = normalizeConfigEnvironment(realEnv.MN_ENV);
   const environmentFile = `.env.${envFileSuffixFor(environment)}`;
   const loadedFiles: string[] = [];
-  const envDefaults = loadDotEnvFile(resolve(cwd, '.env'), loadedFiles);
-  const environmentDefaults = loadDotEnvFile(resolve(cwd, environmentFile), loadedFiles);
+  const envDefaults = loadDotEnvFile(resolve(cwd, ".env"), loadedFiles);
+  const environmentDefaults = loadDotEnvFile(
+    resolve(cwd, environmentFile),
+    loadedFiles,
+  );
   const raw = filterSupportedConfig({
     ...envDefaults,
     ...environmentDefaults,
@@ -56,7 +61,7 @@ function loadDotEnvFile(path: string, loadedFiles: string[]) {
   }
 
   loadedFiles.push(path);
-  return parseDotEnv(readFileSync(path, 'utf8'));
+  return parseDotEnv(readFileSync(path, "utf8"));
 }
 
 export function parseDotEnv(contents: string) {
@@ -65,11 +70,11 @@ export function parseDotEnv(contents: string) {
   for (const line of contents.split(/\r?\n/)) {
     const trimmed = line.trim();
 
-    if (!trimmed || trimmed.startsWith('#')) {
+    if (!trimmed || trimmed.startsWith("#")) {
       continue;
     }
 
-    const separatorIndex = trimmed.indexOf('=');
+    const separatorIndex = trimmed.indexOf("=");
     if (separatorIndex <= 0) {
       continue;
     }
@@ -85,8 +90,8 @@ export function parseDotEnv(contents: string) {
 
 function stripDotEnvQuotes(value: string) {
   if (
-    (value.startsWith('"') && value.endsWith('"'))
-    || (value.startsWith("'") && value.endsWith("'"))
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
   ) {
     return value.slice(1, -1);
   }
@@ -99,7 +104,10 @@ function stripDotEnvQuotes(value: string) {
   return value;
 }
 
-function filterSupportedConfig(source: RawConfigSource, keys = CONFIG_ENV_NAMES) {
+function filterSupportedConfig(
+  source: RawConfigSource,
+  keys = CONFIG_ENV_NAMES,
+) {
   return Object.fromEntries(
     keys
       .map((key) => [key, source[key]])

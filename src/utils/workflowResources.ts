@@ -1,13 +1,13 @@
-import type { JobDetails, WorkflowProgress } from '../api';
-import { artifactDisplayName, isOpenableHref } from './artifacts';
-import { isRecord } from './records';
+import type { JobDetails, WorkflowProgress } from "../api";
+import { artifactDisplayName, isOpenableHref } from "./artifacts";
+import { isRecord } from "./records";
 
 export type ProgressResource = {
   id: string;
   label: string;
   value: string;
   href?: string;
-  kind: 'file' | 'url' | 'input' | 'text';
+  kind: "file" | "url" | "input" | "text";
 };
 
 export type FailureArtifact = {
@@ -18,26 +18,38 @@ export type FailureArtifact = {
   size_bytes?: number;
 };
 
-const RESOURCE_KEYS = ['outputs', 'output', 'artifacts', 'artifact', 'files', 'urls', 'results', 'result'];
-const INPUT_RESOURCE_KEYS = ['inputs', 'input', 'sources', 'source'];
+const RESOURCE_KEYS = [
+  "outputs",
+  "output",
+  "artifacts",
+  "artifact",
+  "files",
+  "urls",
+  "results",
+  "result",
+];
+const INPUT_RESOURCE_KEYS = ["inputs", "input", "sources", "source"];
 
 const displayNameFromPath = (value: string) => {
   const trimmed = value.trim();
-  if (!trimmed) return 'Untitled';
+  if (!trimmed) return "Untitled";
   try {
     const parsed = new URL(trimmed);
     return parsed.hostname || trimmed;
   } catch {
-    const normalized = trimmed.replace(/\/+$/, '');
-    return normalized.split('/').filter(Boolean).pop() || normalized;
+    const normalized = trimmed.replace(/\/+$/, "");
+    return normalized.split("/").filter(Boolean).pop() || normalized;
   }
 };
 
 const isUrl = (value: string) => /^https?:\/\//i.test(value.trim());
 
-const stringProp = (source: Record<string, unknown>, key: string): string | undefined => {
+const stringProp = (
+  source: Record<string, unknown>,
+  key: string,
+): string | undefined => {
   const value = source[key];
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 };
 
 const resourceFromPrimitive = (
@@ -52,7 +64,11 @@ const resourceFromPrimitive = (
     label: fallbackLabel || displayNameFromPath(text),
     value: text,
     href: isOpenableHref(text) ? text : undefined,
-    kind: isUrl(text) ? 'url' : text.includes('/') || text.includes('.') ? 'file' : 'text',
+    kind: isUrl(text)
+      ? "url"
+      : text.includes("/") || text.includes(".")
+        ? "file"
+        : "text",
   };
 };
 
@@ -62,46 +78,70 @@ const resourceFromRecord = (
   fallbackLabel?: string,
 ): ProgressResource | null => {
   const artifact = {
-    artifact_id: stringProp(value, 'artifact_id'),
-    relative_path: stringProp(value, 'relative_path'),
-    path: stringProp(value, 'path'),
-    url: stringProp(value, 'url'),
-    label: stringProp(value, 'label'),
-    title: stringProp(value, 'title'),
-    name: stringProp(value, 'name'),
+    artifact_id: stringProp(value, "artifact_id"),
+    relative_path: stringProp(value, "relative_path"),
+    path: stringProp(value, "path"),
+    url: stringProp(value, "url"),
+    label: stringProp(value, "label"),
+    title: stringProp(value, "title"),
+    name: stringProp(value, "name"),
   };
-  const rawValue = artifact.relative_path
-    || artifact.path
-    || value.file
-    || value.file_path
-    || value.local_path
-    || value.value
-    || artifact.url
-    || value.href
-    || artifact.name;
-  if (typeof rawValue !== 'string' && typeof rawValue !== 'number' && typeof rawValue !== 'boolean') {
+  const rawValue =
+    artifact.relative_path ||
+    artifact.path ||
+    value.file ||
+    value.file_path ||
+    value.local_path ||
+    value.value ||
+    artifact.url ||
+    value.href ||
+    artifact.name;
+  if (
+    typeof rawValue !== "string" &&
+    typeof rawValue !== "number" &&
+    typeof rawValue !== "boolean"
+  ) {
     return null;
   }
   const text = String(rawValue).trim();
   if (!text) return null;
-  const hrefValue = stringProp(value, 'url') || stringProp(value, 'href');
+  const hrefValue = stringProp(value, "url") || stringProp(value, "href");
   return {
     id,
-    label: artifactDisplayName(artifact, fallbackLabel || displayNameFromPath(text)),
+    label: artifactDisplayName(
+      artifact,
+      fallbackLabel || displayNameFromPath(text),
+    ),
     value: text,
-    href: isOpenableHref(hrefValue) ? hrefValue : isOpenableHref(text) ? text : undefined,
-    kind: isUrl(hrefValue || text) ? 'url' : 'file',
+    href: isOpenableHref(hrefValue)
+      ? hrefValue
+      : isOpenableHref(text)
+        ? text
+        : undefined,
+    kind: isUrl(hrefValue || text) ? "url" : "file",
   };
 };
 
-const resourceFromValue = (value: unknown, id: string, fallbackLabel?: string): ProgressResource | null => {
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+const resourceFromValue = (
+  value: unknown,
+  id: string,
+  fallbackLabel?: string,
+): ProgressResource | null => {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
     return resourceFromPrimitive(value, id, fallbackLabel);
   }
   return isRecord(value) ? resourceFromRecord(value, id, fallbackLabel) : null;
 };
 
-const collectResources = (source: unknown, keys: string[], prefix: string): ProgressResource[] => {
+const collectResources = (
+  source: unknown,
+  keys: string[],
+  prefix: string,
+): ProgressResource[] => {
   if (!isRecord(source)) return [];
   const resources: ProgressResource[] = [];
   keys.forEach((key) => {
@@ -115,7 +155,11 @@ const collectResources = (source: unknown, keys: string[], prefix: string): Prog
     }
     if (isRecord(raw)) {
       Object.entries(raw).forEach(([name, item], index) => {
-        const resource = resourceFromValue(item, `${prefix}-${key}-${name}-${index}`, name);
+        const resource = resourceFromValue(
+          item,
+          `${prefix}-${key}-${name}-${index}`,
+          name,
+        );
         if (resource) resources.push(resource);
       });
       return;
@@ -138,8 +182,11 @@ const uniqueResources = (resources: ProgressResource[]) => {
 
 export const artifactsFromDetails = (details?: JobDetails | null) => {
   const root = details as Record<string, unknown> | null | undefined;
-  const artifacts = root?.artifacts || root?.output_files || details?.job?.artifacts;
-  return Array.isArray(artifacts) ? artifacts.filter(isRecord) as FailureArtifact[] : [];
+  const artifacts =
+    root?.artifacts || root?.output_files || details?.job?.artifacts;
+  return Array.isArray(artifacts)
+    ? (artifacts.filter(isRecord) as FailureArtifact[])
+    : [];
 };
 
 export const buildOutputResources = (
@@ -149,14 +196,21 @@ export const buildOutputResources = (
   const detailRoot = details as Record<string, unknown> | null | undefined;
   const job = isRecord(details?.job) ? details.job : {};
   const summary = isRecord(details?.summary) ? details.summary : {};
-  const events = [...(progress.recent_events || []), ...(details?.recent_events || [])];
+  const events = [
+    ...(progress.recent_events || []),
+    ...(details?.recent_events || []),
+  ];
   return uniqueResources([
-    ...collectResources(progress, RESOURCE_KEYS, 'progress'),
-    ...progress.steps.flatMap((step, index) => collectResources(step, [...RESOURCE_KEYS, 'provides'], `step-${index}`)),
-    ...collectResources(detailRoot, RESOURCE_KEYS, 'details'),
-    ...collectResources(job, RESOURCE_KEYS, 'job'),
-    ...collectResources(summary, RESOURCE_KEYS, 'summary'),
-    ...events.flatMap((event, index) => collectResources(event.payload, RESOURCE_KEYS, `event-${index}`)),
+    ...collectResources(progress, RESOURCE_KEYS, "progress"),
+    ...progress.steps.flatMap((step, index) =>
+      collectResources(step, [...RESOURCE_KEYS, "provides"], `step-${index}`),
+    ),
+    ...collectResources(detailRoot, RESOURCE_KEYS, "details"),
+    ...collectResources(job, RESOURCE_KEYS, "job"),
+    ...collectResources(summary, RESOURCE_KEYS, "summary"),
+    ...events.flatMap((event, index) =>
+      collectResources(event.payload, RESOURCE_KEYS, `event-${index}`),
+    ),
   ]);
 };
 
@@ -168,10 +222,23 @@ export const buildInputResources = (
   const job = isRecord(details?.job) ? details.job : {};
   const summary = isRecord(details?.summary) ? details.summary : {};
   return uniqueResources([
-    ...collectResources(progress, INPUT_RESOURCE_KEYS, 'progress-input'),
-    ...progress.steps.flatMap((step, index) => collectResources(step, [...INPUT_RESOURCE_KEYS, 'requires'], `step-input-${index}`)),
-    ...collectResources(detailRoot, INPUT_RESOURCE_KEYS, 'details-input'),
-    ...collectResources(job, INPUT_RESOURCE_KEYS, 'job-input'),
-    ...collectResources(summary, [...INPUT_RESOURCE_KEYS, 'config'], 'summary-input'),
-  ]).map((resource) => ({ ...resource, kind: resource.kind === 'url' ? resource.kind : 'input' }));
+    ...collectResources(progress, INPUT_RESOURCE_KEYS, "progress-input"),
+    ...progress.steps.flatMap((step, index) =>
+      collectResources(
+        step,
+        [...INPUT_RESOURCE_KEYS, "requires"],
+        `step-input-${index}`,
+      ),
+    ),
+    ...collectResources(detailRoot, INPUT_RESOURCE_KEYS, "details-input"),
+    ...collectResources(job, INPUT_RESOURCE_KEYS, "job-input"),
+    ...collectResources(
+      summary,
+      [...INPUT_RESOURCE_KEYS, "config"],
+      "summary-input",
+    ),
+  ]).map((resource) => ({
+    ...resource,
+    kind: resource.kind === "url" ? resource.kind : "input",
+  }));
 };

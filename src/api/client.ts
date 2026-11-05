@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { apiBaseUrl, authToken } from '../config/browser';
+import axios from "axios";
+import { apiBaseUrl, authToken } from "../config/browser";
 
 const api = axios.create({
   baseURL: apiBaseUrl(),
@@ -10,9 +10,9 @@ api.interceptors.request.use((request) => {
   request.baseURL = apiBaseUrl();
   const token = authToken();
   if (token) {
-    request.headers.set('Authorization', `Bearer ${token}`);
+    request.headers.set("Authorization", `Bearer ${token}`);
   } else {
-    request.headers.delete('Authorization');
+    request.headers.delete("Authorization");
   }
   return request;
 });

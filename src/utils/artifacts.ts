@@ -9,14 +9,14 @@ export type ArtifactLike = {
 };
 
 const fileNameFromPath = (value: string): string => {
-  const normalized = value.trim().replace(/\/+$/, '');
-  return normalized.split('/').filter(Boolean).pop() || normalized;
+  const normalized = value.trim().replace(/\/+$/, "");
+  return normalized.split("/").filter(Boolean).pop() || normalized;
 };
 
 const artifactIdToFileName = (artifactId: string): string => {
   const rotated = artifactId.match(/^(events|logs|errors)_jsonl_(\d+)$/);
   if (rotated) return `${rotated[1]}.${rotated[2]}.jsonl`;
-  const suffixes = ['jsonl', 'json', 'log', 'md', 'pdf', 'txt', 'gz'];
+  const suffixes = ["jsonl", "json", "log", "md", "pdf", "txt", "gz"];
   for (const suffix of suffixes) {
     const marker = `_${suffix}`;
     if (artifactId.endsWith(marker)) {
@@ -28,12 +28,15 @@ const artifactIdToFileName = (artifactId: string): string => {
 
 const firstText = (...values: unknown[]): string | undefined => {
   for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === "string" && value.trim()) return value.trim();
   }
   return undefined;
 };
 
-export const artifactDisplayName = (artifact?: ArtifactLike | null, fallback = 'artifact'): string => {
+export const artifactDisplayName = (
+  artifact?: ArtifactLike | null,
+  fallback = "artifact",
+): string => {
   const label = firstText(artifact?.label, artifact?.title, artifact?.name);
   if (label) return label;
   const relativePath = firstText(artifact?.relative_path);
@@ -45,6 +48,7 @@ export const artifactDisplayName = (artifact?: ArtifactLike | null, fallback = '
   return fallback;
 };
 
-export const isOpenableHref = (value: string | undefined): value is string => (
-  typeof value === 'string' && /^(https?:\/\/|\/(?![/\\]))/i.test(value.trim()) && !/[\\\r\n]/.test(value)
-);
+export const isOpenableHref = (value: string | undefined): value is string =>
+  typeof value === "string" &&
+  /^(https?:\/\/|\/(?![/\\]))/i.test(value.trim()) &&
+  !/[\\\r\n]/.test(value);

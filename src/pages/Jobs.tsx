@@ -1,15 +1,25 @@
-import { useCallback, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { format } from 'date-fns';
-import { AlertCircle, Ban, CheckCircle, Clock, Eye, Loader2, PauseCircle, PlayCircle, XCircle } from 'lucide-react';
-import { cancelRun, fetchRuns, isServiceJob, pauseRun } from '../api';
-import type { RunSummary } from '../api';
-import { confirmActionDialog } from '../components/ui/confirm-action';
-import { Tooltip } from '../components/ui/tooltip';
-import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader } from '../components/ui/card';
-import { Skeleton } from '../components/ui/skeleton';
+import { useCallback, useState } from "react";
+import { Link } from "react-router-dom";
+import { format } from "date-fns";
+import {
+  AlertCircle,
+  Ban,
+  CheckCircle,
+  Clock,
+  Eye,
+  Loader2,
+  PauseCircle,
+  PlayCircle,
+  XCircle,
+} from "lucide-react";
+import { cancelRun, fetchRuns, isServiceJob, pauseRun } from "../api";
+import type { RunSummary } from "../api";
+import { confirmActionDialog } from "../components/ui/confirm-action";
+import { Tooltip } from "../components/ui/tooltip";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Card, CardContent, CardHeader } from "../components/ui/card";
+import { Skeleton } from "../components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -17,32 +27,39 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '../components/ui/table';
-import { usePaginatedPolling } from '../hooks/usePaginatedPolling';
-import { cn } from '../lib/utils';
-import { apiErrorMessage } from '../utils/apiErrors';
-import { isActiveRunStatus } from '../utils/jobStatus';
+} from "../components/ui/table";
+import { usePaginatedPolling } from "../hooks/usePaginatedPolling";
+import { cn } from "../lib/utils";
+import { apiErrorMessage } from "../utils/apiErrors";
+import { isActiveRunStatus } from "../utils/jobStatus";
 
 const StatusIcon = ({ status }: { status: string }) => {
   const normalized = status.trim().toLowerCase();
   switch (normalized) {
-    case 'running':
-    case 'active': return <PlayCircle className="h-4 w-4" />;
-    case 'completed':
-    case 'done':
-    case 'finished':
-    case 'succeeded':
-    case 'success': return <CheckCircle className="h-4 w-4" />;
-    case 'failed':
-    case 'error': return <XCircle className="h-4 w-4" />;
-    case 'pending':
-    case 'scheduled':
-    case 'queued': return <Clock className="h-4 w-4" />;
-    case 'paused':
-    case 'pausing': return <PauseCircle className="h-4 w-4" />;
-    case 'cancelled':
-    case 'canceled': return <Ban className="h-4 w-4" />;
-    default: return <AlertCircle className="h-4 w-4" />;
+    case "running":
+    case "active":
+      return <PlayCircle className="h-4 w-4" />;
+    case "completed":
+    case "done":
+    case "finished":
+    case "succeeded":
+    case "success":
+      return <CheckCircle className="h-4 w-4" />;
+    case "failed":
+    case "error":
+      return <XCircle className="h-4 w-4" />;
+    case "pending":
+    case "scheduled":
+    case "queued":
+      return <Clock className="h-4 w-4" />;
+    case "paused":
+    case "pausing":
+      return <PauseCircle className="h-4 w-4" />;
+    case "cancelled":
+    case "canceled":
+      return <Ban className="h-4 w-4" />;
+    default:
+      return <AlertCircle className="h-4 w-4" />;
   }
 };
 
@@ -50,17 +67,35 @@ const runIdentity = (run: RunSummary) => run.run_id;
 
 export default function Runs() {
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
-  const [bulkAction, setBulkAction] = useState<'pause' | 'cancel' | null>(null);
+  const [bulkAction, setBulkAction] = useState<"pause" | "cancel" | null>(null);
   const [activeOnly, setActiveOnly] = useState(false);
-  const loadPage = useCallback((token?: string) => fetchRuns({
-    includeTerminal: !activeOnly,
-    ...(token ? { pageToken: token } : {}),
-  }), [activeOnly]);
-  const { items: runs, loading, nextPageToken, loadingMore, error, refresh: refreshRuns, loadMore } = usePaginatedPolling(
-    loadPage, runIdentity, 'Failed to load runs. Try again.',
+  const loadPage = useCallback(
+    (token?: string) =>
+      fetchRuns({
+        includeTerminal: !activeOnly,
+        ...(token ? { pageToken: token } : {}),
+      }),
+    [activeOnly],
   );
-  const availableIds = new Set(runs.filter(run => isActiveRunStatus(run.status)).map(run => run.run_id));
-  const selectedIds = [...selectedJobIds].filter(id => availableIds.has(id));
+  const {
+    items: runs,
+    loading,
+    nextPageToken,
+    loadingMore,
+    error,
+    refresh: refreshRuns,
+    loadMore,
+  } = usePaginatedPolling(
+    loadPage,
+    runIdentity,
+    "Failed to load runs. Try again.",
+  );
+  const availableIds = new Set(
+    runs
+      .filter((run) => isActiveRunStatus(run.status))
+      .map((run) => run.run_id),
+  );
+  const selectedIds = [...selectedJobIds].filter((id) => availableIds.has(id));
 
   const toggleJobSelection = (jobId: string) => {
     setSelectedJobIds((current) => {
@@ -75,42 +110,48 @@ export default function Runs() {
   };
 
   const toggleAllJobs = () => {
-    const selectableIds = runs.filter((run) => isActiveRunStatus(run.status)).map((run) => run.run_id);
+    const selectableIds = runs
+      .filter((run) => isActiveRunStatus(run.status))
+      .map((run) => run.run_id);
     setSelectedJobIds(() => {
       if (selectedIds.length === selectableIds.length) return new Set();
       return new Set(selectableIds);
     });
   };
 
-  const confirmBulkAction = (action: 'pause' | 'cancel') => {
+  const confirmBulkAction = (action: "pause" | "cancel") => {
     const jobIds = selectedIds;
     if (jobIds.length === 0) return;
 
-    const actionLabel = action === 'pause' ? 'Pause' : 'Cancel';
-    const completedLabel = action === 'pause' ? 'Paused' : 'Cancelled';
-    const loadingLabel = action === 'pause' ? 'Pausing' : 'Cancelling';
-    const runner = action === 'pause' ? pauseRun : cancelRun;
+    const actionLabel = action === "pause" ? "Pause" : "Cancel";
+    const completedLabel = action === "pause" ? "Paused" : "Cancelled";
+    const loadingLabel = action === "pause" ? "Pausing" : "Cancelling";
+    const runner = action === "pause" ? pauseRun : cancelRun;
 
     confirmActionDialog({
-      tone: action === 'cancel' ? 'danger' : 'default',
+      tone: action === "cancel" ? "danger" : "default",
       id: `jobs-bulk-${action}`,
-      title: `${actionLabel} ${jobIds.length} selected run${jobIds.length === 1 ? '' : 's'}?`,
-      description: action === 'pause'
-        ? 'Selected running executions will stop accepting work until they are resumed.'
-        : 'Selected executions will be stopped. Their running agents will be interrupted.',
+      title: `${actionLabel} ${jobIds.length} selected run${jobIds.length === 1 ? "" : "s"}?`,
+      description:
+        action === "pause"
+          ? "Selected running executions will stop accepting work until they are resumed."
+          : "Selected executions will be stopped. Their running agents will be interrupted.",
       confirmLabel: actionLabel,
-      cancelLabel: 'Keep runs',
+      cancelLabel: "Keep runs",
       loading: {
         title: `${loadingLabel} runs`,
-        description: `${jobIds.length} selected run${jobIds.length === 1 ? '' : 's'} are being updated.`,
+        description: `${jobIds.length} selected run${jobIds.length === 1 ? "" : "s"} are being updated.`,
       },
       success: {
         title: `${completedLabel} runs`,
-        description: `${completedLabel} ${jobIds.length} run${jobIds.length === 1 ? '' : 's'}.`,
+        description: `${completedLabel} ${jobIds.length} run${jobIds.length === 1 ? "" : "s"}.`,
       },
       error: (error) => ({
         title: `${actionLabel} failed`,
-        description: apiErrorMessage(error, `Failed to ${action} selected runs.`),
+        description: apiErrorMessage(
+          error,
+          `Failed to ${action} selected runs.`,
+        ),
       }),
       onConfirm: async () => {
         try {
@@ -128,28 +169,46 @@ export default function Runs() {
   const selectedRuns = runs.filter((run) => selectedIds.includes(run.run_id));
   const selectedCount = selectedRuns.length;
   const hasSelection = selectedCount > 0;
-  const canPauseSelection = hasSelection && selectedRuns.every((run) => ['pending', 'running'].includes(run.status.trim().toLowerCase()));
-  const canCancelSelection = hasSelection && selectedRuns.every((run) => isActiveRunStatus(run.status));
-  const selectableCount = runs.filter((run) => isActiveRunStatus(run.status)).length;
+  const canPauseSelection =
+    hasSelection &&
+    selectedRuns.every((run) =>
+      ["pending", "running"].includes(run.status.trim().toLowerCase()),
+    );
+  const canCancelSelection =
+    hasSelection && selectedRuns.every((run) => isActiveRunStatus(run.status));
+  const selectableCount = runs.filter((run) =>
+    isActiveRunStatus(run.status),
+  ).length;
   const allSelected = selectableCount > 0 && selectedCount === selectableCount;
 
   return (
     <Card>
       {error ? (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-b border-red-200 bg-red-50 px-5 py-3 text-xs text-red-800">
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-2 border-b border-red-200 bg-red-50 px-5 py-3 text-xs text-red-800"
+        >
           <span>{error}</span>
-          <Button type="button" variant="outline" size="sm" onClick={() => void refreshRuns().catch(() => {})}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void refreshRuns().catch(() => {})}
+          >
             Retry
           </Button>
         </div>
       ) : null}
       <CardHeader className="flex flex-col items-stretch gap-3 space-y-0 border-b border-neutral-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-xs font-medium text-neutral-500" aria-live="polite">
+        <div
+          className="text-xs font-medium text-neutral-500"
+          aria-live="polite"
+        >
           {loading
-            ? 'Loading runs…'
+            ? "Loading runs…"
             : selectedCount > 0
-            ? `${selectedCount} run${selectedCount === 1 ? '' : 's'} selected`
-            : `${runs.length} run${runs.length === 1 ? '' : 's'}`}
+              ? `${selectedCount} run${selectedCount === 1 ? "" : "s"} selected`
+              : `${runs.length} run${runs.length === 1 ? "" : "s"}`}
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <button
@@ -161,12 +220,12 @@ export default function Runs() {
           >
             <span
               className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${
-                activeOnly ? 'bg-neutral-950' : 'bg-neutral-200'
+                activeOnly ? "bg-neutral-950" : "bg-neutral-200"
               }`}
             >
               <span
                 className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${
-                  activeOnly ? 'translate-x-4' : 'translate-x-0.5'
+                  activeOnly ? "translate-x-4" : "translate-x-0.5"
                 }`}
               />
             </span>
@@ -179,10 +238,16 @@ export default function Runs() {
                 variant="outline"
                 size="sm"
                 disabled={!canPauseSelection || bulkAction !== null}
-                onClick={() => confirmBulkAction('pause')}
+                onClick={() => confirmBulkAction("pause")}
               >
-                {bulkAction === 'pause' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PauseCircle className="h-3.5 w-3.5" />}
-                {bulkAction === 'pause' ? 'Pausing...' : `Pause${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
+                {bulkAction === "pause" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <PauseCircle className="h-3.5 w-3.5" />
+                )}
+                {bulkAction === "pause"
+                  ? "Pausing..."
+                  : `Pause${selectedCount > 0 ? ` (${selectedCount})` : ""}`}
               </Button>
             </span>
           </Tooltip>
@@ -194,10 +259,16 @@ export default function Runs() {
                 className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
                 size="sm"
                 disabled={!canCancelSelection || bulkAction !== null}
-                onClick={() => confirmBulkAction('cancel')}
+                onClick={() => confirmBulkAction("cancel")}
               >
-                {bulkAction === 'cancel' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
-                {bulkAction === 'cancel' ? 'Cancelling...' : `Cancel${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
+                {bulkAction === "cancel" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Ban className="h-3.5 w-3.5" />
+                )}
+                {bulkAction === "cancel"
+                  ? "Cancelling..."
+                  : `Cancel${selectedCount > 0 ? ` (${selectedCount})` : ""}`}
               </Button>
             </span>
           </Tooltip>
@@ -233,18 +304,35 @@ export default function Runs() {
             {loading ? (
               [1, 2, 3, 4, 5].map((i) => (
                 <TableRow key={i}>
-                  <TableCell className="px-4 py-2.5"><Skeleton className="h-4 w-4" /></TableCell>
-                  <TableCell className="px-4 py-2.5"><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell className="px-4 py-2.5"><Skeleton className="h-5 w-36" /></TableCell>
-                  <TableCell className="px-4 py-2.5"><Skeleton className="h-5 w-28" /></TableCell>
-                  <TableCell className="px-4 py-2.5"><Skeleton className="h-5 w-32" /></TableCell>
-                  <TableCell className="px-4 py-2.5"><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell className="px-4 py-2.5"><Skeleton className="h-7 w-7" /></TableCell>
+                  <TableCell className="px-4 py-2.5">
+                    <Skeleton className="h-4 w-4" />
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5">
+                    <Skeleton className="h-5 w-24" />
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5">
+                    <Skeleton className="h-5 w-36" />
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5">
+                    <Skeleton className="h-5 w-28" />
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5">
+                    <Skeleton className="h-5 w-32" />
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5">
+                    <Skeleton className="h-5 w-16" />
+                  </TableCell>
+                  <TableCell className="px-4 py-2.5">
+                    <Skeleton className="h-7 w-7" />
+                  </TableCell>
                 </TableRow>
               ))
             ) : runs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="px-4 py-8 text-center text-xs text-neutral-500">
+                <TableCell
+                  colSpan={7}
+                  className="px-4 py-8 text-center text-xs text-neutral-500"
+                >
                   No execution runs found.
                 </TableCell>
               </TableRow>
@@ -254,51 +342,69 @@ export default function Runs() {
                 const selected = selectedIds.includes(runId);
                 const selectable = isActiveRunStatus(run.status);
                 return (
-                <TableRow
-                  key={runId}
-                  className={cn(selected ? 'bg-neutral-50' : 'hover:bg-neutral-50')}
-                >
-                  <TableCell className="px-4 py-2.5">
-                    <input
-                      type="checkbox"
-                      aria-label={`Select run ${runId}`}
-                      checked={selected}
-                      onChange={() => toggleJobSelection(runId)}
-                      disabled={!selectable}
-                      className="h-4 w-4 rounded border-neutral-300 text-neutral-950 focus:ring-neutral-950"
-                    />
-                  </TableCell>
-                  <TableCell className="px-4 py-2.5">
-                    <Badge variant="outline" className="gap-1.5 capitalize">
-                      <StatusIcon status={run.status} />
-                      {run.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="px-4 py-2.5">
-                    <span className="font-mono text-xs font-medium text-neutral-950">
-                      {runId}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-4 py-2.5 text-xs text-neutral-600">{run.graph_id}</TableCell>
-                  <TableCell className="px-4 py-2.5 text-xs text-neutral-500">
-                    {run.submitted_at && Number.isFinite(new Date(run.submitted_at).getTime()) ? format(new Date(run.submitted_at), 'MMM d, HH:mm:ss') : 'Not reported'}
-                  </TableCell>
-                  <TableCell className="px-4 py-2.5 text-xs text-neutral-600">
-                    {isServiceJob(run) ? '∞' : (run.active_executors ?? run.executor_count ?? null) === null ? 'Not reported' : `${run.active_executors ?? 0} / ${run.executor_count ?? 0}`}
-                  </TableCell>
-                  <TableCell className="px-4 py-2.5">
-                    <Tooltip content="Open run details and live progress.">
-                      <Button asChild variant="outline" size="icon" className="h-7 w-7 text-neutral-600">
-                        <Link
-                          to={`/runs/${encodeURIComponent(runId)}`}
-                          aria-label={`View run ${runId}`}
+                  <TableRow
+                    key={runId}
+                    className={cn(
+                      selected ? "bg-neutral-50" : "hover:bg-neutral-50",
+                    )}
+                  >
+                    <TableCell className="px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select run ${runId}`}
+                        checked={selected}
+                        onChange={() => toggleJobSelection(runId)}
+                        disabled={!selectable}
+                        className="h-4 w-4 rounded border-neutral-300 text-neutral-950 focus:ring-neutral-950"
+                      />
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5">
+                      <Badge variant="outline" className="gap-1.5 capitalize">
+                        <StatusIcon status={run.status} />
+                        {run.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5">
+                      <span className="font-mono text-xs font-medium text-neutral-950">
+                        {runId}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5 text-xs text-neutral-600">
+                      {run.graph_id}
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5 text-xs text-neutral-500">
+                      {run.submitted_at &&
+                      Number.isFinite(new Date(run.submitted_at).getTime())
+                        ? format(new Date(run.submitted_at), "MMM d, HH:mm:ss")
+                        : "Not reported"}
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5 text-xs text-neutral-600">
+                      {isServiceJob(run)
+                        ? "∞"
+                        : (run.active_executors ??
+                              run.executor_count ??
+                              null) === null
+                          ? "Not reported"
+                          : `${run.active_executors ?? 0} / ${run.executor_count ?? 0}`}
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5">
+                      <Tooltip content="Open run details and live progress.">
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7 text-neutral-600"
                         >
-                          <Eye className="h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
+                          <Link
+                            to={`/runs/${encodeURIComponent(runId)}`}
+                            aria-label={`View run ${runId}`}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
                 );
               })
             )}
@@ -307,8 +413,13 @@ export default function Runs() {
       </CardContent>
       {nextPageToken ? (
         <div className="border-t border-neutral-200 p-3 text-center">
-          <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
-            {loadingMore ? 'Loading…' : 'Load more'}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore ? "Loading…" : "Load more"}
           </Button>
         </div>
       ) : null}

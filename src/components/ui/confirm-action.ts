@@ -1,11 +1,15 @@
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
-export type ActionMessage = ReactNode | {
-  title: ReactNode;
-  description?: ReactNode;
-};
+export type ActionMessage =
+  | ReactNode
+  | {
+      title: ReactNode;
+      description?: ReactNode;
+    };
 
-export type ResultMessage<Result> = ActionMessage | ((result: Result) => ActionMessage);
+export type ResultMessage<Result> =
+  | ActionMessage
+  | ((result: Result) => ActionMessage);
 export type ErrorMessage = ActionMessage | ((error: unknown) => ActionMessage);
 
 export type ConfirmActionDialogOptions<Result = void> = {
@@ -14,7 +18,7 @@ export type ConfirmActionDialogOptions<Result = void> = {
   description?: ReactNode;
   confirmLabel: ReactNode;
   cancelLabel?: ReactNode;
-  tone?: 'default' | 'danger';
+  tone?: "default" | "danger";
   loading: ActionMessage;
   success: ResultMessage<Result>;
   error?: ErrorMessage;
@@ -34,6 +38,8 @@ export function subscribeToConfirmActions(listener: DialogListener) {
   };
 }
 
-export function confirmActionDialog<Result = void>(options: ConfirmActionDialogOptions<Result>) {
+export function confirmActionDialog<Result = void>(
+  options: ConfirmActionDialogOptions<Result>,
+) {
   listeners.forEach((listener) => listener(options as DialogRequest));
 }

@@ -1,15 +1,22 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Boxes, History, LayoutDashboard, List, Play, Plus } from 'lucide-react';
-import mnLogo from '../assets/mn-logo.svg';
-import { Button } from './ui/button';
-import { cn } from '../lib/utils';
+import { NavLink, Outlet, useLocation } from "react-router-dom";
+import {
+  Boxes,
+  History,
+  LayoutDashboard,
+  List,
+  Play,
+  Plus,
+} from "lucide-react";
+import mnLogo from "../assets/mn-logo.svg";
+import { Button } from "./ui/button";
+import { cn } from "../lib/utils";
 
 const navItems = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Jobs', path: '/jobs', icon: List },
-  { name: 'Runs', path: '/runs', icon: History },
-  { name: 'Models', path: '/models', icon: Boxes },
-  { name: 'Start a run', path: '/run', icon: Play },
+  { name: "Dashboard", path: "/", icon: LayoutDashboard },
+  { name: "Jobs", path: "/jobs", icon: List },
+  { name: "Runs", path: "/runs", icon: History },
+  { name: "Models", path: "/models", icon: Boxes },
+  { name: "Start a run", path: "/run", icon: Play },
 ];
 
 export default function Layout() {
@@ -39,10 +46,10 @@ export default function Layout() {
                   to={item.path}
                   className={({ isActive }) =>
                     cn(
-                      'flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                      "flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
                       isActive
-                        ? 'bg-neutral-100 text-neutral-950'
-                        : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950'
+                        ? "bg-neutral-100 text-neutral-950"
+                        : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950",
                     )
                   }
                 >
@@ -56,7 +63,9 @@ export default function Layout() {
       </aside>
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center border-b border-neutral-200 bg-white px-6">
-          <h1 className="text-lg font-semibold tracking-tight text-neutral-950">{title}</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-neutral-950">
+            {title}
+          </h1>
         </header>
         <div className="flex-1 overflow-auto bg-white p-5">
           <Outlet />
@@ -67,13 +76,14 @@ export default function Layout() {
 }
 
 function pageTitle(pathname: string) {
-  if (pathname === '/') return 'Dashboard';
-  if (pathname === '/jobs') return 'Jobs';
-  if (pathname.startsWith('/jobs/') && pathname.endsWith('/ui')) return 'Blueprint UI';
-  if (pathname.startsWith('/jobs/')) return 'Job details';
-  if (pathname === '/runs') return 'Runs';
-  if (pathname.startsWith('/runs/')) return 'Run details';
-  if (pathname === '/models') return 'Models';
-  if (pathname === '/run') return 'Start a run';
-  return 'MirrorNeuron';
+  if (pathname === "/") return "Dashboard";
+  if (pathname === "/jobs") return "Jobs";
+  if (pathname.startsWith("/jobs/") && pathname.endsWith("/ui"))
+    return "Blueprint UI";
+  if (pathname.startsWith("/jobs/")) return "Job details";
+  if (pathname === "/runs") return "Runs";
+  if (pathname.startsWith("/runs/")) return "Run details";
+  if (pathname === "/models") return "Models";
+  if (pathname === "/run") return "Start a run";
+  return "MirrorNeuron";
 }

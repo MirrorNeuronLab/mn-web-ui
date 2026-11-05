@@ -1,11 +1,12 @@
-import { Link } from 'react-router-dom';
+import { Link } from "react-router-dom";
 
 export default function NotFound() {
   return (
     <div className="space-y-3 rounded-md border border-neutral-200 bg-white p-8 text-center">
       <h2 className="text-lg font-semibold text-neutral-950">Page not found</h2>
       <p className="text-sm text-neutral-500">
-        The address doesn&apos;t match a known view. Check the URL or return to a known page.
+        The address doesn&apos;t match a known view. Check the URL or return to
+        a known page.
       </p>
       <div className="flex flex-wrap justify-center gap-2">
         <Link
