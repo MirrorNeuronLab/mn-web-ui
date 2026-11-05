@@ -558,7 +558,6 @@ export const WorkflowProgressAgentSchema = z
     items_total: z.number().nullable().optional(),
     live: z.boolean().optional().default(false),
     mailbox_depth: z.number().nullable().optional(),
-    tokens: z.number().nullable().optional(),
     tokens_used: z.number().nullable().optional(),
     token_budget: z.number().nullable().optional(),
     tools: z.number().nullable().optional(),

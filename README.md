@@ -1,5 +1,11 @@
 # MirrorNeuron Web UI
 
+## Current contracts
+
+Use `fetchRuns` and `FetchRunsOptions` for executions. The historical `fetchJobs` and `FetchJobsOptions` aliases are removed. Deploy the UI with the matching current API contract.
+
+Backward compatibility and automatic migration of obsolete state are unsupported.
+
 `mn-web-ui` is the React/Vite browser interface for operating persistent
 MirrorNeuron jobs and inspecting their execution runs, workflow graphs, events,
 artifacts, runtime resources, and models through `mn-api`.

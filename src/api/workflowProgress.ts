@@ -319,12 +319,6 @@ const normalizeAgent = (value: unknown, index: number) => {
       record.queueDepth,
       asRecord(record.mailbox).depth,
     ),
-    tokens: firstNumber(
-      record.tokens,
-      record.total_tokens,
-      record.totalTokens,
-      asRecord(record.usage).tokens,
-    ),
     tokens_used: firstNumber(
       record.tokens_used,
       record.tokensUsed,

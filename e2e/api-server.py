@@ -41,7 +41,9 @@ from fastapi.responses import HTMLResponse, Response  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
 from mn_api import state  # noqa: E402
 from mn_api.app import create_app  # noqa: E402
-from mn_api.routes import jobs as monitor, runs as outputs, models  # noqa: E402
+from mn_api import job_projection as monitor  # noqa: E402
+from mn_api import run_projection as outputs  # noqa: E402
+from mn_api.routes import models  # noqa: E402
 from mn_api.routes.v1 import jobs, blueprints  # noqa: E402
 from mn_sdk.blueprints.authoring import write_blueprint_definition  # noqa: E402
 
@@ -103,6 +105,9 @@ class Runtime:
             **attrs,
         }
 
+    def stream_events(self, *_args, **_kwargs):
+        return iter(())
+
     def get_system_summary(self):
         return encoded(
             {
@@ -141,7 +146,13 @@ class Runtime:
         )
 
     def get_run(self, run_id):
-        return encoded({**self.runs[run_id], "runtime_run_id": f"output-{run_id}"})
+        return encoded(
+            {
+                **self.runs[run_id],
+                "owner_node": "Test PC",
+                "runtime_run_id": f"output-{run_id}",
+            }
+        )
 
     def change_run(self, run_id, status):
         self.runs[run_id]["status"] = status
@@ -260,7 +271,7 @@ catalog = [
 blueprints.load_blueprint_catalog = lambda _: (Path(storage.name), catalog)
 blueprints.blueprint_public_projection = lambda value: value
 blueprints.find_blueprint = lambda _, identity: (Path(storage.name), {"id": identity})
-blueprints.legacy_blueprints.resolve_async_blueprint_run_request = lambda _, request: (
+blueprints.blueprint_launch.resolve_async_blueprint_run_request = lambda _, request: (
     request
 )
 
@@ -272,7 +283,7 @@ def launch(_root, blueprint, request):
     return json.loads(runtime.start_run(created["job_id"]))
 
 
-blueprints.legacy_blueprints.run_blueprint_record = launch
+blueprints.blueprint_launch.run_blueprint_record = launch
 jobs.local_blueprint_from_path = lambda _: (Path(storage.name), {"id": "uploaded"})
 jobs.load_blueprint_bundle = lambda *_args, **_kwargs: (
     encoded(

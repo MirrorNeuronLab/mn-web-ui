@@ -1,5 +1,11 @@
 # MirrorNeuron Web UI Specification
 
+## Current contracts
+
+Use `fetchRuns` and `FetchRunsOptions` for executions. The historical `fetchJobs` and `FetchJobsOptions` aliases are removed. Deploy the UI with the matching current API contract.
+
+Backward compatibility and automatic migration of obsolete state are unsupported.
+
 ## Purpose
 
 `mn-web-ui` is the browser interface for observing and operating a MirrorNeuron

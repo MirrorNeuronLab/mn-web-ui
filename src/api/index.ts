@@ -270,9 +270,6 @@ export type FetchRunsOptions = {
   pageToken?: string | null;
 };
 
-/** @deprecated Use FetchRunsOptions; retained for API consumers during the UI rename. */
-export type FetchJobsOptions = FetchRunsOptions;
-
 export const fetchRuns = async (options: FetchRunsOptions = {}) => {
   const request =
     typeof options.includeTerminal === "boolean"
@@ -292,9 +289,6 @@ export const fetchRuns = async (options: FetchRunsOptions = {}) => {
   const r = await request;
   return parsePage(RunSummarySchema, r.data, "fetchRuns");
 };
-
-/** @deprecated Use fetchRuns; retained for API consumers during the UI rename. */
-export const fetchJobs = fetchRuns;
 
 export type FetchStableJobsOptions = {
   includeArchived?: boolean;

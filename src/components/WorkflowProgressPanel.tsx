@@ -104,19 +104,14 @@ const formatProgress = (agent: WorkflowProgressAgent) => {
   const inferred = !["explicit", "items", "complete"].includes(source);
   const percent = `${Math.round(Math.max(0, Math.min(1, agent.progress || 0)) * 100)}%${inferred ? " est." : ""}`;
   const parts = [percent];
-  const legacyTokensAreBudget = Boolean(
-    agent.token_budget &&
-      agent.tokens === agent.token_budget &&
-      !agent.tokens_used,
-  );
   if (agent.items_total)
     parts.push(`${agent.items_done || 0}/${agent.items_total} items`);
   if (agent.tokens_used && agent.token_budget) {
     parts.push(
       `${formatTokens(agent.tokens_used)}/${formatTokens(agent.token_budget)} tok`,
     );
-  } else if (agent.tokens_used || (agent.tokens && !legacyTokensAreBudget)) {
-    parts.push(`${formatTokens(agent.tokens_used || agent.tokens || 0)} tok`);
+  } else if (agent.tokens_used) {
+    parts.push(`${formatTokens(agent.tokens_used)} tok`);
   } else if (agent.token_budget) {
     parts.push(`${formatTokens(agent.token_budget)} tok budget`);
   }
