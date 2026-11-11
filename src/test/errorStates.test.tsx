@@ -28,15 +28,27 @@ describe("page and panel error states", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  it("shows a visible alert instead of measured zeros when the summary fetch fails", async () => {
-    vi.mocked(fetchSystemSummary).mockRejectedValue(new Error("network down"));
+  it("shows the runtime connection hint and recovers after retrying", async () => {
+    vi.mocked(fetchSystemSummary)
+      .mockRejectedValueOnce({
+        response: {
+          data: {
+            code: "MN_CLIENT_NOT_CONNECTED",
+            detail: "No runtime node is connected.",
+            hint: "Run mn node add local.",
+          },
+        },
+      })
+      .mockResolvedValue({ nodes: [], jobs: [] });
     renderDashboard();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/network down/);
-    expect(screen.queryByText("0 cores")).not.toBeInTheDocument();
-    expect(
-      await screen.findByRole("button", { name: "Retry" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No runtime node is connected. Run mn node add local.",
+    );
+    expect(screen.queryByText("Total Runs")).not.toBeInTheDocument();
+    screen.getByRole("button", { name: "Retry" }).click();
+    expect(await screen.findByText("Total Runs")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("renders untrusted artifact links as plain text instead of clickable javascript: URLs", () => {

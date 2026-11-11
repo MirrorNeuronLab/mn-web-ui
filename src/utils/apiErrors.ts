@@ -24,6 +24,7 @@ type ApiErrorData = {
     | string
     | { error?: string; message?: string; errors?: ValidationIssue[] };
   message?: string;
+  hint?: string;
   model_install?: {
     models?: Array<{ id?: string; model?: string }>;
   };
@@ -153,10 +154,17 @@ export const apiErrorMessage = (err: unknown, fallback: string) => {
   if (validationErrors.length > 0) return validationErrors.join("\n");
   if (validationIssues.length > 0)
     return validationIssues.map(issueText).join("\n");
+  const problemDetail = stringValue(data?.detail);
+  if (problemDetail) {
+    const hint = stringValue(data?.hint);
+    return hint ? `${problemDetail} ${hint}` : problemDetail;
+  }
   if (data?.error) return data.error;
   if (data?.message) return data.message;
-  if (typeof data?.detail === "string") return data.detail;
-  if (data?.detail?.error) return data.detail.error;
-  if (data?.detail?.message) return data.detail.message;
-  return apiError.message || fallback;
+  return (
+    stringValue(detail.error) ||
+    stringValue(detail.message) ||
+    apiError.message ||
+    fallback
+  );
 };

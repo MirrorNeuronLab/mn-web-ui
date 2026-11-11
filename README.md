@@ -44,20 +44,22 @@ npm run build
 npm run test:e2e
 ```
 
-The normal browser suite uses deterministic HTTP fixtures. To additionally test
-against the current API's actual routes and Web UI reverse proxy, keep sibling
-`mn-api` and `mn-python-sdk` checkouts and provide a Python interpreter with the
-API dependencies installed:
+The normal browser suite uses deterministic HTTP fixtures. To test the current
+API and native runtime service, keep sibling `mn-api` and `mn-python-sdk`
+checkouts and use a Python 3.12+ environment with their API and runtime
+dependencies installed:
 
 ```bash
 MN_WEB_E2E_PYTHON=/path/to/python npm run test:api
+MN_WEB_E2E_PYTHON=/path/to/python MN_WEB_E2E_PROXY=compose npm run test:api
 ```
 
-`MN_WEB_E2E_API_SOURCE` may override the sibling API checkout path. This gate
-uses ports 54009 and 4174, temporary storage, and a fake runtime. It verifies
-authentication, pagination, ZIP validation/upload, launch requests, progress,
-downloads, model benchmarks, job/run controls, data resets, and embedded service
-UI without executing real work or accessing user runtime storage.
+`MN_WEB_E2E_API_SOURCE` may override the API checkout path. The Compose option
+runs the proxy from the sibling `mn-deploy` checkout. Both options use ports
+4174 and 54009–54011, temporary storage, and a deterministic Core fixture. They
+exercise the real API and gRPC transport for authentication, pagination, ZIP
+uploads, launch progress, runtime notifications, downloads, run controls, and
+embedded service pages and WebSockets.
 
 Default local URL:
 
@@ -73,10 +75,13 @@ http://localhost:55173
 
 ## Notes
 
-- Start `mn-api` before using live runtime screens.
+- Start `mn-api` before using live runtime screens. It uses the native runtime
+  connection shared with the CLI. Use `mn node add local` for a local runtime
+  or `mn node add <HOST> --token <RUNTIME_NODE_TOKEN>` for a remote runtime.
 - The browser API base is a same-origin path, normally `/api/v1`. Absolute and
   protocol-relative bases are rejected to keep bearer tokens on the local origin.
-- Set `MN_WEB_API_TOKEN` when connecting to a protected API instance.
+- The installed Web UI proxy sends the surface API credential from the server.
+  For Vite development with a protected API, set `MN_WEB_API_TOKEN` locally.
 - Job IDs, execution IDs, and output-storage IDs are separate identities. Run
   routes and controls always use the canonical execution ID; job UI routes use
   the durable job ID returned by the canonical Run resource.

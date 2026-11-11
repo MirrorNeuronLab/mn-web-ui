@@ -36,9 +36,11 @@ direct-linkable and survive refresh with the same route parameters.
 The browser calls the configured API base through the central API client.
 Persistent jobs, execution controls, monitor snapshots, public workflow
 progress, execution artifacts, and runtime-wide inventory use the configured
-same-origin `/api/v1` base. When
-`MN_WEB_API_TOKEN` is set, requests send it as a bearer token. The token is
-sensitive and is never printed or included in diagnostics.
+same-origin `/api/v1` base. The installed Web UI proxies use the surface API
+credential server-side. A Vite development build can use `MN_WEB_API_TOKEN`
+for a protected API. The API owns the native runtime connection, which is shared
+with the CLI. The dashboard displays connection guidance from API errors and
+waits for a successful runtime summary before showing metrics.
 Job-specific UI definitions use an `external-url` service handle. The service
 UI remains rendered at `/jobs/:jobId/ui` in a same-origin frame. Its remote
 host is resolved by the local Web UI server from the authenticated job handle,

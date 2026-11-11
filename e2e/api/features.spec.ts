@@ -2,9 +2,18 @@ import { expect, test } from "@playwright/test";
 
 test("dashboard, installed models, benchmarking and the complete blueprint catalog", async ({
   page,
+  request,
 }) => {
+  expect(
+    (
+      await request.get("http://127.0.0.1:54009/api/v1/system/summary")
+    ).status(),
+  ).toBe(401);
   await page.goto("/");
-  await expect(page.getByText("Test PC", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("test-pc@127.0.0.1", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Entry runtime", { exact: true })).toBeVisible();
   await expect(page.getByText("8 cores").first()).toBeVisible();
   await page.goto("/models");
   await expect(page.getByText("Model 054", { exact: true })).toBeVisible();
@@ -20,6 +29,12 @@ test("dashboard, installed models, benchmarking and the complete blueprint catal
     .getByRole("dialog")
     .getByRole("button", { name: "Launch", exact: true })
     .click();
+  await expect(
+    page.getByText("Preparing fixture bundle", { exact: true }),
+  ).toBeVisible();
+  expect(
+    (await request.post("http://127.0.0.1:54011/fixture-launch-release")).ok(),
+  ).toBe(true);
   await expect(page).toHaveURL(/\/runs\/execution-new-/);
   await expect(
     page.getByRole("heading", { name: /execution-new-/ }),
@@ -38,6 +53,9 @@ test("job history crosses page boundaries and controls the execution rather than
   await page.getByLabel("View run execution-live").click();
   await expect(
     page.getByRole("heading", { name: "execution-live" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Command fixture-command: completed"),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Review evidence/ }),
@@ -61,6 +79,14 @@ test("job history crosses page boundaries and controls the execution rather than
     .first()
     .click();
   expect((await download).suggestedFilename()).toBe("events.jsonl");
+  const range = await page.request.get(
+    "/api/v1/runs/execution-live/artifacts/events.jsonl",
+    {
+      headers: { Range: "bytes=0-6" },
+    },
+  );
+  expect(range.status()).toBe(206);
+  expect(await range.text()).toBe("fixture");
   await page.getByRole("button", { name: "Pause", exact: true }).click();
   await page.getByRole("button", { name: "Pause run", exact: true }).click();
   await expect(
@@ -71,6 +97,15 @@ test("job history crosses page boundaries and controls the execution rather than
   await expect(
     page.getByRole("button", { name: "Pause", exact: true }),
   ).toBeVisible();
+  await page.goto("/jobs/job-history");
+  await expect
+    .poll(async () => {
+      const signals = await page.request.get(
+        "http://127.0.0.1:54011/fixture-signals/execution-live",
+      );
+      return (await signals.json()).active;
+    })
+    .toBe(0);
 });
 
 test("reset waits for completion, then conditional archive and delete work", async ({
@@ -105,6 +140,12 @@ test("job UI uses the authenticated local proxy and reflects service lifecycle",
       .frameLocator("iframe")
       .getByRole("heading", { name: "Shared operator controls" }),
   ).toBeVisible();
+  await expect(
+    page.frameLocator("iframe").getByText("Companion connected"),
+  ).toBeVisible();
+  expect(
+    (await page.request.get("/job-ui-proxy/job-service/1/")).status(),
+  ).toBe(404);
   await page.goto("/jobs/job-service");
   await expect(
     page.getByRole("button", { name: "Start run", exact: true }),

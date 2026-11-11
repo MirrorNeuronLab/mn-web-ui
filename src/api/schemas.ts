@@ -243,6 +243,7 @@ export const SystemSummarySchema = z
           name: z.string().optional().default("unknown"),
           connected_nodes: z.array(z.string()).optional().default([]),
           self: z.boolean().optional(),
+          "self?": z.boolean().optional(),
           executor_pools: z
             .record(
               z.string(),
@@ -257,7 +258,11 @@ export const SystemSummarySchema = z
             .optional()
             .default({}),
         })
-        .passthrough(),
+        .passthrough()
+        .transform((node) => {
+          if (node["self?"] !== undefined) node.self = node["self?"];
+          return node;
+        }),
     ),
     jobs: z.array(
       z
