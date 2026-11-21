@@ -8,15 +8,15 @@ import {
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import { toast } from "sonner";
-import Runs from "../pages/Jobs";
-import { cancelRun, fetchRuns, pauseRun } from "../api";
-import type { RunSummary } from "../api";
-import { Toaster } from "../components/ui/sonner";
-import { TooltipProvider } from "../components/ui/tooltip";
-import { ConfirmActionDialogHost } from "../components/ui/confirm-action-dialog";
+import RunList from "../../pages/runs/RunList";
+import { cancelRun, fetchRuns, pauseRun } from "../../api";
+import type { RunSummary } from "../../api";
+import { Toaster } from "../../components/ui/sonner";
+import { TooltipProvider } from "../../components/ui/tooltip";
+import { ConfirmActionDialogHost } from "../../components/ui/confirm-action-dialog";
 
-vi.mock("../api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api")>();
+vi.mock("../../api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api")>();
   return {
     ...actual,
     fetchRuns: vi.fn(),
@@ -44,7 +44,7 @@ const runsPage = (
   next_page_token: null,
 });
 
-describe("Runs Component", () => {
+describe("RunList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     toast.dismiss();
@@ -57,7 +57,7 @@ describe("Runs Component", () => {
   it("shows an error alert with retry when loading fails", async () => {
     vi.mocked(fetchRuns).mockRejectedValue(new Error("down"));
 
-    renderWithRouter(<Runs />);
+    renderWithRouter(<RunList />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/down/);
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
@@ -78,7 +78,7 @@ describe("Runs Component", () => {
         options?.pageToken ? pageB : pageA,
       );
 
-      renderWithRouter(<Runs />);
+      renderWithRouter(<RunList />);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
@@ -108,7 +108,7 @@ describe("Runs Component", () => {
   it("renders skeleton loading state initially", () => {
     vi.mocked(fetchRuns).mockReturnValue(new Promise(() => {}));
 
-    const { container } = renderWithRouter(<Runs />);
+    const { container } = renderWithRouter(<RunList />);
 
     expect(container.querySelector(".animate-pulse")).toBeInTheDocument();
   });
@@ -116,7 +116,7 @@ describe("Runs Component", () => {
   it("renders an empty execution history", async () => {
     vi.mocked(fetchRuns).mockResolvedValue(runsPage([]));
 
-    renderWithRouter(<Runs />);
+    renderWithRouter(<RunList />);
 
     await waitFor(() => {
       expect(screen.getByText("No execution runs found.")).toBeInTheDocument();
@@ -137,7 +137,7 @@ describe("Runs Component", () => {
 
     vi.mocked(fetchRuns).mockResolvedValue(runsPage(mockJobs));
 
-    renderWithRouter(<Runs />);
+    renderWithRouter(<RunList />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-123")).toBeInTheDocument();
@@ -180,7 +180,7 @@ describe("Runs Component", () => {
         ]),
       );
 
-    renderWithRouter(<Runs />);
+    renderWithRouter(<RunList />);
 
     await waitFor(() => {
       expect(screen.getByText("done-job-1")).toBeInTheDocument();
@@ -224,7 +224,7 @@ describe("Runs Component", () => {
       status: "paused",
     });
 
-    renderWithRouter(<Runs />);
+    renderWithRouter(<RunList />);
 
     await waitFor(() => {
       expect(screen.getByText("job-1")).toBeInTheDocument();
@@ -281,7 +281,7 @@ describe("Runs Component", () => {
       status: "cancelled",
     });
 
-    renderWithRouter(<Runs />);
+    renderWithRouter(<RunList />);
 
     await waitFor(() => {
       expect(screen.getByText("job-1")).toBeInTheDocument();
@@ -321,7 +321,7 @@ describe("Runs Component", () => {
       status: "cancelled",
     });
 
-    renderWithRouter(<Runs />);
+    renderWithRouter(<RunList />);
 
     await waitFor(() => {
       expect(screen.getByText("job-1")).toBeInTheDocument();

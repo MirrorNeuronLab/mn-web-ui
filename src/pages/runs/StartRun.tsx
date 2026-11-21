@@ -6,13 +6,13 @@ import {
   launchBlueprintJob,
   newIdempotencyKey,
   uploadBundle,
-} from "../api";
+} from "../../api";
 import type {
   Blueprint,
   LaunchProgressEvent,
   LaunchProgressPhase,
   LaunchProgressResponse,
-} from "../api";
+} from "../../api";
 import {
   CheckCircle,
   FileArchive,
@@ -22,23 +22,23 @@ import {
   Workflow,
   XCircle,
 } from "lucide-react";
-import { confirmActionDialog } from "../components/ui/confirm-action";
-import { Tooltip } from "../components/ui/tooltip";
-import { Button } from "../components/ui/button";
-import { Card, CardContent } from "../components/ui/card";
+import { confirmActionDialog } from "../../components/ui/confirm-action";
+import { Tooltip } from "../../components/ui/tooltip";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent } from "../../components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "../components/ui/dialog";
-import { Progress } from "../components/ui/progress";
-import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { cn } from "../lib/utils";
-import { apiErrorMessage } from "../utils/apiErrors";
-import { parseConfigOverrideAssignments } from "../utils/configOverrides";
-import { usePollingEffect } from "../hooks/usePollingEffect";
+} from "../../components/ui/dialog";
+import { Progress } from "../../components/ui/progress";
+import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import { cn } from "../../lib/utils";
+import { apiErrorMessage } from "../../utils/apiErrors";
+import { parseConfigOverrideAssignments } from "../../utils/configOverrides";
+import { usePollingEffect } from "../../hooks/usePollingEffect";
 
 type LaunchMode = "blueprint" | "bundle";
 
@@ -320,7 +320,7 @@ function LaunchProgressModal({
   );
 }
 
-export default function RunJob() {
+export default function StartRun() {
   const [mode, setMode] = useState<LaunchMode>("blueprint");
   const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
   const [selectedBlueprintId, setSelectedBlueprintId] = useState("");

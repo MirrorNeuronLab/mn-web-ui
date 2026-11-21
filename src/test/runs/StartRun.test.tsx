@@ -8,19 +8,19 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import { toast } from "sonner";
-import RunJob from "../pages/RunJob";
+import StartRun from "../../pages/runs/StartRun";
 import {
   fetchBlueprints,
   fetchLaunchProgress,
   launchBlueprintJob,
   newIdempotencyKey,
   uploadBundle,
-} from "../api";
-import { Toaster } from "../components/ui/sonner";
-import { TooltipProvider } from "../components/ui/tooltip";
-import { ConfirmActionDialogHost } from "../components/ui/confirm-action-dialog";
+} from "../../api";
+import { Toaster } from "../../components/ui/sonner";
+import { TooltipProvider } from "../../components/ui/tooltip";
+import { ConfirmActionDialogHost } from "../../components/ui/confirm-action-dialog";
 
-vi.mock("../api", () => ({
+vi.mock("../../api", () => ({
   fetchBlueprints: vi.fn(),
   fetchLaunchProgress: vi.fn(),
   launchBlueprintJob: vi.fn(),
@@ -38,7 +38,7 @@ const renderRunJob = () =>
   render(
     <TooltipProvider>
       <BrowserRouter>
-        <RunJob />
+        <StartRun />
       </BrowserRouter>
       <ConfirmActionDialogHost />
       <Toaster />
@@ -51,7 +51,7 @@ const waitForBlueprintSelection = async () => {
   return select;
 };
 
-describe("RunJob Component", () => {
+describe("StartRun", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     toast.dismiss();

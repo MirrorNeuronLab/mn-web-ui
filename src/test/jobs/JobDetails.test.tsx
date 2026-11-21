@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import StableJobDetails from "../pages/StableJobDetails";
+import JobDetails from "../../pages/jobs/JobDetails";
 import {
   archiveStableJob,
   cancelRun,
@@ -13,12 +13,12 @@ import {
   resetStableJobData,
   resumeRun,
   startStableJobRun,
-} from "../api";
-import { ConfirmActionDialogHost } from "../components/ui/confirm-action-dialog";
-import { TooltipProvider } from "../components/ui/tooltip";
+} from "../../api";
+import { ConfirmActionDialogHost } from "../../components/ui/confirm-action-dialog";
+import { TooltipProvider } from "../../components/ui/tooltip";
 
-vi.mock("../api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../api")>()),
+vi.mock("../../api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../api")>()),
   archiveStableJob: vi.fn(),
   cancelRun: vi.fn(),
   deleteRun: vi.fn(),
@@ -54,7 +54,7 @@ const renderPage = () =>
     <TooltipProvider>
       <MemoryRouter initialEntries={["/jobs/job-stable-1"]}>
         <Routes>
-          <Route path="/jobs/:jobId" element={<StableJobDetails />} />
+          <Route path="/jobs/:jobId" element={<JobDetails />} />
           <Route path="/jobs" element={<div>Jobs destination</div>} />
           <Route path="/runs/:id" element={<div>Run destination</div>} />
         </Routes>
@@ -63,7 +63,7 @@ const renderPage = () =>
     </TooltipProvider>,
   );
 
-describe("StableJobDetails", () => {
+describe("JobDetails", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(fetchStableJob).mockResolvedValue(stableJob);

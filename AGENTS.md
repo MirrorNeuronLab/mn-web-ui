@@ -14,10 +14,12 @@ presentation and interaction, not runtime, API, SDK, or blueprint behavior.
 ## Repository Map
 
 - `src/App.tsx`: route composition.
-- `src/pages/`: Dashboard, jobs, job details, models, run submission, and
-  per-run UI pages.
-- `src/api/`: Axios client, endpoint calls, schemas/parsing, streams, and
-  workflow-progress adaptation.
+- `src/pages/jobs/` contains durable Job pages and the Job UI. Run submission,
+  execution history and monitoring live in `src/pages/runs/`. The dashboard
+  and model inventory live in `src/pages/`.
+- `src/api/endpoints/` groups requests by resource. `src/api/schemas/` owns
+  the corresponding payloads and inferred types. Pages import the public API
+  from `src/api/index.ts`.
 - `src/components/`: reusable application panels, graphs, layout, and dialogs.
 - `src/utils/`: pure projections for job status, topology, progress, resources,
   artifacts, and errors.

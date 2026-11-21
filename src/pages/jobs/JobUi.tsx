@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { AlertCircle, Loader2 } from "lucide-react";
-import { fetchJobUi } from "../api";
-import { apiErrorMessage } from "../utils/apiErrors";
-import { isRecord } from "../utils/records";
-import { usePollingEffect } from "../hooks/usePollingEffect";
+import { fetchJobUi } from "../../api";
+import { apiErrorMessage } from "../../utils/apiErrors";
+import { isRecord } from "../../utils/records";
+import { usePollingEffect } from "../../hooks/usePollingEffect";
 
 function localProxyUrl(
   jobId: string,

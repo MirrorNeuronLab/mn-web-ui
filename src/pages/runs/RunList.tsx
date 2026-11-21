@@ -12,14 +12,14 @@ import {
   PlayCircle,
   XCircle,
 } from "lucide-react";
-import { cancelRun, fetchRuns, isServiceJob, pauseRun } from "../api";
-import type { RunSummary } from "../api";
-import { confirmActionDialog } from "../components/ui/confirm-action";
-import { Tooltip } from "../components/ui/tooltip";
-import { Badge } from "../components/ui/badge";
-import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader } from "../components/ui/card";
-import { Skeleton } from "../components/ui/skeleton";
+import { cancelRun, fetchRuns, isServiceJob, pauseRun } from "../../api";
+import type { RunSummary } from "../../api";
+import { confirmActionDialog } from "../../components/ui/confirm-action";
+import { Tooltip } from "../../components/ui/tooltip";
+import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardHeader } from "../../components/ui/card";
+import { Skeleton } from "../../components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -27,11 +27,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "../components/ui/table";
-import { usePaginatedPolling } from "../hooks/usePaginatedPolling";
-import { cn } from "../lib/utils";
-import { apiErrorMessage } from "../utils/apiErrors";
-import { isActiveRunStatus } from "../utils/jobStatus";
+} from "../../components/ui/table";
+import { usePaginatedPolling } from "../../hooks/usePaginatedPolling";
+import { cn } from "../../lib/utils";
+import { apiErrorMessage } from "../../utils/apiErrors";
+import { isActiveRunStatus } from "../../utils/jobStatus";
 
 const StatusIcon = ({ status }: { status: string }) => {
   const normalized = status.trim().toLowerCase();
@@ -65,7 +65,7 @@ const StatusIcon = ({ status }: { status: string }) => {
 
 const runIdentity = (run: RunSummary) => run.run_id;
 
-export default function Runs() {
+export default function RunList() {
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<"pause" | "cancel" | null>(null);
   const [activeOnly, setActiveOnly] = useState(false);

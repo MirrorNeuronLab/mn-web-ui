@@ -24,14 +24,14 @@ import {
   resetStableJobData,
   resumeRun,
   startStableJobRun,
-} from "../api";
-import type { StableJob, StableRun } from "../api";
-import { collectPages } from "../api/parsing";
-import { usePollingEffect } from "../hooks/usePollingEffect";
-import { confirmActionDialog } from "../components/ui/confirm-action";
-import { Badge } from "../components/ui/badge";
-import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader } from "../components/ui/card";
+} from "../../api";
+import type { StableJob, StableRun } from "../../api";
+import { collectPages } from "../../api/parsing";
+import { usePollingEffect } from "../../hooks/usePollingEffect";
+import { confirmActionDialog } from "../../components/ui/confirm-action";
+import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardHeader } from "../../components/ui/card";
 import {
   Table,
   TableBody,
@@ -39,9 +39,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "../components/ui/table";
-import { Tooltip } from "../components/ui/tooltip";
-import { apiErrorMessage } from "../utils/apiErrors";
+} from "../../components/ui/table";
+import { Tooltip } from "../../components/ui/tooltip";
+import { apiErrorMessage } from "../../utils/apiErrors";
 import {
   isActiveRunStatus,
   isTerminalRunStatus,
@@ -49,7 +49,7 @@ import {
   jobLifecycleStatusLabel,
   runStatusBadgeClass,
   runStatusLabel,
-} from "../utils/jobStatus";
+} from "../../utils/jobStatus";
 
 const timestamp = (...values: Array<string | null | undefined>) => {
   const value = values.find((item) => typeof item === "string" && item.trim());
@@ -60,12 +60,12 @@ const timestamp = (...values: Array<string | null | undefined>) => {
     : "Not reported";
 };
 
-export default function StableJobDetails() {
+export default function JobDetails() {
   const { jobId } = useParams();
-  return <StableJobDetailsView key={jobId} jobId={jobId} />;
+  return <JobDetailsView key={jobId} jobId={jobId} />;
 }
 
-function StableJobDetailsView({ jobId }: { jobId?: string }) {
+function JobDetailsView({ jobId }: { jobId?: string }) {
   const navigate = useNavigate();
   const [job, setJob] = useState<StableJob | null>(null);
   const [runs, setRuns] = useState<StableRun[]>([]);

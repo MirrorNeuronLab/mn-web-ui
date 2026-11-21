@@ -10,7 +10,7 @@ import {
   cancelRun,
   pauseRun,
   resumeRun,
-} from "../api";
+} from "../../api";
 import type {
   AgentGraph,
   ErrorEnvelope,
@@ -18,7 +18,7 @@ import type {
   JobEvent,
   WebUiHandle,
   WorkflowProgress,
-} from "../api";
+} from "../../api";
 import { format } from "date-fns";
 import {
   PlayCircle,
@@ -36,19 +36,19 @@ import {
   Code2,
   FileText,
 } from "lucide-react";
-import { WorkflowAgentGraph } from "../components/WorkflowAgentGraph";
-import { WorkflowProgressPanel } from "../components/WorkflowProgressPanel";
-import FailurePanel from "../components/FailurePanel";
+import { WorkflowAgentGraph } from "../../components/WorkflowAgentGraph";
+import { WorkflowProgressPanel } from "../../components/WorkflowProgressPanel";
+import FailurePanel from "../../components/FailurePanel";
 import ObservabilitySummaryPanel, {
   type ObservabilityArtifactRef,
-} from "../components/ObservabilitySummaryPanel";
-import { confirmActionDialog } from "../components/ui/confirm-action";
-import { Tooltip } from "../components/ui/tooltip";
-import { buildDisplayGraph } from "../utils/agentGraph";
-import { Badge } from "../components/ui/badge";
-import { Button } from "../components/ui/button";
-import { Card } from "../components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
+} from "../../components/ObservabilitySummaryPanel";
+import { confirmActionDialog } from "../../components/ui/confirm-action";
+import { Tooltip } from "../../components/ui/tooltip";
+import { buildDisplayGraph } from "../../utils/agentGraph";
+import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
+import { Card } from "../../components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -56,11 +56,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "../components/ui/table";
-import { cn } from "../lib/utils";
-import { apiErrorMessage } from "../utils/apiErrors";
-import { formatElapsed, workflowStepCounts } from "../utils/workflowProgress";
-import { buildOutputResources } from "../utils/workflowResources";
+} from "../../components/ui/table";
+import { cn } from "../../lib/utils";
+import { apiErrorMessage } from "../../utils/apiErrors";
+import {
+  formatElapsed,
+  workflowStepCounts,
+} from "../../utils/workflowProgress";
+import { buildOutputResources } from "../../utils/workflowResources";
 import {
   webUiInfoFromRecord,
   stringValue,
@@ -72,13 +75,19 @@ import {
   displayStatusFromSources,
   inferredTerminalStatusFromProgress,
   formattedTimestamp,
-} from "../utils/jobDetailsView";
-import { isTerminalRunStatus, runStatusBadgeClass } from "../utils/jobStatus";
-import { isRecord } from "../utils/records";
-import { applyWorkflowShape, type WorkflowShape } from "../api/workflowShape";
-import { usePollingEffect } from "../hooks/usePollingEffect";
-import { useRuntimeSignals } from "../hooks/useRuntimeSignals";
-import { RuntimeSignalsPanel } from "../components/RuntimeSignalsPanel";
+} from "../../utils/jobDetailsView";
+import {
+  isTerminalRunStatus,
+  runStatusBadgeClass,
+} from "../../utils/jobStatus";
+import { isRecord } from "../../utils/records";
+import {
+  applyWorkflowShape,
+  type WorkflowShape,
+} from "../../api/workflowShape";
+import { usePollingEffect } from "../../hooks/usePollingEffect";
+import { useRuntimeSignals } from "../../hooks/useRuntimeSignals";
+import { RuntimeSignalsPanel } from "../../components/RuntimeSignalsPanel";
 
 const StatusIcon = ({ status }: { status: string }) => {
   const normalized = status.trim().toLowerCase();
@@ -152,12 +161,12 @@ const progressStreamBadgeClass = (state: ProgressStreamState) => {
   }
 };
 
-export default function JobDetails() {
+export default function RunDetails() {
   const { id } = useParams();
-  return <JobDetailsView key={id} id={id} />;
+  return <RunDetailsView key={id} id={id} />;
 }
 
-function JobDetailsView({ id }: { id?: string }) {
+function RunDetailsView({ id }: { id?: string }) {
   const navigate = useNavigate();
   const [details, setDetails] = useState<JobDetailsType | null>(null);
   const [events, setEvents] = useState<JobEvent[]>([]);

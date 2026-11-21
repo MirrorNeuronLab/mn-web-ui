@@ -8,7 +8,7 @@ import {
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { toast } from "sonner";
-import JobDetails from "../pages/JobDetails";
+import RunDetails from "../../pages/runs/RunDetails";
 import {
   fetchJobDetails,
   fetchJobEvents,
@@ -19,18 +19,18 @@ import {
   cancelRun,
   pauseRun,
   resumeRun,
-} from "../api";
-import type { WorkflowProgress } from "../api";
-import { Toaster } from "../components/ui/sonner";
-import { TooltipProvider } from "../components/ui/tooltip";
-import { ConfirmActionDialogHost } from "../components/ui/confirm-action-dialog";
+} from "../../api";
+import type { WorkflowProgress } from "../../api";
+import { Toaster } from "../../components/ui/sonner";
+import { TooltipProvider } from "../../components/ui/tooltip";
+import { ConfirmActionDialogHost } from "../../components/ui/confirm-action-dialog";
 
-vi.mock("../hooks/useRuntimeSignals", () => ({
+vi.mock("../../hooks/useRuntimeSignals", () => ({
   useRuntimeSignals: () => ({ events: [], unavailable: null }),
 }));
 
-vi.mock("../api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api")>();
+vi.mock("../../api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api")>();
   return {
     ...actual,
     fetchJobDetails: vi.fn(),
@@ -75,7 +75,7 @@ const renderWithRouter = (ui: React.ReactElement) => {
   );
 };
 
-describe("JobDetails Component", () => {
+describe("RunDetails", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     toast.dismiss();
@@ -176,7 +176,7 @@ describe("JobDetails Component", () => {
     vi.mocked(fetchJobEvents).mockReturnValue(new Promise(() => {}));
     vi.mocked(fetchJobAgentGraph).mockReturnValue(new Promise(() => {}));
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     expect(screen.getByText(/Loading/i)).toBeInTheDocument();
   });
@@ -184,7 +184,7 @@ describe("JobDetails Component", () => {
   it("shows an error with retry instead of infinite loading when details fail", async () => {
     vi.mocked(fetchJobDetails).mockRejectedValue({ response: { status: 404 } });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/Run not found/);
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
@@ -267,7 +267,7 @@ describe("JobDetails Component", () => {
       },
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();
@@ -362,7 +362,7 @@ describe("JobDetails Component", () => {
     });
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("Observability Summary")).toBeInTheDocument();
@@ -451,7 +451,7 @@ describe("JobDetails Component", () => {
       recent_events: [],
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();
@@ -537,7 +537,7 @@ describe("JobDetails Component", () => {
       failure,
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();
@@ -586,7 +586,7 @@ describe("JobDetails Component", () => {
       recent_events: [],
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(
@@ -638,7 +638,7 @@ describe("JobDetails Component", () => {
       recent_events: [],
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(
@@ -690,7 +690,7 @@ describe("JobDetails Component", () => {
       recent_events: [],
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(
@@ -751,7 +751,7 @@ describe("JobDetails Component", () => {
       },
     );
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(
@@ -800,7 +800,7 @@ describe("JobDetails Component", () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchJobAgentGraph).mockRejectedValue(new Error("Not Found"));
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();
@@ -851,7 +851,7 @@ describe("JobDetails Component", () => {
       },
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();
@@ -966,7 +966,7 @@ describe("JobDetails Component", () => {
       recent_events: [],
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(
@@ -1018,7 +1018,7 @@ describe("JobDetails Component", () => {
     vi.mocked(fetchJobEvents).mockResolvedValue([]);
     vi.mocked(fetchWorkflowProgress).mockRejectedValue(new Error("Not Found"));
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();
@@ -1128,7 +1128,7 @@ describe("JobDetails Component", () => {
       recent_events: [],
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();
@@ -1266,7 +1266,7 @@ describe("JobDetails Component", () => {
       recent_events: [],
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();
@@ -1419,7 +1419,7 @@ describe("JobDetails Component", () => {
     };
     vi.mocked(fetchWorkflowProgress).mockResolvedValue(progress);
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();
@@ -1560,7 +1560,7 @@ describe("JobDetails Component", () => {
       recent_events: [],
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();
@@ -1622,7 +1622,7 @@ describe("JobDetails Component", () => {
       },
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(
@@ -1652,7 +1652,7 @@ describe("JobDetails Component", () => {
     vi.mocked(fetchJobUi).mockRejectedValue({ response: { status: 404 } });
 
     try {
-      renderWithRouter(<JobDetails />);
+      renderWithRouter(<RunDetails />);
 
       await waitFor(() => {
         expect(fetchJobUi).toHaveBeenCalledWith("test-job-1");
@@ -1687,7 +1687,7 @@ describe("JobDetails Component", () => {
       run_id: "test-job-1",
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();
@@ -1731,7 +1731,7 @@ describe("JobDetails Component", () => {
       run_id: "test-job-1",
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();
@@ -1771,7 +1771,7 @@ describe("JobDetails Component", () => {
       run_id: "test-job-1",
     });
 
-    renderWithRouter(<JobDetails />);
+    renderWithRouter(<RunDetails />);
 
     await waitFor(() => {
       expect(screen.getByText("test-job-1")).toBeInTheDocument();

@@ -2,12 +2,12 @@ import { useCallback, useState } from "react";
 import { format } from "date-fns";
 import { Archive, Clock3, Eye, Layers3, Play, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
-import { fetchStableJobs } from "../api";
-import type { StableJob } from "../api";
-import { Badge } from "../components/ui/badge";
-import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader } from "../components/ui/card";
-import { Skeleton } from "../components/ui/skeleton";
+import { fetchStableJobs } from "../../api";
+import type { StableJob } from "../../api";
+import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardHeader } from "../../components/ui/card";
+import { Skeleton } from "../../components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -15,14 +15,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "../components/ui/table";
-import { Tooltip } from "../components/ui/tooltip";
-import { usePaginatedPolling } from "../hooks/usePaginatedPolling";
+} from "../../components/ui/table";
+import { Tooltip } from "../../components/ui/tooltip";
+import { usePaginatedPolling } from "../../hooks/usePaginatedPolling";
 import {
   jobLifecycleStatusBadgeClass,
   jobLifecycleStatusLabel,
-} from "../utils/jobStatus";
-import { cn } from "../lib/utils";
+} from "../../utils/jobStatus";
+import { cn } from "../../lib/utils";
 
 const timestamp = (value?: string | null) => {
   if (!value) return "Not reported";
@@ -34,7 +34,7 @@ const timestamp = (value?: string | null) => {
 
 const jobIdentity = (job: StableJob) => job.job_id;
 
-export default function StableJobs() {
+export default function JobList() {
   const [includeArchived, setIncludeArchived] = useState(false);
   const loadPage = useCallback(
     (token?: string) =>

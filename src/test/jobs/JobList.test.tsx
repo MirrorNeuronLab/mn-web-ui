@@ -1,12 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import StableJobs from "../pages/StableJobs";
-import { fetchStableJobs } from "../api";
-import { TooltipProvider } from "../components/ui/tooltip";
+import JobList from "../../pages/jobs/JobList";
+import { fetchStableJobs } from "../../api";
+import { TooltipProvider } from "../../components/ui/tooltip";
 
-vi.mock("../api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../api")>()),
+vi.mock("../../api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../api")>()),
   fetchStableJobs: vi.fn(),
 }));
 
@@ -14,12 +14,12 @@ const renderPage = () =>
   render(
     <TooltipProvider>
       <MemoryRouter>
-        <StableJobs />
+        <JobList />
       </MemoryRouter>
     </TooltipProvider>,
   );
 
-describe("StableJobs", () => {
+describe("JobList", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("renders persistent job identity and lifecycle counts", async () => {

@@ -2,13 +2,13 @@ import { Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Dashboard from "./pages/Dashboard";
-import Runs from "./pages/Jobs";
-import JobDetails from "./pages/JobDetails";
-import StableJobs from "./pages/StableJobs";
-import StableJobDetails from "./pages/StableJobDetails";
+import RunList from "./pages/runs/RunList";
+import RunDetails from "./pages/runs/RunDetails";
+import JobList from "./pages/jobs/JobList";
+import JobDetails from "./pages/jobs/JobDetails";
 import Models from "./pages/Models";
-import RunJob from "./pages/RunJob";
-import JobUi from "./pages/JobUi";
+import StartRun from "./pages/runs/StartRun";
+import JobUi from "./pages/jobs/JobUi";
 import NotFound from "./pages/NotFound";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -40,7 +40,7 @@ function App() {
               path="jobs"
               element={
                 <ErrorBoundary>
-                  <StableJobs />
+                  <JobList />
                 </ErrorBoundary>
               }
             />
@@ -48,7 +48,7 @@ function App() {
               path="jobs/:jobId"
               element={
                 <ErrorBoundary>
-                  <StableJobDetails />
+                  <JobDetails />
                 </ErrorBoundary>
               }
             />
@@ -56,7 +56,7 @@ function App() {
               path="runs"
               element={
                 <ErrorBoundary>
-                  <Runs />
+                  <RunList />
                 </ErrorBoundary>
               }
             />
@@ -64,7 +64,7 @@ function App() {
               path="runs/:id"
               element={
                 <ErrorBoundary>
-                  <JobDetails />
+                  <RunDetails />
                 </ErrorBoundary>
               }
             />
@@ -80,7 +80,7 @@ function App() {
               path="run"
               element={
                 <ErrorBoundary>
-                  <RunJob />
+                  <StartRun />
                 </ErrorBoundary>
               }
             />

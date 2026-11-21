@@ -1,6 +1,16 @@
-import type { Operation } from "./index";
-import { isRecord } from "../utils/records";
 import { apiErrorMessage } from "../utils/apiErrors";
+import { isRecord } from "../utils/records";
+import api from "./client";
+import { parseOrThrow } from "./parsing";
+import { operationPath } from "./routes";
+import { type Operation, OperationSchema } from "./schemas/operations";
+
+export const fetchOperation = (id: string) =>
+  api
+    .get(operationPath(id))
+    .then((r) =>
+      parseOrThrow(OperationSchema, r.data, `fetchOperation(${id})`),
+    );
 
 export const waitForOperation = async (
   initial: Operation,

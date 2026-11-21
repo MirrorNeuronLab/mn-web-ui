@@ -1,10 +1,10 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import JobUi from "../pages/JobUi";
-import { fetchJobUi } from "../api";
+import JobUi from "../../pages/jobs/JobUi";
+import { fetchJobUi } from "../../api";
 
-vi.mock("../api", () => ({
+vi.mock("../../api", () => ({
   fetchJobUi: vi.fn(),
 }));
 

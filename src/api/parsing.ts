@@ -1,4 +1,7 @@
 import { z } from "zod";
+import type { Page } from "./schemas/common";
+
+export type { Page } from "./schemas/common";
 
 export class ValidationError extends Error {
   readonly validationLabel: string;
@@ -91,8 +94,6 @@ export const parseArrayOrEmpty = <T>(
     return [];
   });
 };
-
-export type Page<T> = { items: T[]; next_page_token: string | null };
 
 export const parsePage = <T>(
   schema: z.ZodType<T>,
