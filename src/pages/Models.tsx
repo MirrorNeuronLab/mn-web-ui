@@ -194,7 +194,7 @@ export default function Models() {
                           content={
                             canBenchmark
                               ? "Benchmark this model from the runtime node."
-                              : "Benchmark is only available for Docker Model Runner chat models."
+                              : "Benchmarking requires a locally managed chat model."
                           }
                         >
                           <span className="inline-flex">
